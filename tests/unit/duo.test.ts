@@ -99,3 +99,14 @@ describe('arrange (ArrangementView model)', () => {
     expect(folded.axis).toBe('horizontal');
   });
 });
+
+describe('status bar', () => {
+  it('sits on top in portrait, in the trailing strip in landscape, and outside old apps’ windows', () => {
+    expect(present('closed', '27.1').statusBar).toMatchObject({ x: 0, y: 0, w: OUTER.w });
+    const open = present('open', '27.1');
+    expect(open.statusBar!.x + open.statusBar!.w).toBe(open.window.w);
+    expect(open.statusBar!.x).toBe(open.window.w - open.safeArea.right);
+    expect(present('open', '27').statusBar).toBeNull();
+    expect(present('open', '26').statusBar).toBeNull();
+  });
+});

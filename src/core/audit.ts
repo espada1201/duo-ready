@@ -1,7 +1,7 @@
 import { checkFiles, RULE_BY_ID, tierFromUpgradeCheck, xcodeVersion } from './rules';
 import type { AuditResult, Finding, SourceFile } from './types';
 
-const SKIP_DIR = /(^|\/)(Pods|Carthage|\.build|DerivedData|node_modules|build|\.git|SourcePackages|\.swiftpm)\//;
+const SKIP_DIR = /(^|\/)(Pods|Carthage|DerivedData|node_modules|build|SourcePackages|\.[^/]+)\//;
 const RELEVANT = /(\.swift|\.plist|\/project\.pbxproj|(^|\/)package\.json|(^|\/)pubspec\.yaml)$/;
 
 export function isRelevant(path: string): boolean {

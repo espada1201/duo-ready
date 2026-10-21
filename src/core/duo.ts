@@ -37,6 +37,8 @@ export interface Presentation {
   bars: 'horizontal' | 'vertical';
   /** Regions in window coordinates. Inactive regions are included, as with `.includeInactive`. */
   regions: ReservedRegion[];
+  /** The system status bar in window coordinates, when it overlaps the window. */
+  statusBar: Rect | null;
   /** Share of the display the app can draw on. */
   coverage: number;
 }
@@ -48,6 +50,7 @@ export const INNER = { w: INNER_PX.w / SCALE, h: INNER_PX.h / SCALE };
 export const OUTER = { w: OUTER_PX.w / SCALE, h: OUTER_PX.h / SCALE };
 
 const STATUS_STRIP = 40;
+const STATUS_STRIP_HEIGHT = 96;
 const STATUS_TOP = 54;
 const HOME_INDICATOR = 21;
 const HINGE = 24;
@@ -95,7 +98,13 @@ function screenRegions(posture: Posture, screen: { w: number; h: number }, camer
   return out;
 }
 
-function intersect(a: Rect, b: Rect): Rect | null {
+function statusBarRect(screen: { w: number; h: number }): Rect {
+  return screen.w > screen.h
+    ? { x: screen.w - STATUS_STRIP, y: 0, w: STATUS_STRIP, h: STATUS_STRIP_HEIGHT }
+    : { x: 0, y: 0, w: screen.w, h: STATUS_TOP };
+}
+
+export function intersect(a: Rect, b: Rect): Rect | null {
   const x = Math.max(a.x, b.x);
   const y = Math.max(a.y, b.y);
   const r = Math.min(a.x + a.w, b.x + b.w);
@@ -135,13 +144,15 @@ export function present(posture: Posture, tier: SdkTier, cameraActive = false): 
     safeArea = { top: STATUS_TOP, left: 0, bottom: HOME_INDICATOR, right: 0 };
   }
 
+  const toWindow = (r: Rect): Rect => ({ x: r.x - window.x, y: r.y - window.y, w: r.w, h: r.h });
   const regions: ReservedRegion[] = [];
   for (const r of screenRegions(posture, screen, cameraActive)) {
     const clipped = intersect(r.frame, window);
     if (!clipped) continue;
-    regions.push({ ...r, frame: { x: clipped.x - window.x, y: clipped.y - window.y, w: clipped.w, h: clipped.h } });
+    regions.push({ ...r, frame: toWindow(clipped) });
   }
 
+  const status = intersect(statusBarRect(screen), window);
   const sizeClass = sizeClassFor(s.display, posture, window);
   return {
     display: s.display,
@@ -151,6 +162,7 @@ export function present(posture: Posture, tier: SdkTier, cameraActive = false): 
     safeArea,
     bars,
     regions,
+    statusBar: status && status.w * status.h > 0 ? toWindow(status) : null,
     coverage: (window.w * window.h) / (s.w * s.h),
   };
 }
