@@ -20,11 +20,11 @@ export const initialAudit = (): AuditState => ({ status: 'empty', source: '', fi
 
 const SAMPLE = import.meta.glob('../../sample/**/*', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
-export function sampleFiles(): SourceFile[] {
+function sampleFiles(): SourceFile[] {
   return Object.entries(SAMPLE).map(([path, content]) => ({ path: path.replace('../../sample/', ''), content }));
 }
 
-export function runAudit(files: SourceFile[], source: string): AuditState {
+function runAudit(files: SourceFile[], source: string): AuditState {
   const relevant = files.filter((f) => isRelevant(f.path));
   if (!relevant.length) {
     return { ...initialAudit(), status: 'error', error: 'No Swift files, Info.plist or Xcode project found there. Pick the folder that contains your .xcodeproj.' };
@@ -54,14 +54,14 @@ async function readEntries(entry: FileSystemEntry, prefix: string, out: SourceFi
   }
 }
 
-export async function filesFromDrop(items: DataTransferItemList): Promise<SourceFile[]> {
+async function filesFromDrop(items: DataTransferItemList): Promise<SourceFile[]> {
   const out: SourceFile[] = [];
   const entries = [...items].map((i) => i.webkitGetAsEntry?.()).filter(Boolean) as FileSystemEntry[];
   for (const e of entries) await readEntries(e, '', out);
   return out;
 }
 
-export async function filesFromInput(list: FileList): Promise<SourceFile[]> {
+async function filesFromInput(list: FileList): Promise<SourceFile[]> {
   const out: SourceFile[] = [];
   for (const f of [...list]) {
     const path = f.webkitRelativePath || f.name;
@@ -118,18 +118,14 @@ function download(name: string, data: Uint8Array, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function fixedZip(state: AuditState): { zip: Uint8Array; changed: string[] } {
+function fixedZip(state: AuditState): Uint8Array {
   const chosen = state.result!.findings.filter((_, i) => state.selected.has(i));
   const { files } = applyFixes(state.files, chosen, 'all');
   const entries: Record<string, Uint8Array> = {};
-  const changed: string[] = [];
   files.forEach((f, i) => {
-    if (f.content !== state.files[i].content) {
-      entries[f.path] = strToU8(f.content);
-      changed.push(f.path);
-    }
+    if (f.content !== state.files[i].content) entries[f.path] = strToU8(f.content);
   });
-  return { zip: zipSync(entries), changed };
+  return zipSync(entries);
 }
 
 export function renderAudit(state: AuditState, set: (s: AuditState) => void, openPreview: (tier: string | null) => void): HTMLElement {
@@ -231,7 +227,7 @@ function results(state: AuditState, openPreview: (tier: string | null) => void):
       class: 'button primary',
       disabled: state.selected.size === 0,
       'data-testid': 'download',
-      onclick: () => download('duo-ready-fixes.zip', fixedZip(state).zip, 'application/zip'),
+      onclick: () => download('duo-ready-fixes.zip', fixedZip(state), 'application/zip'),
     },
     icon('download', 16),
     downloadLabel,

@@ -12,7 +12,7 @@ const PENALTY = { error: 10, warning: 4, info: 1 } as const;
 /** One rule can cost at most two of its own hits, so a single habit can't zero the score. */
 const MAX_HITS_PER_RULE = 2;
 
-export function score(findings: Finding[]): number {
+function score(findings: Finding[]): number {
   const hits = new Map<string, number>();
   for (const f of findings) hits.set(f.ruleId, (hits.get(f.ruleId) ?? 0) + 1);
   let total = 0;
@@ -20,7 +20,7 @@ export function score(findings: Finding[]): number {
   return Math.max(0, 100 - total);
 }
 
-export function grade(value: number, findings: Finding[]): AuditResult['grade'] {
+function grade(value: number, findings: Finding[]): AuditResult['grade'] {
   const errors = findings.some((f) => f.severity === 'error');
   if (value >= 90 && !errors) return 'Duo-ready';
   if (value >= 70) return 'Close';

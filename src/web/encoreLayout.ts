@@ -13,7 +13,7 @@ export const BUILDS: { id: Build; tier: SdkTier; label: string; detail: string }
   { id: 'ready', tier: '27.1', label: '27.1 + duo-ready', detail: 'Rebuilt with fixes applied' },
 ];
 
-export type PieceRole = 'bar' | 'rail' | 'artwork' | 'title' | 'controls' | 'list' | 'mini';
+type PieceRole = 'bar' | 'rail' | 'artwork' | 'title' | 'controls' | 'list' | 'mini';
 
 export interface Piece {
   role: PieceRole;
@@ -23,7 +23,7 @@ export interface Piece {
   rule?: string;
 }
 
-export interface Collision {
+interface Collision {
   piece: Piece;
   obstacle: 'hinge' | 'camera' | 'status bar';
   rect: Rect;

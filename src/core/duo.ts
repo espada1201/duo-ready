@@ -12,7 +12,7 @@ export interface Rect {
   h: number;
 }
 
-export interface Insets {
+interface Insets {
   top: number;
   left: number;
   bottom: number;
@@ -20,9 +20,9 @@ export interface Insets {
 }
 
 export type Posture = 'closed' | 'closed-landscape' | 'open' | 'open-portrait' | 'book' | 'tent';
-export type SizeClass = 'compact' | 'regular';
+type SizeClass = 'compact' | 'regular';
 
-export interface ReservedRegion {
+interface ReservedRegion {
   kind: 'division' | 'occlusion';
   frame: Rect;
   active: boolean;
@@ -43,9 +43,9 @@ export interface Presentation {
   coverage: number;
 }
 
-export const SCALE = 3;
-export const INNER_PX = { w: 2670, h: 1878 };
-export const OUTER_PX = { w: 1398, h: 2034 };
+const SCALE = 3;
+const INNER_PX = { w: 2670, h: 1878 };
+const OUTER_PX = { w: 1398, h: 2034 };
 export const INNER = { w: INNER_PX.w / SCALE, h: INNER_PX.h / SCALE };
 export const OUTER = { w: OUTER_PX.w / SCALE, h: OUTER_PX.h / SCALE };
 
@@ -67,7 +67,7 @@ export const POSTURES: { id: Posture; label: string; detail: string }[] = [
 
 const ZERO: Insets = { top: 0, left: 0, bottom: 0, right: 0 };
 
-export function screenFor(posture: Posture): { display: 'inner' | 'outer'; w: number; h: number } {
+function screenFor(posture: Posture): { display: 'inner' | 'outer'; w: number; h: number } {
   switch (posture) {
     case 'closed':
       return { display: 'outer', ...OUTER };
@@ -175,7 +175,7 @@ function sizeClassFor(display: 'inner' | 'outer', posture: Posture, window: Rect
   return posture === 'closed' ? { horizontal: 'compact', vertical: 'regular' } : { horizontal: 'compact', vertical: 'compact' };
 }
 
-export type ArrangementStyle = 'split' | 'overlay';
+type ArrangementStyle = 'split' | 'overlay';
 
 export interface Arrangement {
   primary: Rect;

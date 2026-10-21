@@ -15,7 +15,7 @@ const PATHS: Record<string, string> = {
   arrow: 'M5 12h14M13 6l6 6-6 6',
 };
 
-export function icon(name: keyof typeof PATHS | string, size = 18): SVGSVGElement {
+export function icon(name: string, size = 18): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('width', String(size));

@@ -14,7 +14,6 @@ export interface Block {
 }
 
 export interface SwiftSource {
-  text: string;
   masked: string;
   root: Block;
   lineStarts: number[];
@@ -182,9 +181,13 @@ export function parseSwift(text: string): SwiftSource {
       current = current.parent;
     }
   }
-  const lineStarts = [0];
-  for (let i = 0; i < text.length; i++) if (text[i] === '\n') lineStarts.push(i + 1);
-  return { text, masked, root, lineStarts };
+  return { masked, root, lineStarts: lineStarts(text) };
+}
+
+export function lineStarts(text: string): number[] {
+  const out = [0];
+  for (let i = 0; i < text.length; i++) if (text[i] === '\n') out.push(i + 1);
+  return out;
 }
 
 export function position(src: { lineStarts: number[] }, offset: number): { line: number; column: number } {
@@ -226,8 +229,7 @@ export function headerOf(src: SwiftSource, block: Block): string {
   return src.masked.slice(j + 1, block.open).trim();
 }
 
-export interface DeclaredType {
-  name: string;
+interface DeclaredType {
   inherits: string[];
   block: Block | null;
 }
@@ -248,7 +250,7 @@ export function declaredTypes(src: SwiftSource): DeclaredType[] {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    out.push({ name: m[1], inherits, block: byOpen.get(m.index! + m[0].length - 1) ?? null });
+    out.push({ inherits, block: byOpen.get(m.index! + m[0].length - 1) ?? null });
   }
   typeCache.set(src, out);
   return out;

@@ -79,7 +79,7 @@ function statusBar(p: Presentation, s: number, compat: boolean): HTMLElement | n
   );
 }
 
-export function renderStage(layout: EncoreLayout, state: PreviewState, width: number): HTMLElement {
+function renderStage(layout: EncoreLayout, state: PreviewState, width: number): HTMLElement {
   const p = layout.presentation;
   const maxH = Math.min(window.innerHeight * 0.62, 560);
   const s = Math.min((width - 24 - BEZEL * 2) / p.screen.w, (maxH - BEZEL * 2) / p.screen.h);
@@ -223,8 +223,7 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
 
   const onShot = (e: Event) => {
     const file = (e.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) return;
+    if (!file || !file.type.startsWith('image/')) return;
     if (state.screenshot) URL.revokeObjectURL(state.screenshot);
     set({ screenshot: URL.createObjectURL(file), build: 'legacy-26', posture: state.posture === 'closed' || state.posture === 'closed-landscape' ? 'open' : state.posture });
   };

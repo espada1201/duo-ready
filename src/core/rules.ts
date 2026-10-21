@@ -1,8 +1,8 @@
 import { parsePlist, type PlistValue } from './plist';
-import { ancestors, blockAt, declaredTypes, headerOf, parseSwift, position, walk, type Block, type SwiftSource } from './swift';
+import { ancestors, blockAt, declaredTypes, headerOf, lineStarts, parseSwift, position, walk, type Block, type SwiftSource } from './swift';
 import type { Finding, Fix, Severity, SourceFile } from './types';
 
-export interface Rule {
+interface Rule {
   id: string;
   title: string;
   severity: Severity;
@@ -160,12 +160,6 @@ export const RULES: Rule[] = [
 export const RULE_BY_ID = new Map(RULES.map((r) => [r.id, r]));
 
 type Report = (ruleId: string, offset: number, message?: string, fix?: Fix) => void;
-
-function lineStarts(text: string): number[] {
-  const out = [0];
-  for (let i = 0; i < text.length; i++) if (text[i] === '\n') out.push(i + 1);
-  return out;
-}
 
 function reporter(file: SourceFile, findings: Finding[], starts = lineStarts(file.content)): Report {
   return (ruleId, offset, message, fix) => {
@@ -382,7 +376,7 @@ function plistFindings(file: SourceFile, findings: Finding[]) {
   if (full && full.value === true) report('requires-full-screen', full.offset);
 }
 
-export interface ProjectFacts {
+interface ProjectFacts {
   hasSceneManifest: boolean;
   hasSwiftUIApp: boolean;
   hasSceneDelegate: boolean;

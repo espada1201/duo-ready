@@ -2,7 +2,7 @@
 
 export type PlistValue = string | number | boolean | PlistValue[] | { [key: string]: PlistValue };
 
-export interface PlistKey {
+interface PlistKey {
   value: PlistValue;
   /** Offset of the `<key>` element, for line reporting. */
   offset: number;
