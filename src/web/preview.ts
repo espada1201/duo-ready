@@ -225,6 +225,7 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) return;
+    if (state.screenshot) URL.revokeObjectURL(state.screenshot);
     set({ screenshot: URL.createObjectURL(file), build: 'legacy-26', posture: state.posture === 'closed' || state.posture === 'closed-landscape' ? 'open' : state.posture });
   };
 
@@ -263,7 +264,10 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
         h('input', { type: 'file', accept: 'image/*', class: 'visually-hidden', onchange: onShot, 'data-testid': 'shot-input' }),
       ),
       state.screenshot
-        ? h('button', { class: 'button ghost', type: 'button', onclick: () => set({ screenshot: null }) }, 'Remove')
+        ? h('button', { class: 'button ghost', type: 'button', onclick: () => {
+            URL.revokeObjectURL(state.screenshot!);
+            set({ screenshot: null });
+          } }, 'Remove')
         : h('span', { class: 'hint' }, 'See how your current iPhone app opens on the inner display.'),
     ),
   );

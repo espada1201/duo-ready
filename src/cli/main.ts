@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import { applyFixes, audit, isRelevant } from '../core/audit';
 import { RULE_BY_ID, RULES, tierLabel } from '../core/rules';
 import type { Finding, SourceFile } from '../core/types';
@@ -48,12 +48,12 @@ function parseArgs(argv: string[]): Options | 'help' | 'rules' | string {
     else if (a === '--fix=all') o.fix = 'all';
     else if (a === '--dry-run') o.dryRun = true;
     else if (a === '--no-color') o.color = false;
-    else if (a.startsWith('--format')) {
+    else if (a === '--format' || a.startsWith('--format=')) {
       const v = value();
       if (v !== 'text' && v !== 'json' && v !== 'sarif') return `Unknown format "${v}"`;
       o.format = v;
-    } else if (a.startsWith('--out')) o.out = value();
-    else if (a.startsWith('--fail-on')) {
+    } else if (a === '--out' || a.startsWith('--out=')) o.out = value();
+    else if (a === '--fail-on' || a.startsWith('--fail-on=')) {
       const v = value();
       if (v !== 'error' && v !== 'warning' && v !== 'never') return `Unknown --fail-on "${v}"`;
       o.failOn = v;
@@ -70,8 +70,9 @@ function readProject(root: string): SourceFile[] {
   const visit = (dir: string) => {
     for (const name of readdirSync(dir)) {
       const full = join(dir, name);
-      const st = statSync(full, { throwIfNoEntry: false });
-      if (!st) continue;
+      // lstat: symlinked folders are skipped, so link cycles can't recurse forever.
+      const st = lstatSync(full, { throwIfNoEntry: false });
+      if (!st || st.isSymbolicLink()) continue;
       const rel = relative(root, full).split('\\').join('/');
       if (st.isDirectory()) {
         if (!isRelevant(`${rel}/x.swift`)) continue;
@@ -196,7 +197,7 @@ export function run(argv: string[], log = (s: string) => console.log(s)): number
     if (opts.dryRun) {
       log(diff(files, fixed) || 'Nothing to fix.');
       log(c.dim(`\n${applied.length} fixes would be applied. Nothing was written.`));
-      return 0;
+      return exitCode(result, opts.failOn);
     }
     fixed.forEach((file, i) => {
       if (file.content !== files[i].content) writeFileSync(join(statSync(root).isDirectory() ? root : resolve(root, '..'), file.path), file.content);
@@ -209,13 +210,26 @@ export function run(argv: string[], log = (s: string) => console.log(s)): number
     opts.format === 'json'
       ? JSON.stringify(result, null, 2)
       : opts.format === 'sarif'
-        ? JSON.stringify(toSarif(result, __VERSION__), null, 2)
+        ? JSON.stringify(toSarif(result, __VERSION__, repoPrefix(root)), null, 2)
         : textReport(result, opts.out ? paint(false) : c);
   if (opts.out) {
     writeFileSync(opts.out, body + '\n');
     log(`Report written to ${opts.out}`);
   } else log(body);
 
-  const failing = opts.failOn === 'never' ? [] : result.findings.filter((f) => f.severity === 'error' || (opts.failOn === 'warning' && f.severity === 'warning'));
-  return failing.length ? 1 : 0;
+  return exitCode(result, opts.failOn);
+}
+
+function exitCode(result: ReturnType<typeof audit>, failOn: Options['failOn']): number {
+  if (failOn === 'never') return 0;
+  return result.findings.some((f) => f.severity === 'error' || (failOn === 'warning' && f.severity === 'warning')) ? 1 : 0;
+}
+
+/** Path from the enclosing git checkout to the audited folder, so SARIF paths match the repo. */
+function repoPrefix(root: string): string {
+  const start = statSync(root).isDirectory() ? root : dirname(root);
+  for (let dir = start; ; dir = dirname(dir)) {
+    if (existsSync(join(dir, '.git'))) return relative(dir, start).split('\\').join('/');
+    if (dirname(dir) === dir) return '';
+  }
 }

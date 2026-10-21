@@ -273,7 +273,7 @@ function results(state: AuditState, openPreview: (tier: string | null) => void):
         h(
           'section',
           { class: 'file' },
-          h('h4', {}, icon('doc', 16), h('span', {}, path)),
+          h('h4', {}, icon('doc', 16), h('span', {}, h('span', { class: 'dir' }, path.slice(0, path.lastIndexOf('/') + 1)), path.slice(path.lastIndexOf('/') + 1))),
           h(
             'ol',
             { class: 'findings' },

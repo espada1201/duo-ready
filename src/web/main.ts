@@ -59,7 +59,19 @@ function render() {
   const activeKey = active instanceof HTMLInputElement ? `${active.name}|${active.value}|${active.type}` : null;
 
   root.replaceChildren(
-    h('a', { class: 'skip', href: '#main' }, 'Skip to content'),
+    h(
+      'a',
+      {
+        class: 'skip',
+        href: '#main',
+        // Hash links drive routing here, so move focus without touching the URL.
+        onclick: (e: Event) => {
+          e.preventDefault();
+          document.getElementById('main')?.focus();
+        },
+      },
+      'Skip to content',
+    ),
     h(
       'header',
       { class: 'top' },

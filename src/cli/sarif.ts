@@ -4,7 +4,7 @@ import type { AuditResult } from '../core/types';
 const LEVEL = { error: 'error', warning: 'warning', info: 'note' } as const;
 
 /** SARIF 2.1.0, the format GitHub code scanning ingests. */
-export function toSarif(result: AuditResult, version: string): object {
+export function toSarif(result: AuditResult, version: string, prefix = ''): object {
   return {
     $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
     version: '2.1.0',
@@ -32,7 +32,7 @@ export function toSarif(result: AuditResult, version: string): object {
           locations: [
             {
               physicalLocation: {
-                artifactLocation: { uri: f.path },
+                artifactLocation: { uri: prefix ? `${prefix}/${f.path}` : f.path },
                 region: { startLine: f.line, startColumn: f.column },
               },
             },

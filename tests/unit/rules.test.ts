@@ -24,18 +24,19 @@ describe('rules', () => {
     }
   });
 
-  it('UIScreen.main.scale in a view controller is safely rewritten to the trait collection', () => {
+  it('UIScreen.main.scale in a view controller method gets a review-level trait collection fix', () => {
     const files = swift('final class A: UIViewController {\n  func f() { let s = UIScreen.main.scale }\n}');
     expect(ids(files)).toEqual(['uiscreen-main']);
-    expect(fixAll(files, 'safe')).toContain('let s = traitCollection.displayScale');
+    expect(fixAll(files, 'safe')).toContain('UIScreen.main.scale');
+    expect(fixAll(files, 'all')).toContain('let s = traitCollection.displayScale');
   });
 
   it('UIScreen.main.bounds gets a review-only fix and none outside UIKit views', () => {
-    const vc = swift('class A: UIViewController { func f() { let b = UIScreen.main.bounds } }');
+    const vc = swift('class A: UIViewController {\n  func f() { let b = UIScreen.main.bounds }\n}');
     expect(audit(vc).findings[0].fix?.confidence).toBe('review');
     expect(fixAll(vc, 'safe')).toContain('UIScreen.main.bounds');
     expect(fixAll(vc, 'all')).toContain('let b = view.bounds');
-    const view = swift('class Cell: UICollectionViewCell { func f() { let b = UIScreen.main.bounds } }');
+    const view = swift('class Cell: UICollectionViewCell {\n  func f() { let b = UIScreen.main.bounds }\n}');
     expect(fixAll(view)).toContain('let b = bounds');
     const free = swift('func f() { let b = UIScreen.main.bounds }');
     expect(audit(free).findings[0].fix).toBeUndefined();
@@ -165,7 +166,7 @@ describe('sample project (Encore)', () => {
 
   it('safe fixes remove their findings, leave the rest, and are idempotent', () => {
     const { files: fixed, applied } = applyFixes(files, result.findings, 'safe');
-    expect(applied.map((f) => f.ruleId).sort()).toEqual(['navigation-view', 'symmetric-safe-area', 'uiscreen-main']);
+    expect(applied.map((f) => f.ruleId).sort()).toEqual(['navigation-view', 'symmetric-safe-area']);
     const after = audit(fixed);
     expect(after.findings).toHaveLength(result.findings.length - applied.length);
     expect(after.score).toBeGreaterThan(result.score);

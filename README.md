@@ -26,9 +26,9 @@ iOS doesn't let anyone reshape someone else's app, so this kit is for the people
 
 ## The rules
 
-17 checks traced to Apple's iPhone Duo tech talks: `UIScreen.main`, idiom and orientation checks, symmetric safe-area math, hard-coded iPhone sizes, hand-built bars, `NavigationView`, `ArrangementView` misuse, missing sidebar, centered columns, hand-rolled two-pane layouts, portrait lock, `UIRequiresFullScreen`, missing scene lifecycle, pre-27.1 Xcode, and React Native / Flutter. `npm run audit -- rules` lists them.
+17 checks traced to Apple's iPhone Duo guidance: `UIScreen.main`, idiom and orientation checks, symmetric safe-area math, hard-coded iPhone sizes, hand-built bars, `NavigationView`, `ArrangementView` misuse, missing sidebar, centered columns, hand-rolled two-pane layouts, portrait lock, `UIRequiresFullScreen`, missing scene lifecycle, pre-27.1 Xcode, and React Native / Flutter. `npm run audit -- rules` lists them.
 
-Fixes come in two kinds. *Safe* ones (`UIScreen.main.scale` to `traitCollection.displayScale`, safe-area insets, `NavigationView` to `NavigationStack`) keep behavior. *Review* ones change it and are never applied without `--fix=all` or a tick.
+Fixes come in two kinds. *Safe* ones are Apple's own before/after rewrites, offered only where the scanner can prove they compile (safe-area insets, single-column `NavigationView` to `NavigationStack`). *Review* ones (`UIScreen.main` replacements, the tab sidebar) need a human look and are never applied without `--fix=all` or a tick.
 
 ## Limits
 

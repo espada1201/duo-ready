@@ -79,6 +79,14 @@ export function maskSwift(text: string): string {
       }
       continue;
     }
+    if (c === '/' && isRegexStart(i)) {
+      const end = regexEnd(i);
+      if (end > 0) {
+        for (let m = i + 1; m < end; m++) blank(m);
+        i = end + 1;
+        continue;
+      }
+    }
     const top = interp[interp.length - 1];
     if (top && c === '(') top.depth++;
     if (top && c === ')') {
@@ -105,6 +113,24 @@ export function maskSwift(text: string): string {
     i++;
   }
   return out.join('');
+
+  // `/…/` is a regex literal where an expression starts, never after an operand.
+  function isRegexStart(at: number): boolean {
+    const next = text[at + 1];
+    if (next === undefined || next === ' ' || next === '\t' || next === '\n' || next === '=') return false;
+    let j = at - 1;
+    while (j >= 0 && (text[j] === ' ' || text[j] === '\t')) j--;
+    if (j < 0 || '=(,:[{!&|?;\n'.includes(text[j])) return true;
+    return /\breturn$/.test(text.slice(Math.max(0, j - 6), j + 1));
+  }
+
+  function regexEnd(at: number): number {
+    for (let j = at + 1; j < n && text[j] !== '\n'; j++) {
+      if (text[j] === '\\') j++;
+      else if (text[j] === '/') return j;
+    }
+    return -1;
+  }
 }
 
 const IDENT = /[A-Za-z_][A-Za-z0-9_]*$/;
@@ -114,7 +140,7 @@ function labelBefore(masked: string, brace: number): { label: string | null; arg
   while (j >= 0 && /\s/.test(masked[j])) j--;
   // `} secondary: {` — a labelled trailing closure of the previous call.
   if (masked[j] === ':') {
-    const m = IDENT.exec(masked.slice(0, j).trimEnd());
+    const m = IDENT.exec(masked.slice(Math.max(0, j - 200), j).trimEnd());
     return { label: null, argument: m ? m[0] : null };
   }
   if (masked[j] === ')') {
@@ -193,20 +219,37 @@ export function blockAt(root: Block, offset: number): Block {
   return root;
 }
 
+/** Text of the statement that opens `block`, back to the previous brace, semicolon or line break. */
+export function headerOf(src: SwiftSource, block: Block): string {
+  let j = block.open - 1;
+  while (j >= 0 && !'{};\n'.includes(src.masked[j])) j--;
+  return src.masked.slice(j + 1, block.open).trim();
+}
+
+export interface DeclaredType {
+  name: string;
+  inherits: string[];
+  block: Block | null;
+}
+
+const typeCache = new WeakMap<SwiftSource, DeclaredType[]>();
+
 /** Declared types in the file with their superclass / conformance list. */
-export function declaredTypes(src: SwiftSource): { name: string; inherits: string[]; block: Block | null }[] {
+export function declaredTypes(src: SwiftSource): DeclaredType[] {
+  const cached = typeCache.get(src);
+  if (cached) return cached;
+  const byOpen = new Map<number, Block>();
+  for (const b of walk(src.root)) byOpen.set(b.open, b);
   const re = /\b(?:class|struct|extension|enum|actor)\s+([A-Za-z_][\w.]*)(?:\s*<[^>{]*>)?\s*(?::\s*([^{]+))?\{/g;
-  const out: { name: string; inherits: string[]; block: Block | null }[] = [];
+  const out: DeclaredType[] = [];
   for (const m of src.masked.matchAll(re)) {
-    const braceAt = m.index! + m[0].length - 1;
-    let block: Block | null = null;
-    for (const b of walk(src.root)) if (b.open === braceAt) block = b;
     const inherits = (m[2] ?? '')
       .replace(/\bwhere\b[\s\S]*/, '')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    out.push({ name: m[1], inherits, block });
+    out.push({ name: m[1], inherits, block: byOpen.get(m.index! + m[0].length - 1) ?? null });
   }
+  typeCache.set(src, out);
   return out;
 }

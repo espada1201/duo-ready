@@ -10,6 +10,7 @@
     "start": "npm run build && vite preview --open",
     "dev": "vite",
     "build": "vite build && node build-cli.mjs",
+    "prepare": "node build-cli.mjs",
     "audit": "node build-cli.mjs && node dist-cli/duo-ready.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

@@ -1,5 +1,5 @@
 import { parsePlist, type PlistValue } from './plist';
-import { ancestors, blockAt, declaredTypes, parseSwift, position, walk, type Block, type SwiftSource } from './swift';
+import { ancestors, blockAt, declaredTypes, headerOf, parseSwift, position, walk, type Block, type SwiftSource } from './swift';
 import type { Finding, Fix, Severity, SourceFile } from './types';
 
 export interface Rule {
@@ -23,7 +23,7 @@ export const RULES: Rule[] = [
     id: 'uiscreen-main',
     title: 'UIScreen.main on a two-display phone',
     severity: 'error',
-    why: 'iPhone Duo has two displays, so “the main screen” is ambiguous. Apple says UIScreen.main will be deprecated.',
+    why: 'iPhone Duo has two displays, so “the main screen” is ambiguous. UIScreen.main is deprecated, and Apple says to remove it.',
     instead: 'Read scale from traitCollection.displayScale and sizes from your view or window scene.',
     source: PREPARE,
   },
@@ -85,10 +85,10 @@ export const RULES: Rule[] = [
   },
   {
     id: 'navigation-in-arrangement',
-    title: 'Navigation container inside ArrangementView',
+    title: 'NavigationSplitView inside ArrangementView',
     severity: 'error',
-    why: 'ArrangementView provides no navigation infrastructure. Navigation containers belong outside it.',
-    instead: 'Wrap the ArrangementView in your NavigationStack, not the other way round.',
+    why: 'ArrangementView provides no navigation infrastructure, and a split view inside it fights it for the same space.',
+    instead: 'Put the ArrangementView inside your navigation container, not the other way round.',
     source: POSE,
   },
   {
@@ -96,7 +96,7 @@ export const RULES: Rule[] = [
     title: 'TabView without a sidebar on the inner display',
     severity: 'info',
     why: 'On the inner display a sidebar uses the width better than a bottom tab bar.',
-    instead: 'Opt in with .defaultTabBarPlacement(.sidebar).',
+    instead: 'Opt in with .defaultTabBarPlacement(.sidebar) (iOS 27.1 SDK).',
     source: PREPARE,
   },
   {
@@ -119,7 +119,7 @@ export const RULES: Rule[] = [
     id: 'portrait-only',
     title: 'Portrait-only app',
     severity: 'warning',
-    why: 'The inner display ignores your orientation lock, and people prop Duo up like a tent on the outer display.',
+    why: 'The inner display ignores your orientation lock, so a portrait-only layout gets a landscape canvas anyway.',
     instead: 'Support landscape on iPhone.',
     source: PREPARE,
   },
@@ -185,18 +185,26 @@ function reporter(file: SourceFile, findings: Finding[], starts = lineStarts(fil
   };
 }
 
-const UIKIT_VIEWISH = /^(UI\w*View\w*|UI\w*Cell|UI\w*Controller|\w*(View|Cell|ViewController|Controller))$/;
+const UIKIT_VIEWS = /^UI(View|Control|Button|Label|ImageView|ScrollView|TableView|CollectionView|StackView|TextField|TextView|VisualEffectView|TableViewCell|CollectionViewCell|CollectionReusableView|TableViewHeaderFooterView)$/;
+const UIKIT_CONTROLLERS = /^UI(ViewController|TableViewController|CollectionViewController|NavigationController|TabBarController|SplitViewController|PageViewController)$/;
+const CONTROL_FLOW = /^(\}\s*)?(if|else|guard|for|while|switch|do|repeat|defer|catch)\b/;
 
-/** Which UIKit context, if any, the offset sits in: decides what `traitCollection` / `view` resolve to. */
+/**
+ * Whether `offset` sits in an instance method of a UIKit view or view controller, where
+ * `traitCollection`, `bounds` and `view` resolve to the instance. Anything less certain
+ * (closures, initializers, static members, property initializers, unknown superclasses)
+ * returns null so no fix is offered.
+ */
 function uikitContext(src: SwiftSource, offset: number): 'controller' | 'view' | null {
-  const at = blockAt(src.root, offset);
-  const chain = [at, ...ancestors(at)];
-  for (const t of declaredTypes(src)) {
-    if (!t.block || !chain.includes(t.block)) continue;
-    const base = t.inherits[0] ?? '';
-    if (!UIKIT_VIEWISH.test(base) || !base.startsWith('UI')) continue;
-    return /Controller$/.test(base) ? 'controller' : 'view';
-  }
+  let b: Block | null = blockAt(src.root, offset);
+  while (b && b.parent && CONTROL_FLOW.test(headerOf(src, b))) b = b.parent;
+  if (!b || !b.parent) return null;
+  const header = headerOf(src, b);
+  if (!/^(@\w+\s+)*((public|private|fileprivate|internal|open|final|override|@objc|mutating|nonisolated)\s+)*func\s/.test(header)) return null;
+  const owner = declaredTypes(src).find((t) => t.block === b!.parent);
+  const base = owner?.inherits[0] ?? '';
+  if (UIKIT_CONTROLLERS.test(base)) return 'controller';
+  if (UIKIT_VIEWS.test(base)) return 'view';
   return null;
 }
 
@@ -205,7 +213,8 @@ const PHONE_WIDTHS = new Set([320, 375, 390, 393, 402, 414, 428, 430, 440]);
 const PHONE_HEIGHTS = new Set([568, 667, 736, 812, 844, 852, 874, 896, 926, 932, 956]);
 
 const SCROLLERS = new Set(['List', 'ScrollView', 'LazyVStack', 'LazyHStack', 'Form']);
-const NAVIGATORS = new Set(['NavigationSplitView', 'NavigationStack', 'NavigationView', 'TabView']);
+/** Closures whose content is presented elsewhere, so it is not laid out inside the enclosing scroller. */
+const PRESENTED = new Set(['NavigationLink', 'sheet', 'fullScreenCover', 'popover', 'navigationDestination', 'inspector']);
 
 function checkSwift(file: SourceFile, findings: Finding[]) {
   const src = parseSwift(file.content);
@@ -216,17 +225,18 @@ function checkSwift(file: SourceFile, findings: Finding[]) {
     const ctx = uikitContext(src, hit.index!);
     const member = hit[2];
     let fix: Fix | undefined;
-    if ((member === 'scale' || member === 'nativeScale') && ctx) {
+    const span = { start: hit.index!, end: hit.index! + hit[0].length };
+    if (member === 'scale' && ctx) {
       fix = {
-        confidence: 'safe',
-        description: 'Use the trait collection’s display scale.',
-        edits: [{ start: hit.index!, end: hit.index! + hit[0].length, text: 'traitCollection.displayScale' }],
+        confidence: 'review',
+        description: 'Use the trait collection’s display scale. Read it once the view is in a window.',
+        edits: [{ ...span, text: 'traitCollection.displayScale' }],
       };
     } else if (member === 'bounds' && ctx) {
       fix = {
         confidence: 'review',
         description: ctx === 'controller' ? 'Size from the view controller’s view.' : 'Size from this view’s bounds.',
-        edits: [{ start: hit.index!, end: hit.index! + hit[0].length, text: ctx === 'controller' ? 'view.bounds' : 'bounds' }],
+        edits: [{ ...span, text: ctx === 'controller' ? 'view.bounds' : 'bounds' }],
       };
     }
     report('uiscreen-main', hit.index!, member ? `UIScreen.main.${member} is ambiguous on a two-display phone.` : undefined, fix);
@@ -238,11 +248,14 @@ function checkSwift(file: SourceFile, findings: Finding[]) {
     report('orientation-layout', hit.index!);
   }
 
-  const symmetric = /\b([A-Za-z_][\w.]*?)\.bounds\.(width|height)\s*-\s*\1\.safeAreaInsets\.(left|right|top|bottom)\s*\*\s*2\b/g;
+  const symmetric = /\b([A-Za-z_][\w.]*?)\.bounds\.(width|height)\s*-\s*\1\.safeAreaInsets\.(left|right|top|bottom)\s*\*\s*2(?![.\w])/g;
   const fixedSymmetric = new Set<number>();
   for (const hit of m.matchAll(symmetric)) {
     const axisOk = (hit[2] === 'width') === (hit[3] === 'left' || hit[3] === 'right');
-    if (!axisOk) continue;
+    // Only rewrite a standalone `a - b * 2`: a neighbouring * / - % would re-associate.
+    const before = m.slice(0, hit.index!).trimEnd().slice(-1);
+    const after = m.slice(hit.index! + hit[0].length).trimStart()[0] ?? '';
+    if (!axisOk || /[*/%\w)\].-]/.test(before) || /[*/%.]/.test(after)) continue;
     fixedSymmetric.add(hit.index! + hit[0].indexOf('safeAreaInsets'));
     report('symmetric-safe-area', hit.index!, undefined, {
       confidence: 'safe',
@@ -250,7 +263,7 @@ function checkSwift(file: SourceFile, findings: Finding[]) {
       edits: [{ start: hit.index!, end: hit.index! + hit[0].length, text: `${hit[1]}.bounds.inset(by: ${hit[1]}.safeAreaInsets).${hit[2]}` }],
     });
   }
-  for (const hit of m.matchAll(/safeAreaInsets\.(left|right|top|bottom)\s*\*\s*2\b/g)) {
+  for (const hit of m.matchAll(/safeAreaInsets\.(left|right|top|bottom)\s*\*\s*2(?![.\w])/g)) {
     if (!fixedSymmetric.has(hit.index!)) report('symmetric-safe-area', hit.index!);
   }
 
@@ -273,35 +286,42 @@ function checkSwift(file: SourceFile, findings: Finding[]) {
   for (const b of blocks) {
     if (b.label === 'NavigationView' && !b.argument) {
       const at = m.lastIndexOf('NavigationView', b.open);
-      const columns = countTopLevelViews(src, b);
       report(
         'navigation-view',
         at,
         undefined,
-        columns <= 1
+        countStatements(m.slice(b.open + 1, b.close)) === 1
           ? { confidence: 'safe', description: 'Replace with NavigationStack.', edits: [{ start: at, end: at + 'NavigationView'.length, text: 'NavigationStack' }] }
           : undefined,
       );
     }
     if (b.label === 'ArrangementView' && !b.argument) {
-      const scroller = ancestors(b).find((a) => a.label && SCROLLERS.has(a.label));
+      let scroller: Block | undefined;
+      for (const a of ancestors(b)) {
+        if (a.label && PRESENTED.has(a.label)) break;
+        if (a.label && SCROLLERS.has(a.label)) {
+          scroller = a;
+          break;
+        }
+      }
       if (scroller) report('arrangement-in-scroll', m.lastIndexOf('ArrangementView', b.open), `ArrangementView is inside ${scroller.label}.`);
     }
-    if (b.label && NAVIGATORS.has(b.label) && !b.argument) {
-      const arrangement = ancestors(b).find((a) => a.label === 'ArrangementView');
-      if (arrangement) report('navigation-in-arrangement', m.lastIndexOf(b.label, b.open), `${b.label} is inside an ArrangementView.`);
+    if (b.label === 'NavigationSplitView' && !b.argument && ancestors(b).some((a) => a.label === 'ArrangementView')) {
+      report('navigation-in-arrangement', m.lastIndexOf(b.label, b.open), 'NavigationSplitView is inside an ArrangementView.');
     }
-    if (b.label === 'TabView' && !b.argument && !/\.defaultTabBarPlacement\b/.test(m.slice(b.close + 1, afterModifiers(m, b.close + 1)))) {
+    const modifiers = b.label === 'TabView' && !b.argument ? m.slice(b.close + 1, afterModifiers(m, b.close + 1)) : null;
+    if (modifiers !== null && !/\.defaultTabBarPlacement\b|\.sidebarAdaptable\b/.test(modifiers)) {
       const indent = lineIndent(file.content, b.open);
+      const eol = file.content.includes('\r\n') ? '\r\n' : '\n';
       report('tab-sidebar', m.lastIndexOf('TabView', b.open), undefined, {
         confidence: 'review',
-        description: 'Show tabs as a sidebar on the inner display.',
-        edits: [{ start: b.close + 1, end: b.close + 1, text: `\n${indent}.defaultTabBarPlacement(.sidebar)` }],
+        description: 'Show tabs as a sidebar on the inner display. Needs the iOS 27.1 SDK.',
+        edits: [{ start: b.close + 1, end: b.close + 1, text: `${eol}${indent}.defaultTabBarPlacement(.sidebar)` }],
       });
     }
     // `if horizontalSizeClass == .regular { HStack { … } }`
     const head = m.slice(Math.max(0, b.open - 80), b.open);
-    const sizeCheck = /\b(horizontalSizeClass|sizeClass)\s*==\s*\.regular\s*$/.exec(head);
+    const sizeCheck = /\b\w*[sS]izeClass\w*\s*==\s*\.regular\s*$/.exec(head);
     if (sizeCheck && b.children.some((c) => c.label === 'HStack')) report('manual-two-pane', b.open - head.length + sizeCheck.index);
   }
 
@@ -327,18 +347,24 @@ function lineIndent(text: string, offset: number): string {
   return /^[ \t]*/.exec(text.slice(start))![0];
 }
 
-/** Rough count of sibling views directly inside a builder block. */
-function countTopLevelViews(src: SwiftSource, b: Block): number {
+/**
+ * Number of top-level statements in a builder body. Lines starting with `.` continue the
+ * previous statement (modifier chains); anything ambiguous counts as another statement.
+ */
+function countStatements(body: string): number {
   let count = 0;
   let depth = 0;
-  const body = src.masked.slice(b.open + 1, b.close);
+  let open = false;
   for (const line of body.split('\n')) {
     const trimmed = line.trim();
-    if (depth === 0 && /^[A-Z]\w*\s*[({]/.test(trimmed)) count++;
+    if (!trimmed) continue;
+    if (depth === 0 && !(open && trimmed.startsWith('.'))) count++;
     for (const c of line) {
-      if (c === '{' || c === '(') depth++;
-      else if (c === '}' || c === ')') depth--;
+      if (c === '{' || c === '(' || c === '[') depth++;
+      else if (c === '}' || c === ')' || c === ']') depth--;
+      else if (c === ';' && depth === 0) count++;
     }
+    open = true;
   }
   return count;
 }
@@ -348,7 +374,7 @@ function plistFindings(file: SourceFile, findings: Finding[]) {
   if (!parsed) return;
   const report = reporter(file, findings);
   const { keys } = parsed;
-  const orientations = keys.get('UISupportedInterfaceOrientations');
+  const orientations = keys.get('UISupportedInterfaceOrientations~iphone') ?? keys.get('UISupportedInterfaceOrientations');
   if (orientations && Array.isArray(orientations.value) && orientations.value.length > 0) {
     if (orientations.value.every((v: PlistValue) => typeof v === 'string' && v.includes('Portrait'))) report('portrait-only', orientations.offset);
   }
@@ -378,7 +404,7 @@ export function checkFiles(files: SourceFile[]): Finding[] {
       if (appDelegate && !facts.appDelegateOffset) facts.appDelegateOffset = { file, offset: appDelegate.index };
     } else if (name.endsWith('.plist')) {
       plistFindings(file, findings);
-      if (file.content.includes('UIApplicationSceneManifest')) facts.hasSceneManifest = true;
+      if (parsePlist(file.content)?.keys.has('UIApplicationSceneManifest')) facts.hasSceneManifest = true;
     } else if (name === 'project.pbxproj') {
       if (/INFOPLIST_KEY_UIApplicationSceneManifest_Generation\s*=\s*YES/.test(file.content)) facts.hasSceneManifest = true;
       pbxprojFindings(file, findings);
@@ -398,8 +424,13 @@ export function checkFiles(files: SourceFile[]): Finding[] {
 
 function pbxprojFindings(file: SourceFile, findings: Finding[]) {
   const report = reporter(file, findings);
-  const portrait = /INFOPLIST_KEY_UISupportedInterfaceOrientations\s*=\s*"?([^";]*)"?;/.exec(file.content);
-  if (portrait && portrait[1].trim() && portrait[1].split(/\s+/).every((o) => o.includes('Portrait'))) report('portrait-only', portrait.index);
+  const seen = new Set<string>();
+  for (const hit of file.content.matchAll(/INFOPLIST_KEY_UISupportedInterfaceOrientations(?:_iPhone)?\s*=\s*"?([^";]*)"?;/g)) {
+    const value = hit[1].trim();
+    if (!value || seen.has(value) || !value.split(/\s+/).every((o) => o.includes('Portrait'))) continue;
+    seen.add(value);
+    report('portrait-only', hit.index!);
+  }
   const full = /INFOPLIST_KEY_UIRequiresFullScreen\s*=\s*YES;/.exec(file.content);
   if (full) report('requires-full-screen', full.index);
   const upgrade = /LastUpgradeCheck\s*=\s*(\d{4});/.exec(file.content);

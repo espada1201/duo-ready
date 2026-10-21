@@ -6,8 +6,10 @@ struct NowPlayingView: View {
             ArrangementView {
                 PlayerArtwork()
             } secondary: {
-                NavigationStack {
+                NavigationSplitView {
                     UpNextList()
+                } detail: {
+                    Text("Lyrics")
                 }
             }
         }

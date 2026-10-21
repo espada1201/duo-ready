@@ -59,13 +59,13 @@ test('auditing the sample app lists findings and downloads working fixes', async
   await page.getByRole('button', { name: 'Try the sample app' }).click();
   await expect(page.getByTestId('grade')).toHaveText('Not ready');
   await expect(page.locator('.finding')).toHaveCount(19);
-  await expect(page.getByTestId('download')).toHaveText('Download 3 fixes');
+  await expect(page.getByTestId('download')).toHaveText('Download 2 fixes');
 
   // Opt into the review-level sidebar fix too.
   const sidebar = page.locator('.finding[data-rule="tab-sidebar"] input[type=checkbox]');
   await sidebar.check();
   await expect(sidebar).toBeFocused();
-  await expect(page.getByTestId('download')).toHaveText('Download 4 fixes');
+  await expect(page.getByTestId('download')).toHaveText('Download 3 fixes');
 
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('download').click()]);
   const zip = unzipSync(new Uint8Array(readFileSync((await download.path())!)));
@@ -86,7 +86,7 @@ test('auditing a chosen folder, pasted code, and a folder with nothing to audit'
   await expect(page.locator('.finding')).toHaveCount(19);
 
   await page.getByRole('button', { name: 'Paste Swift' }).click();
-  await page.getByLabel('Swift source').fill('final class A: UIViewController {\n  let s = UIScreen.main.scale\n}');
+  await page.getByLabel('Swift source').fill('final class A: UIViewController {\n  func f() { let s = UIScreen.main.scale }\n}');
   await page.getByRole('button', { name: 'Audit', exact: true }).click();
   await expect(page.locator('.finding')).toHaveCount(1);
   await expect(page.locator('.diff')).toContainText('traitCollection.displayScale');
@@ -98,5 +98,9 @@ test('auditing a chosen folder, pasted code, and a folder with nothing to audit'
 test('rule links deep-link and focus the rule', async ({ page }) => {
   await page.goto('./#rules/hand-built-bar');
   await expect(page.locator('#rule-hand-built-bar')).toBeFocused();
+  await page.getByRole('link', { name: 'Skip to content' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main')).toBeFocused();
+  await expect(page).toHaveURL(/#rules\/hand-built-bar$/);
   await expect(page.locator('.rule')).toHaveCount(17);
 });

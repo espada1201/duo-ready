@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -22,7 +22,7 @@ describe('duo-ready CLI', () => {
     expect(code).toBe(1);
     expect(out).toContain('Encore/Encore/NowPlayingView.swift');
     expect(out).toMatch(/Duo readiness \d+\/100 {2}Not ready/);
-    expect(out).toContain('3 safe fixes (--fix), 1 more for review (--fix=all).');
+    expect(out).toContain('2 safe fixes (--fix), 2 more for review (--fix=all).');
   });
 
   it('emits JSON and SARIF that tools can consume', () => {
@@ -48,9 +48,21 @@ describe('duo-ready CLI', () => {
 
     const fixed = capture([dir, '--fix', '--no-color', '--fail-on', 'never']);
     expect(fixed.code).toBe(0);
-    expect(fixed.out).toContain('Applied 3 fixes.');
-    expect(readFileSync(player, 'utf8')).toContain('image(scale: traitCollection.displayScale)');
+    expect(fixed.out).toContain('Applied 2 fixes.');
+    expect(readFileSync(player, 'utf8')).toContain('image(scale: UIScreen.main.scale)');
     expect(readFileSync(join(dir, 'Encore/Encore/LibraryView.swift'), 'utf8')).toContain('NavigationStack {');
+  });
+
+  it('survives symlink loops and prefixes SARIF paths from the git root', () => {
+    dir = mkdtempSync(join(tmpdir(), 'duo-'));
+    mkdirSync(join(dir, '.git'));
+    mkdirSync(join(dir, 'ios/App'), { recursive: true });
+    writeFileSync(join(dir, 'ios/App/A.swift'), 'let pad = UIDevice.current.userInterfaceIdiom == .pad');
+    symlinkSync(join(dir, 'ios'), join(dir, 'ios/App/loop'));
+    const sarif = JSON.parse(capture([join(dir, 'ios'), '--format', 'sarif']).out);
+    expect(sarif.runs[0].results.map((r: { locations: { physicalLocation: { artifactLocation: { uri: string } } }[] }) => r.locations[0].physicalLocation.artifactLocation.uri)).toEqual([
+      'ios/App/A.swift',
+    ]);
   });
 
   it('explains bad input instead of crashing', () => {
