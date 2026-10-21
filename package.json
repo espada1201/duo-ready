@@ -1,0 +1,29 @@
+{
+  "name": "duo-ready",
+  "version": "0.1.0",
+  "description": "Audit and auto-fix existing iPhone apps for iPhone Duo, plus a browser lab to preview them.",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "bin": { "duo-ready": "dist-cli/duo-ready.js" },
+  "scripts": {
+    "start": "npm run build && vite preview --open",
+    "dev": "vite",
+    "build": "vite build && node build-cli.mjs",
+    "audit": "node build-cli.mjs && node dist-cli/duo-ready.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "^22.15.0",
+    "esbuild": "^0.25.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.0",
+    "vitest": "^3.2.4"
+  }
+}
