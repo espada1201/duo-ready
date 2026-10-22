@@ -33,6 +33,15 @@ function callText(masked: string, from: number): string {
 /** `width: 40, height: 40` or `width: Layout.icon, height: Layout.icon`: both set, neither read from a window, geometry or container. */
 const FIXED_FRAME = /^\s*width\s*:\s*(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+,\s*height\s*:\s*(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+(?:,|$)/i;
 
+/** Whether the function holding `scope` returns text or an icon (`-> String`, `-> SymbolName`, `-> UIImage?`). */
+function returnsCopy(m: string, scope: Block | null): boolean {
+  for (let b = scope; b?.parent; b = b.parent) {
+    const head = /\bfunc\s+\w+\s*(?:<[^>]*>)?\s*\((?:[^()]|\([^()]*\))*\)\s*(?:throws\s*)?(?:->\s*([\w.]+)\??)?\s*(?:where\s[^{]*)?$/.exec(m.slice(Math.max(0, b.open - 300), b.open));
+    if (head) return /^(?:String|AttributedString|NSAttributedString|LocalizedStringKey|UIImage|Image|\w*Symbol\w*|\w*Icon\w*)$/.test(head[1] ?? '');
+  }
+  return false;
+}
+
 /** Whether a block around the image (`AsyncImage { image in … } placeholder: { … }`, a `Group`, a `switch`, KFImage's `.placeholder { }`) ends in a fixed frame or an aspect ratio. */
 function sizedOutside(m: string, block: Block): boolean {
   for (let b: Block | null = block, depth = 0; b?.parent && depth < 3; b = b.parent, depth++) {
@@ -109,6 +118,8 @@ export const stretched = defineGroup({
       // `userInterfaceIdiom: UIUserInterfaceIdiom = .phone` declares a parameter or property; its readers are what matter.
       if (declaredAt(m, hit.index!) || /^userInterfaceIdiom\s*:\s*UIUserInterfaceIdiom\b/.test(m.slice(hit.index!, hit.index! + 60)) || /\bkeyboardType\b|\bpreferredStyle\b/.test(line) || /^userInterfaceIdiom\s*[!=]=\s*\.(?:tv|mac|carPlay|vision)\b/.test(m.slice(hit.index!, hit.index! + 60))) continue;
       if (facts.idiomWrappers.some((w) => new RegExp(`\\bvar\\s+${w}\\s*:\\s*Bool\\s*\\{[^{}]*$`).test(m.slice(Math.max(0, hit.index! - 120), hit.index)))) continue;
+      // A function that returns a name or an icon picks wording for the device, not a layout.
+      if (returnsCopy(m, blockAt(src.root, hit.index!))) continue;
       report('idiom-layout', hit.index!);
     }
 

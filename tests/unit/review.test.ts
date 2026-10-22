@@ -826,3 +826,11 @@ describe('foreground scenes', () => {
     expect(ids([plist, { path: 'A.swift', content: code }])).toContain('key-window');
   });
 });
+
+describe('idiom wording', () => {
+  it('ignores an idiom check that picks a name or an icon', () => {
+    const code = 'private func storageName() -> String {\n  guard UIDevice.current.userInterfaceIdiom == .pad else { return "On My iPhone" }\n  return "On My iPad"\n}';
+    expect(ids([{ path: 'A.swift', content: code }])).toEqual([]);
+    expect(ids([{ path: 'A.swift', content: 'func layout() {\n  if UIDevice.current.userInterfaceIdiom == .pad { columns = 2 }\n}' }])).toContain('idiom-layout');
+  });
+});
