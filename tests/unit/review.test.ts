@@ -955,3 +955,10 @@ describe('sixth held-out review', () => {
     expect(ids([{ path: 'A.swift', content: 'let o = scene.interfaceOrientation\nconnection.videoOrientation = AVCaptureVideoOrientation(o)' }])).toEqual([]);
   });
 });
+
+describe('hairlines', () => {
+  it('names a hairline width as low impact', () => {
+    const f = audit([{ path: 'A.swift', content: 'let h = 1 / UIScreen.main.scale' }]).findings[0];
+    expect(f.message).toMatch(/hairline/);
+  });
+});

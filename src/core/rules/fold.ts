@@ -227,6 +227,10 @@ export const fold = defineGroup({
           edits: [{ ...span, text: ctx.kind === 'controller' ? 'self.view.bounds' : 'self.bounds' }],
         };
       }
+      // `1 / UIScreen.main.scale` only sets a hairline's width: a pixel off if the displays' scales differ.
+      if ((member === 'scale' || member === 'nativeScale') && /\b1(?:\.0)?\s*\/\s*\(?\s*$/.test(m.slice(Math.max(0, hit.index! - 20), hit.index))) {
+        message = 'A hairline width from UIScreen.main.scale: low impact, but it is a pixel off if Duo’s two displays differ in scale.';
+      }
       report('uiscreen-main', hit.index!, message ?? (member ? `UIScreen.main.${member} is ambiguous on a two-display phone.` : undefined), fix);
     }
 
