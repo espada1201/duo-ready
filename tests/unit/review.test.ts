@@ -987,3 +987,14 @@ describe('every window', () => {
     expect(ids([{ path: 'A.swift', content: 'let html = "<meta name=\\"viewport\\" content=\\"width=320\\">"\nwebView.loadHTMLString(html, baseURL: nil)\nlet w = WKWebView()' }])).toContain('webview-viewport');
   });
 });
+
+describe('sizes that are not screens', () => {
+  const swiftIds = (content: string) => ids([{ path: 'A.swift', content }]);
+  it.each([
+    ['a flow-layout header size', 'func collectionView(_ c: UICollectionView, layout l: UICollectionViewLayout, referenceSizeForHeaderInSection s: Int) -> CGSize {\n  CGSize(width: 320, height: 44)\n}'],
+    ['a fitting size', 'let h = cell.systemLayoutSizeFitting(CGSize(width: 375, height: 0)).height'],
+    ['a dialog card', 'VStack { Text("Alert") }\n  .frame(width: 320)\n  .background(Color.white)\n  .cornerRadius(12)'],
+  ])('ignores %s', (_, code) => {
+    expect(swiftIds(code)).toEqual([]);
+  });
+});

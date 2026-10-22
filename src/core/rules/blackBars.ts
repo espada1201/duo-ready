@@ -5,7 +5,7 @@ import { blockAt, headerOf, type SwiftSource } from '../swift';
 import { chainHas, chainRoot, defineGroup, PREPARE, POSE } from './engine';
 
 // iPhone point sizes from the iPhone SE through the 17 Pro Max.
-const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize|estimated\w*|snapshot\w*|drawHierarchy|render\w*|\w*Preview|GADAdSize\w*|adSize|bannerSize|video\w*Size|export\w*|canvas\w*|renderSize|outputSize|\w*OniPad|\w*ForPad|inputAccessory\w*)\b/i;
+const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize|estimated\w*|snapshot\w*|drawHierarchy|render\w*|\w*Preview|GADAdSize\w*|adSize|bannerSize|video\w*Size|export\w*|canvas\w*|renderSize|outputSize|\w*OniPad|\w*ForPad|inputAccessory\w*|referenceSizeFor\w*|systemLayoutSizeFitting|sizeThatFits|fittingSize)\b/i;
 /** A few lines either side, where a size's purpose is named: `func preferredContentSize`, `renderAsImage()` on the next line. */
 function around(m: string, at: number): string {
   let from = at;
@@ -75,6 +75,8 @@ export const blackBars = defineGroup({
       // A context-menu preview or popover has its own size.
       if (blockAt(src.root, hit.index!).argument === 'preview' || /presentationCompactAdaptation|popover/.test(m.slice(hit.index!, hit.index! + 120))) continue;
       if (NOT_SCREEN.test(around(m, hit.index!)) || (n === 320 && /\bheight\s*:\s*50\b/.test(lineAround(m, hit.index!)))) continue;
+      // A rounded or shadowed box this wide is a dialog or a card, sized for its content rather than the screen.
+      if (/\.frame\s*\([^()]*$/.test(m.slice(Math.max(0, hit.index! - 40), hit.index)) && /\.(?:cornerRadius|clipShape|shadow)\s*\(/.test(around(m, hit.index!))) continue;
       // `super.init(frame: CGRect(x: 0, y: 0, width: 375, height: 250))` is a starting size; layout replaces it.
       if (/\bsuper\s*\.\s*init\s*\(\s*frame\s*:\s*CGRect\s*\([^()]*$/.test(m.slice(Math.max(0, hit.index! - 80), hit.index))) continue;
       // `let width = bounds.width > 0 ? bounds.width : 320` only falls back before the first layout pass.
