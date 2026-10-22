@@ -42,7 +42,7 @@ Fixes come in two kinds. *Safe fixes* are Apple's own before/after rewrites, off
 
 ## Limits
 
-- The scanner is pattern- and structure-based, not a Swift compiler. It skips comments and strings, but unusual code can slip past or trip it. Objective-C files get the core checks (screen, idiom, orientation, keyboard, fonts, bars, gestures, cameras); fixes and SwiftUI checks are Swift only.
+- The scanner is pattern- and structure-based, not a Swift compiler. It skips comments and strings, but unusual code can slip past or trip it. On the last 12 open-source apps it was tested on before any tuning for them, an independent reviewer judged 61 to 72% of findings worth a look; treat each one as a lead, not a verdict. Objective-C files get the core checks (screen, idiom, orientation, keyboard, fonts, bars, gestures, cameras); fixes and SwiftUI checks are Swift only.
 - Duo panel sizes come from Apple's specs; hinge, camera and status bar geometry are approximations. Check in the Xcode 27.1 simulator.
 - The SDK tier is estimated from the project's `LastUpgradeCheck`.
 - Tests, mocks, Xcode previews, `#if DEBUG` code, fallbacks for iOS versions older than Duo's, widgets, watch, Mac, TV and extension targets (and `#if os(...)` branches for them), build scripts, example apps and vendored folders (Pods, Carthage, Third Party, build) are skipped: Duo users never see them. Deployment targets are read from the Xcode project, `.xcconfig` files and XcodeGen specs.
