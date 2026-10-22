@@ -44,7 +44,7 @@ Fixes come in two kinds. *Safe fixes* are Apple's own before/after rewrites, off
 - The scanner is pattern- and structure-based, not a Swift compiler. It skips comments and strings, but unusual code can slip past or trip it.
 - Duo panel sizes come from Apple's specs; hinge, camera and status bar geometry are approximations. Check in the Xcode 27.1 simulator.
 - The SDK tier is estimated from the project's `LastUpgradeCheck`.
-- Tests, Xcode previews, widgets, watch and extension targets, build scripts and vendored folders (Pods, Carthage, build) are skipped: Duo users never see them.
+- Tests, mocks, Xcode previews, widgets, watch and extension targets, build scripts and vendored folders (Pods, Carthage, build) are skipped: Duo users never see them. Deployment targets are read from the Xcode project, `.xcconfig` files and XcodeGen specs.
 - Pasted code or a lone Swift file gets a partial audit: project-level checks can't run, so the grade stops at Close.
 
 ## Develop

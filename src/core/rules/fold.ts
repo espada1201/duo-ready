@@ -129,13 +129,15 @@ export const fold = defineGroup({
   ],
 
   swift({ src, masked: m, blocks, facts, report }) {
-    for (const hit of m.matchAll(/\bUIScreen\s*\.\s*main\b(\s*\.\s*(scale|bounds|nativeScale)\b)?/g)) {
+    for (const hit of m.matchAll(/\bUIScreen\s*\.\s*main\b(\s*\.\s*(scale|bounds|nativeScale|brightness)\b)?/g)) {
       const ctx = uikitContext(src, hit.index!);
       const member = hit[2];
       const span = { start: hit.index!, end: hit.index! + hit[0].length };
       let fix: Fix | undefined;
       let message: string | undefined;
-      if (member === 'scale' && ctx) {
+      if (member === 'brightness') {
+        message = 'UIScreen.main.brightness may change the display the app isn’t on. Use the screen of the view’s window scene: view.window?.windowScene?.screen.';
+      } else if (member === 'scale' && ctx) {
         fix = {
           confidence: 'review',
           description: 'Use the trait collection’s display scale. Read it once the view is in a window.',
@@ -179,6 +181,11 @@ export const fold = defineGroup({
 
     for (const hit of m.matchAll(/\bUIApplication\s*\.\s*shared\s*\.\s*(windows|keyWindow|connectedScenes\s*\.\s*first|delegate\s*\??\s*\.\s*window)\b/g)) {
       report('key-window', hit.index!);
+    }
+    // `connectedScenes.flatMap { ... }.first { $0.isKeyWindow }`, often split over lines.
+    for (const hit of m.matchAll(/\bUIApplication\s*\.\s*shared\s*\.\s*connectedScenes\b(?!\s*\.\s*first\b)/g)) {
+      const statement = /^[^;]*?(?=\n[ \t]*\n|;|$)/.exec(m.slice(hit.index!, hit.index! + 400))![0];
+      if (/\.windows\b|isKeyWindow/.test(statement)) report('key-window', hit.index!);
     }
 
     for (const b of blocks) {

@@ -1,4 +1,4 @@
-import { blockAt } from '../swift';
+import { blockAt, type Block } from '../swift';
 import { eolOf, lineAround } from '../text';
 import { defineGroup, chainHas, declaredAt, matchBefore, PREPARE } from './engine';
 
@@ -6,6 +6,11 @@ const VIEWPORT_WIDTH = /viewport[^\n>]{0,160}?\bwidth\s*=\s*(\d{3,4})\b/g;
 const viewportMessage = (width: string) => `The web viewport is fixed at ${width} px instead of device-width.`;
 /** Callbacks that run when the window changes size. */
 const ON_RESIZE = /\bfunc\s+(viewWillTransition|traitCollectionDidChange|viewWillLayoutSubviews|viewDidLayoutSubviews)\b|\.onChange\s*\(\s*of\s*:\s*\w*[sS]izeClass\b/g;
+
+function inDrawFunc(m: string, scope: Block | null): boolean {
+  for (let b = scope; b?.parent; b = b.parent) if (/\bfunc\s+draw\s*\([^{]*$/.test(m.slice(Math.max(0, b.open - 120), b.open))) return true;
+  return false;
+}
 
 /** The text of the call starting at `from`, through its balanced closing parenthesis. */
 function callText(masked: string, from: number): string {
@@ -67,12 +72,17 @@ export const stretched = defineGroup({
 
   swift({ file, src, masked: m, blocks, report }) {
     for (const hit of m.matchAll(/\buserInterfaceIdiom\b/g)) {
-      if (!declaredAt(m, hit.index!)) report('idiom-layout', hit.index!);
+      // Picking a keyboard type by idiom is about input, not layout.
+      if (!declaredAt(m, hit.index!) && !/\bkeyboardType\b/.test(lineAround(m, hit.index!))) report('idiom-layout', hit.index!);
     }
 
     const scaled = m.includes('scaledFont');
+    const drawing = /\bUIGraphicsPDFRenderer\b|\bUIGraphicsBeginPDFContext/.test(m);
     for (const hit of m.matchAll(/\.system\s*\(\s*size\s*:|\bUIFont\s*\.\s*(?:systemFont|boldSystemFont|italicSystemFont|monospacedSystemFont)\s*\(\s*ofSize\s*:|\bUIFont\s*\(\s*name\s*:[^)]*size\s*:|\.custom\s*\([^)]*size\s*:/g)) {
       if (/relativeTo\s*:|UIFontMetrics|scaledFont/.test(lineAround(m, hit.index!) + callText(m, hit.index!))) continue;
+      // A point size on an SF Symbol sizes an icon; PDF and draw(_:) output has no Dynamic Type to follow.
+      if (/\bImage\s*\(\s*systemName\s*:[^()]*\)(?:\s*\.\w+\s*\((?:[^()]|\([^()]*\))*\))*\s*\.font\s*\(\s*$/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
+      if (drawing || inDrawFunc(m, blockAt(src.root, hit.index!))) continue;
       // `let f = UIFont(...)` later passed to `scaledFont(for: f)` scales too.
       const name = scaled && /\b(?:let|var)\s+(\w+)\s*(?::\s*\w+\s*)?=\s*$/.exec(m.slice(Math.max(0, hit.index! - 60), hit.index))?.[1];
       const scope = blockAt(src.root, hit.index!);
@@ -83,10 +93,10 @@ export const stretched = defineGroup({
     for (const hit of m.matchAll(/\.resizable\s*\(\s*\)/g)) {
       const end = hit.index! + hit[0].length;
       if (chainHas(m, end, /^(aspectRatio|scaledToFit|scaledToFill)$/)) continue;
-      // A symbol or bundled asset (Image(name), Image(.resource)) in a fixed square frame is an icon:
+      // A symbol or bundled asset (Image(name), Image(.resource), SwiftGen's .swiftUIImage) in a fixed square frame is an icon:
       // it neither distorts nor follows the window. Photos and avatars (uiImage:, AsyncImage) can be
       // any shape, so they still count.
-      const icon = matchBefore(m, hit.index!, /\bImage\s*\(\s*(?:systemName\s*:[^()]*|"[^"]*"|\.?[A-Za-z_][\w.]*)\s*\)\s*$/) !== null;
+      const icon = matchBefore(m, hit.index!, /(?:\bImage\s*\(\s*(?:(?:systemName|decorative)\s*:[^()]*|"[^"]*"|\.?[A-Za-z_][\w.]*)\s*\)|\.swiftUIImage)\s*$/) !== null;
       if (icon && chainHas(m, end, /^frame$/, /^\s*width\s*:\s*([^,]+?)\s*,\s*height\s*:\s*\1\s*(?:,|$)/)) continue;
       const indent = /\n([ \t]*)\.resizable/.exec(file.content.slice(Math.max(0, hit.index! - 200), end));
       // A full-bleed background should keep filling the window, not letterbox inside it.

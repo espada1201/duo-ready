@@ -1,6 +1,17 @@
 import { eolOf, lineIndent } from '../text';
-import { blockAt, labelOffset } from '../swift';
+import { blockAt, labelOffset, type Block } from '../swift';
 import { defineGroup, chainHas, PREPARE } from './engine';
+
+/** The sidebar modifier, kept to iOS when the project also builds for platforms that lack it. */
+function sidebar(eol: string, indent: string, otherPlatforms: boolean): string {
+  const modifier = `${eol}${indent}.defaultTabBarPlacement(.sidebar)`;
+  return otherPlatforms ? `${eol}${indent}#if os(iOS)${modifier}${eol}${indent}#endif` : modifier;
+}
+
+function insideExtensionOf(m: string, scope: Block | null, type: string): boolean {
+  for (let b = scope; b?.parent; b = b.parent) if (new RegExp(`\\bextension\\s+${type}\\b[^{}]*$`).test(m.slice(Math.max(0, b.open - 120), b.open))) return true;
+  return false;
+}
 
 export const misplaced = defineGroup({
   id: 'misplaced',
@@ -42,7 +53,7 @@ export const misplaced = defineGroup({
     },
   ],
 
-  swift({ file, src, masked: m, blocks, report }) {
+  swift({ file, src, masked: m, blocks, facts, report }) {
     // `UINavigationBar().bounds` only measures a default bar.
     for (const hit of m.matchAll(/\b(UITabBar|UIToolbar|UINavigationBar)\s*\((?!\s*\)\s*\.)/g)) {
       // A toolbar above the keyboard (inputAccessoryView) is not a screen's bar.
@@ -50,6 +61,8 @@ export const misplaced = defineGroup({
       if (/inputAccessoryView\s*=\s*$/.test(m.slice(Math.max(0, hit.index! - 40), hit.index))) continue;
       const scope = blockAt(src.root, hit.index!);
       if (name && new RegExp(`inputAccessoryView\\s*=\\s*${name}\\b`).test(m.slice(scope.open + 1, scope.close))) continue;
+      // A factory in `extension UIToolbar` makes bars for its callers, which decide where they go.
+      if (insideExtensionOf(m, scope, hit[1])) continue;
       report('hand-built-bar', hit.index!, `${hit[1]} created by hand won’t get Duo’s vertical bar layout.`);
     }
     for (const hit of m.matchAll(/\bstruct\s+(\w*(?:TabBar|Toolbar|NavBar|NavigationBar|BottomBar)(?:View)?)\s*:\s*[^{]*\bView\b/g)) {
@@ -82,7 +95,7 @@ export const misplaced = defineGroup({
       report('tab-sidebar', labelOffset(src, b), undefined, {
         confidence: 'review',
         description: 'Show tabs as a sidebar on the inner display. Needs the iOS 27.1 SDK; behind an availability check if you deploy to earlier iOS.',
-        edits: [{ start: b.close + 1, end: b.close + 1, text: `${eolOf(file.content)}${lineIndent(file.content, b.open)}.defaultTabBarPlacement(.sidebar)` }],
+        edits: [{ start: b.close + 1, end: b.close + 1, text: sidebar(eolOf(file.content), lineIndent(file.content, b.open), facts.otherPlatforms) }],
       });
     }
 

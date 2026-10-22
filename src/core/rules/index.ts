@@ -3,7 +3,7 @@
 
 import { parsePlist } from '../plist';
 import { blockAt, declaredTypes, parseSwift, walk, type Block, type SwiftSource } from '../swift';
-import { deploymentTarget, upgradeCheck } from '../sdk';
+import { configDeploymentTarget, deploymentTarget, upgradeCheck } from '../sdk';
 import { lineAround, lineStarts, position } from '../text';
 import type { Finding, SourceFile } from '../types';
 import { blackBars } from './blackBars';
@@ -37,16 +37,24 @@ export const PAIN_POINTS: PainPoint[] = GROUPS.map(({ id, title, seen, cause, ru
 type Parsed =
   | { kind: 'swift'; file: SourceFile; src: SwiftSource }
   | { kind: 'plist'; file: SourceFile; plist: PlistContext['plist'] }
-  | { kind: 'pbxproj' | 'manifest' | 'html'; file: SourceFile };
+  | { kind: 'pbxproj' | 'manifest' | 'html'; file: SourceFile }
+  /** An .xcconfig or XcodeGen spec: build settings only, no rules of its own. */
+  | { kind: 'config'; file: SourceFile };
 
 /** Keys only a watch app's Info.plist has; WKAppBoundDomains and friends belong to iPhone apps too. */
 const WATCH_KEY = /^WK(WatchKitApp|CompanionAppBundleIdentifier|ApplicationType|Application|WatchOnly|RunsIndependentlyOfCompanionApp)$/;
+/** Watch app code: its own target and display, never in the iPhone app's window. */
+const WATCH_CODE = /\bimport\s+WatchKit\b|@WK(?:Extension|Application)DelegateAdaptor\b/;
+const WATCH_DIR = /(^|\/)[^/]*Watch(?:App|Kit| ?Extension|OS)[^/]*\//;
+const OTHER_PLATFORM_CONFIG = /\b(?:WATCHOS|MACOSX|TVOS|XROS)_DEPLOYMENT_TARGET\b|\bplatform:[^\n]*\b(?:watchOS|tvOS|macOS|visionOS)\b|^[ \t]+(?:watchOS|tvOS|macOS|visionOS):[ \t]*["']?\d/m;
 const WIDGET = /\b(?:TimelineProvider|TimelineEntry|WidgetConfiguration|WidgetBundle|widgetAccentedRenderingMode)\b|@Environment\s*\(\s*\\\.widgetFamily\s*\)/;
 
 function parse(file: SourceFile): Parsed | null {
   const name = file.path.split('/').pop()!;
   if (name.endsWith('.swift')) {
+    if (WATCH_DIR.test(file.path)) return null;
     const src = parseSwift(file.content);
+    if (WATCH_CODE.test(src.masked)) return null;
     // Home Screen widgets are laid out by WidgetKit, not in the app's window.
     return WIDGET.test(src.masked) ? null : { kind: 'swift', file, src };
   }
@@ -61,6 +69,7 @@ function parse(file: SourceFile): Parsed | null {
   if (name === 'project.pbxproj') return { kind: 'pbxproj', file };
   if (name === 'package.json' || name === 'pubspec.yaml') return { kind: 'manifest', file };
   if (/\.html?$/.test(name)) return { kind: 'html', file };
+  if (name.endsWith('.xcconfig') || /^project[\w-]*\.ya?ml$/.test(name)) return { kind: 'config', file };
   return null;
 }
 
@@ -74,6 +83,9 @@ function learn(parsed: Parsed[]): ProjectFacts {
     otherPlatforms: false,
     upgradeCheck: null,
     hasProjectFiles: false,
+  };
+  const lower = (target: number | null) => {
+    if (target !== null && (facts.deploymentTarget === null || target < facts.deploymentTarget)) facts.deploymentTarget = target;
   };
   for (const p of parsed) {
     if (p.kind === 'swift') {
@@ -90,8 +102,10 @@ function learn(parsed: Parsed[]): ProjectFacts {
       if (/INFOPLIST_KEY_UIApplicationSceneManifest_Generation\s*=\s*YES/.test(p.file.content)) facts.sceneManifest = true;
       facts.upgradeCheck ??= upgradeCheck(p.file.content)?.value ?? null;
       if (/\b(?:WATCHOS|MACOSX|TVOS|XROS)_DEPLOYMENT_TARGET\b|SDKROOT = (?:watchos|macosx|appletvos|xros)\b/.test(p.file.content)) facts.otherPlatforms = true;
-      const target = deploymentTarget(p.file.content);
-      if (target !== null && (facts.deploymentTarget === null || target < facts.deploymentTarget)) facts.deploymentTarget = target;
+      lower(deploymentTarget(p.file.content));
+    } else if (p.kind === 'config') {
+      if (OTHER_PLATFORM_CONFIG.test(p.file.content)) facts.otherPlatforms = true;
+      lower(configDeploymentTarget(p.file.content));
     }
   }
   return facts;
@@ -110,10 +124,24 @@ function screenAt(src: SwiftSource, offset: number): string | undefined {
   return best?.name;
 }
 
+/** `static func previewView(...)`, `func frameForPreview()`: helpers only previews call. A plain `showLinkPreview()` is app code. */
+const PREVIEW_FUNC = /\b(?:static\s+func\s+preview\w*|func\s+\w*For(?:Xcode)?Previews?)\s*(?:<[^>{]*>)?\s*\([^{]*$/;
+
 /** Xcode previews never ship, so their fixed sizes and fonts aren't the app's problem. */
 function inPreview(src: SwiftSource, offset: number): boolean {
-  for (let b: Block | null = blockAt(src.root, offset); b?.parent; b = b.parent) if (b.label === 'Preview') return true;
-  return declaredTypes(src).some((t) => t.block && t.inherits.includes('PreviewProvider') && offset > t.start && offset < t.block.close);
+  const m = src.masked;
+  for (let b: Block | null = blockAt(src.root, offset); b?.parent; b = b.parent) {
+    if (b.label === 'Preview' || PREVIEW_FUNC.test(m.slice(Math.max(0, b.open - 300), b.open))) return true;
+  }
+  // `#Preview("Face ID button") {`: the title is part of the preview too.
+  for (const hit of m.matchAll(/#Preview\b/g)) {
+    if (hit.index! > offset) break;
+    const open = m.indexOf('{', hit.index!);
+    if (open > offset) return true;
+  }
+  return declaredTypes(src).some(
+    (t) => t.block && (t.inherits.includes('PreviewProvider') || /Previews?$/.test(t.name)) && offset > t.start && offset < t.block.close,
+  );
 }
 
 function reporter(file: SourceFile, findings: Finding[], src?: SwiftSource): Report {
@@ -148,7 +176,7 @@ export function checkFiles(files: SourceFile[]): { findings: Finding[]; facts: P
     } else if (p.kind === 'plist') {
       const ctx = { file: p.file, facts, report: reporter(p.file, findings), plist: p.plist };
       for (const g of GROUPS) g.plist?.(ctx);
-    } else {
+    } else if (p.kind !== 'config') {
       const ctx = { file: p.file, facts, report: reporter(p.file, findings) };
       for (const g of GROUPS) g[p.kind]?.(ctx);
     }

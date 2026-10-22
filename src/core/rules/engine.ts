@@ -27,7 +27,7 @@ export interface ProjectFacts {
   sceneDelegate: boolean;
   sceneManifest: boolean;
   appDelegate: { file: SourceFile; offset: number } | null;
-  /** Lowest IPHONEOS_DEPLOYMENT_TARGET, when an Xcode project was given. */
+  /** Lowest iOS deployment target from the Xcode project, .xcconfig files or an XcodeGen spec. */
   deploymentTarget: number | null;
   /** The project also builds for watchOS, macOS, tvOS or visionOS, whose SwiftUI versions lag iOS. */
   otherPlatforms: boolean;

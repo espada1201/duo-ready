@@ -51,17 +51,23 @@ export const blackBars = defineGroup({
   ],
 
   swift({ masked: m, report }) {
+    // `CGRect(width: 320, height: 568)` is one hard-coded size, so one finding per line.
+    const lines = new Set<number>();
     for (const hit of m.matchAll(/\b(width|height|maxWidth|maxHeight|minWidth|minHeight)\s*(?::|==|<=|>=|<|>)\s*(\d{3})(?:\.0)?\b/g)) {
       const n = Number(hit[2]);
       const isWidth = /width/i.test(hit[1]);
       // Popovers, rendered images and thumbnails have their own sizes, not the screen's.
       if (NOT_SCREEN.test(lineAround(m, hit.index!))) continue;
-      if ((isWidth && PHONE_WIDTHS.has(n)) || (!isWidth && PHONE_HEIGHTS.has(n))) {
+      const line = m.lastIndexOf('\n', hit.index!);
+      if (((isWidth && PHONE_WIDTHS.has(n)) || (!isWidth && PHONE_HEIGHTS.has(n))) && !lines.has(line)) {
+        lines.add(line);
         report('fixed-device-size', hit.index!, `${n} pt is an iPhone ${isWidth ? 'screen width' : 'screen height'}; Duo windows are other sizes and change live.`);
       }
     }
     for (const hit of m.matchAll(/\.frame\s*\(\s*maxWidth\s*:\s*(\d{3})(?:\.0)?\s*[,)]/g)) {
       const n = Number(hit[1]);
+      // A capped image (`.resizable()...frame(maxWidth: 400)`) is a picture, not a column.
+      if (/\.resizable\s*\(\s*\)[^{}]*$/.test(m.slice(Math.max(0, hit.index! - 250), hit.index))) continue;
       if (n >= 320 && n <= 720) report('centered-column', hit.index!, `A ${n} pt column fills about ${Math.round((n / INNER.w) * 100)}% of the open inner display.`);
     }
   },

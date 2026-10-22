@@ -11,11 +11,23 @@ export function upgradeCheck(pbxproj: string): { value: string; offset: number }
   return hit ? { value: hit[1], offset: hit.index } : null;
 }
 
+/** XcodeGen's `deploymentTarget: { iOS: 15.0 }`, and build settings in .xcconfig files or XcodeGen YAML. */
+const CONFIG_TARGET = /deploymentTarget:[ \t]*\n(?:[ \t]+\w+:.*\n)*?[ \t]+iOS:[ \t]*["']?(\d+(?:\.\d+)?)|IPHONEOS_DEPLOYMENT_TARGET[ \t]*[:=][ \t]*["']?(\d+(?:\.\d+)?)/g;
+
 /** The lowest iOS deployment target across the project's build configurations. */
 export function deploymentTarget(pbxproj: string): number | null {
+  return lowest(pbxproj.matchAll(DEPLOYMENT_TARGET));
+}
+
+/** The lowest iOS deployment target in an .xcconfig file or XcodeGen project spec. */
+export function configDeploymentTarget(config: string): number | null {
+  return lowest(config.matchAll(CONFIG_TARGET));
+}
+
+function lowest(hits: Iterable<RegExpMatchArray>): number | null {
   let lowest: number | null = null;
-  for (const hit of pbxproj.matchAll(DEPLOYMENT_TARGET)) {
-    const v = Number(hit[1]);
+  for (const hit of hits) {
+    const v = Number(hit[1] ?? hit[2]);
     if (lowest === null || v < lowest) lowest = v;
   }
   return lowest;

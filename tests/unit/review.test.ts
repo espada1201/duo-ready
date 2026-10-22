@@ -219,3 +219,65 @@ describe('third review', () => {
     expect(performance.now() - start).toBeLessThan(3000);
   });
 });
+
+describe('fourth review: apps the scanner had never seen', () => {
+  const ids = (files: SourceFile[]) => audit(files).findings.map((f) => f.ruleId);
+  const one = (content: string) => ids(swift(content));
+
+  it.each([
+    ['a Face ID preview title', '#Preview("Face ID Button") {\n  UnlockButton()\n}'],
+    ['a static preview helper', 'struct V: View {\n  static func previewView() -> some View {\n    V().frame(width: 430, height: 330)\n  }\n}'],
+    ['a frameForPreview helper', 'extension View {\n  func frameForPreview() -> some View {\n    frame(width: UIScreen.main.bounds.width)\n  }\n}'],
+    ['a *_Previews type', 'struct Card_Previews {\n  static var v: some View { Text("a").frame(width: 390) }\n}'],
+    ['TrueDepth as one lens among several', 'let s = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera, .builtInTrueDepthCamera], mediaType: .video, position: .front)'],
+    ['a UIToolbar factory', 'extension UIToolbar {\n  static func make() -> UIToolbar {\n    let toolbar = UIToolbar()\n    return toolbar\n  }\n}'],
+    ['a capped image', 'struct V: View {\n  var body: some View {\n    Image("hero")\n      .resizable()\n      .aspectRatio(contentMode: .fit)\n      .frame(maxWidth: 400)\n  }\n}'],
+    ['an SF Symbol sized in points', 'struct V: View {\n  var body: some View {\n    Image(systemName: "star").foregroundStyle(.yellow).font(.system(size: 22))\n  }\n}'],
+    ['a font in draw(_:)', 'class V: UIView {\n  override func draw(_ rect: CGRect) {\n    let f = UIFont.systemFont(ofSize: 14)\n  }\n}'],
+    ['a keyboard type picked by idiom', 'field.keyboardType = UIDevice.current.userInterfaceIdiom == .pad ? .default : .numberPad'],
+    ['a SwiftGen asset icon', 'struct V: View {\n  var body: some View {\n    Asset.Images.close.swiftUIImage.resizable().frame(width: 24, height: 24)\n  }\n}'],
+  ])('ignores %s', (_, code) => {
+    expect(one(code)).toEqual([]);
+  });
+
+  it('still flags TrueDepth when it is the only lens', () => {
+    expect(one('let s = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInTrueDepthCamera], mediaType: .video, position: .front)')).toEqual(['camera-hardware']);
+  });
+
+  it('reports one hard-coded size once per line', () => {
+    expect(one('let r = CGRect(x: 0, y: 0, width: 320, height: 568)')).toEqual(['fixed-device-size']);
+  });
+
+  it('finds key-window lookups through connectedScenes, even split over lines', () => {
+    expect(one('let w = UIApplication.shared.connectedScenes\n  .compactMap { $0 as? UIWindowScene }\n  .flatMap { $0.windows }\n  .first { $0.isKeyWindow }')).toEqual(['key-window']);
+  });
+
+  it('points brightness at the window scene’s screen', () => {
+    expect(audit(swift('UIScreen.main.brightness = 1')).findings[0].message).toContain('windowScene?.screen');
+  });
+
+  it('skips mocks, test helpers and watch apps', () => {
+    const code = 'let r = CGRect(x: 0, y: 0, width: 320, height: 568)';
+    expect(ids([{ path: 'App/Mocks/MockVC.swift', content: code }, { path: 'App/TestHelpers/Support/Base.swift', content: code }])).toEqual([]);
+    expect(ids([{ path: 'BitwardenWatchApp/Main.swift', content: 'NavigationView { List {} }' }])).toEqual([]);
+    expect(ids([{ path: 'Shared/Root.swift', content: 'import WatchKit\nNavigationView { List {} }' }])).toEqual([]);
+    expect(ids([{ path: 'Sources/Watch/Bridge.swift', content: 'let h = UIHostingController(rootView: NavigationView { List {} })' }])).toEqual(['navigation-view']);
+  });
+
+  it('reads the deployment target and other platforms from XcodeGen and .xcconfig files', () => {
+    const view = { path: 'App/Root.swift', content: 'struct R: View {\n  var body: some View {\n    NavigationView {\n      List {}\n    }\n  }\n}' };
+    const yml = { path: 'project.yml', content: 'options:\n  deploymentTarget:\n    iOS: 15.0\n    watchOS: 8.0\n' };
+    expect(audit([view, yml]).findings.find((f) => f.ruleId === 'navigation-view')!.message).toContain('deploys to iOS 15');
+    const xcconfig = { path: 'Configs/Base.xcconfig', content: 'IPHONEOS_DEPLOYMENT_TARGET = 17.0\n' };
+    expect(audit([view, xcconfig]).findings.find((f) => f.ruleId === 'navigation-view')!.fix!.confidence).toBe('safe');
+  });
+
+  it('keeps the tab sidebar to iOS when the project builds for other platforms too', () => {
+    const view = { path: 'App/Main.swift', content: 'struct M: View {\n  var body: some View {\n    TabView {\n      A()\n    }\n  }\n}' };
+    const yml = { path: 'project.yml', content: 'targets:\n  TV:\n    platform: tvOS\n' };
+    const files = [view, yml];
+    const out = applyFixes(files, audit(files).findings, 'all').files[0].content;
+    expect(out).toContain('    }\n    #if os(iOS)\n    .defaultTabBarPlacement(.sidebar)\n    #endif\n');
+    expect(audit([{ path: 'App/Main.swift', content: out }, yml]).findings.map((f) => f.ruleId)).not.toContain('tab-sidebar');
+  });
+});
