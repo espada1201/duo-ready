@@ -42,20 +42,21 @@ function runAudit(files: SourceFile[], source: string): AuditState {
   result.findings.forEach((f, i) => {
     if (!f.fix) return;
     if (f.fix.confidence === 'safe') selected.add(i);
-    const file = byPath.get(f.path)!;
-    previews.set(i, hunks(file.content, applyFixes([file], [f], 'all').files[0].content));
+    previews.set(i, hunks(byPath.get(f.path)!.content, f.fix.edits));
   });
   return { status: 'done', source, files: relevant, result, selected, previews, error: null, paste: false };
 }
 
-async function readEntries(entry: FileSystemEntry, prefix: string, out: SourceFile[]): Promise<void> {
-  const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+// Paths start inside the folder the person picked, as the CLI's do, so a project kept in a
+// folder named `build` or `.archive` isn't mistaken for build output.
+async function readEntries(entry: FileSystemEntry, prefix: string, out: SourceFile[], picked = false): Promise<void> {
+  const path = picked ? '' : prefix ? `${prefix}/${entry.name}` : entry.name;
   if (entry.isFile) {
     if (!isRelevant(path)) return;
     const file = await new Promise<File>((res, rej) => (entry as FileSystemFileEntry).file(res, rej));
     if (file.size <= MAX_BYTES) out.push({ path, content: await file.text() });
   } else if (entry.isDirectory) {
-    if (!isRelevantDir(path)) return;
+    if (!picked && !isRelevantDir(path)) return;
     const reader = (entry as FileSystemDirectoryEntry).createReader();
     for (;;) {
       const batch = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej));
@@ -68,14 +69,14 @@ async function readEntries(entry: FileSystemEntry, prefix: string, out: SourceFi
 async function filesFromDrop(items: DataTransferItemList): Promise<SourceFile[]> {
   const out: SourceFile[] = [];
   const entries = [...items].map((i) => i.webkitGetAsEntry?.()).filter(Boolean) as FileSystemEntry[];
-  for (const e of entries) await readEntries(e, '', out);
+  for (const e of entries) await readEntries(e, '', out, e.isDirectory);
   return out;
 }
 
 async function filesFromInput(list: FileList): Promise<SourceFile[]> {
   const out: SourceFile[] = [];
   for (const f of [...list]) {
-    const path = f.webkitRelativePath || f.name;
+    const path = f.webkitRelativePath ? f.webkitRelativePath.slice(f.webkitRelativePath.indexOf('/') + 1) : f.name;
     if (isRelevant(path) && f.size <= MAX_BYTES) out.push({ path, content: await f.text() });
   }
   return out;

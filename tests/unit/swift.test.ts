@@ -58,10 +58,14 @@ describe('parseSwift', () => {
 });
 
 describe('diff', () => {
-  it('keeps indentation and reports each changed hunk with its line', () => {
-    expect(hunks('a\n    b\nc\nd', 'a\n    B\nc\nd\n    e')).toEqual([
-      { line: 2, removed: ['    b'], added: ['    B'] },
-      { line: 5, removed: [], added: ['    e'] },
+  it('shows exactly the lines each edit touches, with indentation, even when lines repeat', () => {
+    const content = 'I.resizable()\n    I.resizable()\nc';
+    expect(hunks(content, [{ start: 13, end: 13, text: '.scaledToFit()' }])).toEqual([
+      { line: 1, removed: ['I.resizable()'], added: ['I.resizable().scaledToFit()'] },
+    ]);
+    expect(hunks(content, [{ start: 31, end: 31, text: '\n    .x()' }, { start: 0, end: 1, text: 'J' }])).toEqual([
+      { line: 1, removed: ['I.resizable()'], added: ['J.resizable()'] },
+      { line: 2, removed: ['    I.resizable()'], added: ['    I.resizable()', '    .x()'] },
     ]);
   });
 });

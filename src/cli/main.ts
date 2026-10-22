@@ -173,16 +173,22 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
   if (cmd.fix || cmd.dryRun) {
     const { files: fixed, applied } = applyFixes(files, result.findings, cmd.fix ?? 'safe');
     if (cmd.dryRun) {
-      log(fixed.map((file, i) => unifiedDiff(file.path, files[i].content, file.content)).filter(Boolean).join('\n') || 'Nothing to fix.');
+      const diff = files
+        .map((file) => unifiedDiff(file.path, file.content, applied.filter((f) => f.path === file.path).flatMap((f) => f.fix!.edits)))
+        .filter(Boolean)
+        .join('\n');
+      // With --format json or sarif the diff goes to stderr so stdout stays a valid report.
+      status(diff || 'Nothing to fix.');
       status(c.dim(`\n${applied.length} fixes would be applied. Nothing was written.`));
-      return exitCode(result, cmd.failOn);
+      if (cmd.format === 'text' && !cmd.out) return exitCode(result, cmd.failOn);
+    } else {
+      const base = statSync(root).isDirectory() ? root : dirname(root);
+      fixed.forEach((file, i) => {
+        if (file.content !== files[i].content) writeFileSync(join(base, file.path), file.content);
+      });
+      status(c.green(`Applied ${applied.length} fixes.`));
+      result = audit(fixed);
     }
-    const base = statSync(root).isDirectory() ? root : dirname(root);
-    fixed.forEach((file, i) => {
-      if (file.content !== files[i].content) writeFileSync(join(base, file.path), file.content);
-    });
-    status(c.green(`Applied ${applied.length} fixes.`));
-    result = audit(fixed);
   }
 
   const body =

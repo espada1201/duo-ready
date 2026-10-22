@@ -89,3 +89,13 @@ describe('duo-ready CLI', () => {
     expect(capture(['--help']).code).toBe(0);
   });
 });
+
+describe('duo-ready CLI dry run', () => {
+  it('keeps stdout a valid report with --format json, and sends the diff to stderr', () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    run(['sample', '--dry-run', '--format', 'json', '--fail-on', 'never'], (s) => out.push(s), (s) => err.push(s));
+    expect(JSON.parse(out.join('\n')).findings.length).toBeGreaterThan(0);
+    expect(err.join('\n')).toContain('+++ Encore/Encore/LibraryView.swift');
+  });
+});

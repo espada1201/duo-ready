@@ -1,7 +1,7 @@
 import { lineAround } from '../text';
-import { inString, type RuleGroup } from './engine';
+import type { RuleGroup } from './engine';
 
-const FORCED_CAMERA = /\bAVCaptureDevice\s*\.\s*default\s*\((?:[^()]|\([^()]*\))*\)\s*!/;
+const FORCED_CAMERA = /\bAVCaptureDevice\s*\.\s*default\s*\((?:[^()]|\([^()]*\))*\)\s*!(?!=)/;
 
 export const hardware: RuleGroup = {
   id: 'hardware',
@@ -27,14 +27,14 @@ export const hardware: RuleGroup = {
     },
   ],
 
-  swift({ file, masked: m, report }) {
+  swift({ file, src, masked: m, report }) {
     if (!/\.touchID\b/.test(m)) {
       for (const hit of m.matchAll(/\.faceID\b/g)) report('biometry-faceid', hit.index!);
     }
     // Copy lives in strings, which the mask blanks: look at the raw text inside strings.
     for (const hit of file.content.matchAll(/Face ID/g)) {
       const i = hit.index!;
-      if (inString(file.content, m, i) && inString(file.content, m, i + 6)) {
+      if (src.strings[i] && src.strings[i + 6]) {
         report('biometry-faceid', i, 'User-facing text mentions Face ID, which iPhone Duo doesn’t have.');
       }
     }

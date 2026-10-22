@@ -43,10 +43,11 @@ export const misplaced: RuleGroup = {
   ],
 
   swift({ file, src, masked: m, blocks, report }) {
-    for (const hit of m.matchAll(/\b(UITabBar|UIToolbar|UINavigationBar)\s*\(/g)) {
+    // `UINavigationBar().bounds` only measures a default bar.
+    for (const hit of m.matchAll(/\b(UITabBar|UIToolbar|UINavigationBar)\s*\((?!\s*\)\s*\.)/g)) {
       report('hand-built-bar', hit.index!, `${hit[1]} created by hand won’t get Duo’s vertical bar layout.`);
     }
-    for (const hit of m.matchAll(/\bstruct\s+(\w*(?:TabBar|Toolbar|NavBar|NavigationBar|BottomBar)\w*)\s*:\s*[^{]*\bView\b/g)) {
+    for (const hit of m.matchAll(/\bstruct\s+(\w*(?:TabBar|Toolbar|NavBar|NavigationBar|BottomBar)(?:View)?)\s*:\s*[^{]*\bView\b/g)) {
       report('hand-built-bar', hit.index!, `${hit[1]} is a custom bar; it will stay horizontal while system bars go vertical.`);
     }
 

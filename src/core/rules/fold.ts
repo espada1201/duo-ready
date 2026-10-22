@@ -1,5 +1,6 @@
 import { blockAt, declaredTypes, headerOf, labelOffset, type Block, type SwiftSource } from '../swift';
 import type { Fix } from '../types';
+import { lineAround } from '../text';
 import { matchBefore, PREPARE, type RuleGroup } from './engine';
 
 const SCENES = 'Apple, WWDC25 “Make your UIKit app more flexible” (UIScene required after iOS 26)';
@@ -46,6 +47,17 @@ function countStatements(body: string): number {
     open = true;
   }
   return count;
+}
+
+/** Each target configuration's build settings, leaving out watchOS and extension targets. */
+function iPhoneBuildSettings(pbxproj: string): { text: string; offset: number }[] {
+  const out: { text: string; offset: number }[] = [];
+  if (!/buildSettings\s*=/.test(pbxproj)) return [{ text: pbxproj, offset: 0 }];
+  for (const hit of pbxproj.matchAll(/buildSettings\s*=\s*\{([^}]*)\}/g)) {
+    if (/SDKROOT\s*=\s*watchos|WATCHOS_DEPLOYMENT_TARGET|INFOPLIST_KEY_WK|APPLICATION_EXTENSION_API_ONLY\s*=\s*YES/.test(hit[1])) continue;
+    out.push({ text: hit[1], offset: hit.index! + hit[0].indexOf('{') + 1 });
+  }
+  return out;
 }
 
 const isPortraitOnly = (orientations: string[]) => orientations.length > 0 && orientations.every((o) => o.includes('Portrait'));
@@ -137,7 +149,10 @@ export const fold: RuleGroup = {
       report('uiscreen-main', hit.index!, member ? `UIScreen.main.${member} is ambiguous on a two-display phone.` : undefined, fix);
     }
 
-    for (const hit of m.matchAll(/\bUIDevice\s*\.\s*current\s*\.\s*orientation(?:\s*\.\s*is(?:Landscape|Portrait))?\b|\binterfaceOrientation\b|\bstatusBarOrientation\b|\.isLandscape\b|\.isPortrait\b/g)) {
+    const cameraFile = /\b(videoOrientation|videoRotationAngle)\b/.test(m);
+    for (const hit of m.matchAll(/\bUIDevice\s*\.\s*current\s*\.\s*orientation(?:\s*\.\s*is(?:Landscape|Portrait))?\b|\binterfaceOrientation\b|\bstatusBarOrientation\b|\b\w*[oO]rientation\s*\.\s*is(?:Landscape|Portrait)\b/g)) {
+      // Rotating camera output or reporting a sensor reads orientation for a reason that isn't layout.
+      if (cameraFile || /AVCapture|videoOrientation|videoRotation|rawValue|imageOrientation|CGImagePropertyOrientation/.test(lineAround(m, hit.index!))) continue;
       report('orientation-layout', hit.index!);
     }
 
@@ -186,11 +201,16 @@ export const fold: RuleGroup = {
 
   pbxproj({ file, report }) {
     const seen = new Set<string>();
-    for (const hit of file.content.matchAll(/INFOPLIST_KEY_UISupportedInterfaceOrientations(?:_iPhone)?\s*=\s*"?([^";]*)"?;/g)) {
-      const value = hit[1].trim();
-      if (!value || seen.has(value) || !isPortraitOnly(value.split(/\s+/))) continue;
-      seen.add(value);
-      report('portrait-only', hit.index!);
+    for (const settings of iPhoneBuildSettings(file.content)) {
+      const keys = [...settings.text.matchAll(/INFOPLIST_KEY_UISupportedInterfaceOrientations(_iPhone)?\s*=\s*"?([^";]*)"?;/g)];
+      // The _iPhone key overrides the generic one, as `~iphone` does in Info.plist.
+      const chosen = keys.some((k) => k[1]) ? keys.filter((k) => k[1]) : keys;
+      for (const hit of chosen) {
+        const value = hit[2].trim();
+        if (!value || seen.has(value) || !isPortraitOnly(value.split(/\s+/))) continue;
+        seen.add(value);
+        report('portrait-only', settings.offset + hit.index!);
+      }
     }
   },
 

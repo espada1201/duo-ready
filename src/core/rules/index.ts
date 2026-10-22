@@ -2,7 +2,7 @@
 // parses each file once, learns project-wide facts, then hands every file to every group.
 
 import { parsePlist } from '../plist';
-import { declaredTypes, lineStarts, parseSwift, position, walk, type SwiftSource } from '../swift';
+import { blockAt, declaredTypes, lineStarts, parseSwift, position, walk, type Block, type SwiftSource } from '../swift';
 import { deploymentTarget, upgradeCheck } from '../sdk';
 import { lineAround } from '../text';
 import type { Finding, SourceFile } from '../types';
@@ -41,7 +41,9 @@ function parse(file: SourceFile): Parsed | null {
   if (name.endsWith('.swift')) return { kind: 'swift', file, src: parseSwift(file.content) };
   if (name.endsWith('.plist')) {
     const plist = parsePlist(file.content);
-    return plist ? { kind: 'plist', file, plist } : null;
+    // Watch apps and extensions have their own Info.plist; only the iPhone app's matters here.
+    const app = plist && ![...plist.keys.keys()].some((k) => k === 'NSExtension' || k.startsWith('WK'));
+    return app ? { kind: 'plist', file, plist } : null;
   }
   if (name === 'project.pbxproj') return { kind: 'pbxproj', file };
   if (name === 'package.json' || name === 'pubspec.yaml') return { kind: 'manifest', file };
@@ -93,9 +95,16 @@ function screenAt(src: SwiftSource, offset: number): string | undefined {
   return best?.name;
 }
 
+/** Xcode previews never ship, so their fixed sizes and fonts aren't the app's problem. */
+function inPreview(src: SwiftSource, offset: number): boolean {
+  for (let b: Block | null = blockAt(src.root, offset); b?.parent; b = b.parent) if (b.label === 'Preview') return true;
+  return declaredTypes(src).some((t) => t.block && t.inherits.includes('PreviewProvider') && offset > t.start && offset < t.block.close);
+}
+
 function reporter(file: SourceFile, findings: Finding[], src?: SwiftSource): Report {
   const starts = src?.lineStarts ?? lineStarts(file.content);
   return (ruleId, offset, message, fix) => {
+    if (src && inPreview(src, offset)) return;
     const rule = RULE_BY_ID.get(ruleId)!;
     const { line, column } = position({ lineStarts: starts }, offset);
     findings.push({

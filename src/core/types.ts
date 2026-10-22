@@ -5,7 +5,7 @@ export interface SourceFile {
   content: string;
 }
 
-interface Edit {
+export interface Edit {
   start: number;
   end: number;
   text: string;

@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { strFromU8, unzipSync } from 'fflate';
 
@@ -119,6 +121,12 @@ test('auditing a chosen folder, pasted code, and a folder with nothing to audit'
   await expect(page.locator('.diff')).toContainText('  func f() { let s = traitCollection.displayScale }');
   await expect(page.getByTestId('partial')).toBeVisible();
   await expect(page.getByRole('list', { name: 'Findings by reviewer pain point' })).toContainText('Black barsnot checked');
+
+  // A project kept in a folder named like build output is still audited.
+  const build = join(mkdtempSync(join(tmpdir(), 'duo-')), 'build');
+  cpSync('sample/Encore', build, { recursive: true });
+  await page.getByTestId('folder-input').setInputFiles(build);
+  await expect(page.locator('.finding')).toHaveCount(31);
 
   await page.getByTestId('folder-input').setInputFiles('tests/e2e');
   await expect(page.getByRole('alert')).toContainText('No Swift files');

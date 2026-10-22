@@ -95,14 +95,3 @@ export function matchBefore(masked: string, open: number, re: RegExp): number | 
   const hit = re.exec(head);
   return hit ? open - head.length + hit.index : null;
 }
-
-/** Offsets in the raw source that sit inside a string literal: blank in the mask, and not a comment. */
-export function inString(raw: string, masked: string, offset: number): boolean {
-  if (masked[offset] !== ' ' || raw[offset] === ' ') return false;
-  const lineStart = raw.lastIndexOf('\n', offset - 1) + 1;
-  const before = raw.slice(lineStart, offset);
-  const slashes = before.indexOf('//');
-  if (slashes !== -1 && !before.slice(0, slashes).includes('"')) return false;
-  const open = raw.lastIndexOf('/*', offset);
-  return open === -1 || raw.lastIndexOf('*/', offset) > open;
-}

@@ -15,14 +15,27 @@ export interface Block {
 
 export interface SwiftSource {
   masked: string;
+  /** 1 where the character is inside a string literal's text (not an interpolation). */
+  strings: Uint8Array;
   root: Block;
   lineStarts: number[];
 }
 
 export function maskSwift(text: string): string {
+  return maskParts(text).masked;
+}
+
+function maskParts(text: string): { masked: string; strings: Uint8Array } {
   const out = text.split('');
+  const strings = new Uint8Array(text.length);
   const blank = (i: number) => {
     if (out[i] !== '\n') out[i] = ' ';
+  };
+  const blankString = (from: number, to: number) => {
+    for (let m = from; m < to; m++) {
+      blank(m);
+      strings[m] = 1;
+    }
   };
   let i = 0;
   const n = text.length;
@@ -38,7 +51,7 @@ export function maskSwift(text: string): string {
       if (text.startsWith(escape, j)) {
         const k = j + escape.length;
         if (text[k] === '(') {
-          for (let m = from; m < j; m++) blank(m);
+          blankString(from, j);
           interp.push({ hashes, multiline, depth: 1 });
           return k + 1;
         }
@@ -46,13 +59,13 @@ export function maskSwift(text: string): string {
         continue;
       }
       if (text.startsWith(closer, j)) {
-        for (let m = from; m < j; m++) blank(m);
+        blankString(from, j);
         return j + closer.length;
       }
       if (!multiline && text[j] === '\n') break;
       j++;
     }
-    for (let m = from; m < j; m++) blank(m);
+    blankString(from, j);
     return j;
   };
 
@@ -111,7 +124,7 @@ export function maskSwift(text: string): string {
     }
     i++;
   }
-  return out.join('');
+  return { masked: out.join(''), strings };
 
   // `/…/` is a regex literal where an expression starts, never after an operand.
   function isRegexStart(at: number): boolean {
@@ -160,7 +173,7 @@ function labelBefore(masked: string, brace: number): { label: string | null; arg
 }
 
 export function parseSwift(text: string): SwiftSource {
-  const masked = maskSwift(text);
+  const { masked, strings } = maskParts(text);
   const root: Block = { label: null, argument: null, open: -1, close: text.length, parent: null, children: [] };
   let current = root;
   let lastClosed: Block | null = null;
@@ -181,7 +194,7 @@ export function parseSwift(text: string): SwiftSource {
       current = current.parent;
     }
   }
-  return { masked, root, lineStarts: lineStarts(text) };
+  return { masked, strings, root, lineStarts: lineStarts(text) };
 }
 
 export function lineStarts(text: string): number[] {
