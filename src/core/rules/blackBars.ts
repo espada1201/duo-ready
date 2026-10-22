@@ -2,11 +2,10 @@ import { INNER } from '../duo';
 import { tierFromUpgradeCheck, tierLabel, upgradeCheck, xcodeVersion } from '../sdk';
 import { lineAround } from '../text';
 import { blockAt, headerOf, type Block, type SwiftSource } from '../swift';
-import { chainHas, chainRoot, defineGroup, PREPARE, POSE } from './engine';
+import { chainHas, chainRoot, closeOf, defineGroup, PREPARE, POSE } from './engine';
 
 // iPhone point sizes from the iPhone SE through the 17 Pro Max.
 const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize|estimated\w*|snapshot\w*|drawHierarchy|render\w*|\w*Preview|GADAdSize\w*|adSize|bannerSize|video\w*Size|export\w*|canvas\w*|renderSize|outputSize|\w*OniPad|\w*ForPad|inputAccessory\w*|referenceSizeFor\w*|systemLayoutSizeFitting|sizeThatFits|fittingSize)\b/i;
-/** A few lines either side, where a size's purpose is named: `func preferredContentSize`, `renderAsImage()` on the next line. */
 /** Whether `at` is inside `collectionView(_:layout:referenceSizeFor…)`, whose width a vertical flow layout ignores. */
 function inReferenceSize(src: SwiftSource, at: number): boolean {
   for (let b: Block | null = blockAt(src.root, at); b?.parent; b = b.parent) {
@@ -17,6 +16,20 @@ function inReferenceSize(src: SwiftSource, at: number): boolean {
   return false;
 }
 
+/** `Image("hero")….frame(width:` : the frame belongs to a picture. */
+const PICTURE_CHAIN = /\b(?:Async)?Image\s*\((?:[^()\n]|\([^()\n]*\))*\)(?:\s*\.\w+\s*\((?:[^()]|\([^()]*\))*\))*\s*\.frame\s*\([^()]*$/;
+
+/** `.frame(width: 320)` chained to a corner radius, clip shape or shadow, on anything but a picture: a dialog or a card. */
+function dialogCard(src: SwiftSource, at: number): boolean {
+  const m = src.masked;
+  const frame = /\.frame\s*\(([^()]*)$/.exec(m.slice(Math.max(0, at - 40), at));
+  if (!frame) return false;
+  const open = at - frame[1].length - 1;
+  const end = closeOf(m, open);
+  return end > 0 && chainHas(m, end, /^(?:cornerRadius|clipShape|shadow)$/) && !PICTURE_CHAIN.test(m.slice(Math.max(0, at - 400), at));
+}
+
+/** A few lines either side, where a size's purpose is named: `func preferredContentSize`, `renderAsImage()` on the next line. */
 function around(m: string, at: number): string {
   let from = at;
   let to = at;
@@ -86,9 +99,9 @@ export const blackBars = defineGroup({
       if (blockAt(src.root, hit.index!).argument === 'preview' || /presentationCompactAdaptation|popover/.test(m.slice(hit.index!, hit.index! + 120))) continue;
       if (NOT_SCREEN.test(around(m, hit.index!)) || (n === 320 && /\bheight\s*:\s*50\b/.test(lineAround(m, hit.index!)))) continue;
       // A flow layout's header or footer size: a vertical layout stretches it to the collection view's width.
-      if (inReferenceSize(src, hit.index!)) continue;
+      if (isWidth && inReferenceSize(src, hit.index!)) continue;
       // A rounded or shadowed box this wide is a dialog or a card, sized for its content rather than the screen.
-      if (/\.frame\s*\([^()]*$/.test(m.slice(Math.max(0, hit.index! - 40), hit.index)) && /\.(?:cornerRadius|clipShape|shadow)\s*\(/.test(around(m, hit.index!))) continue;
+      if (dialogCard(src, hit.index!)) continue;
       // `super.init(frame: CGRect(x: 0, y: 0, width: 375, height: 250))` is a starting size; layout replaces it.
       if (/\bsuper\s*\.\s*init\s*\(\s*frame\s*:\s*CGRect\s*\([^()]*$/.test(m.slice(Math.max(0, hit.index! - 80), hit.index))) continue;
       // `let width = bounds.width > 0 ? bounds.width : 320` only falls back before the first layout pass.

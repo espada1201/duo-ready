@@ -14,7 +14,7 @@ function inDrawing(m: string, scope: Block | null): boolean {
   for (let b = scope; b?.parent; b = b.parent) {
     const head = m.slice(Math.max(0, b.open - 120), b.open);
     // `func draw(_:)`, or a function that returns the image it draws (`static func pin(for text: String) -> UIImage`).
-    if (/\bfunc\s+draw\s*\([^{]*$|\bfunc\s+\w+\s*\([^{]*->\s*(?:UI|CG|NS)?Image\??\s*$/.test(head)) return true;
+    if (/\bfunc\s+draw\s*\([^{]*$|\bfunc\s+\w+\s*\([^{]*->\s*(?:UI|CG|NS)Image\??\s*$/.test(head)) return true;
     const type = /\b(?:class|struct|enum|actor|extension)\s+(?!func\b|var\b|let\b)(\w+)[^{}]*$/.exec(head);
     if (type ? /PDF|Pdf|UIPrint/.test(type[0]) : OFFSCREEN_RENDER.test(m.slice(b.open, b.close)) || /\bUIGraphicsImageRenderer\b[^{}]*$/.test(head)) return true;
   }
@@ -180,7 +180,7 @@ export const stretched = defineGroup({
     for (const hit of m.matchAll(/\.contentMode\s*=\s*\.scaleToFill\b/g)) {
       // Avatars, icons and thumbnails sit in fixed square frames: named on the line, just above it, or by the view type.
       // A web view's contentMode scales its snapshot during resizes, not an image.
-      if (/\w*[wW]eb\w*\s*$/.test(m.slice(Math.max(0, hit.index! - 60), hit.index))) continue;
+      if (/\w*[wW]eb[vV]iew\w*\s*$/.test(m.slice(Math.max(0, hit.index! - 60), hit.index))) continue;
       const before = m.slice(Math.max(0, hit.index! - 200), hit.index).split('\n').slice(-3).join('\n');
       if (SMALL_IMAGE.test(lineAround(m, hit.index!) + before + (enclosingType(m, blockAt(src.root, hit.index!)) ?? ''))) continue;
       report('stretched-image', hit.index!);
@@ -198,7 +198,7 @@ export const stretched = defineGroup({
       if (/\bfunc\b|[};]/.test(m.slice(hit.index! + 4, open))) continue;
       const body = blocks.find((b) => b.open === open);
       // `listController.reload()` refreshes a list; only a web view's reload loses a page.
-      const reload = body && /\b\w*[wW]eb\w*\??\.reload\s*\(\s*\)|\.loadHTMLString\s*\(|\.load\s*\(\s*URLRequest/.exec(m.slice(body.open, body.close));
+      const reload = body && /\b\w*(?:[wW]eb|[bB]rowser)\w*[?!]?\.reload\s*\(\s*\)|\.loadHTMLString\s*\(|\.load\s*\(\s*URLRequest/.exec(m.slice(body.open, body.close));
       if (reload) report('webview-viewport', body.open + reload.index, 'Web content reloads when the size changes, so a fold throws away its scroll position and input.');
     }
 
@@ -223,7 +223,7 @@ export const stretched = defineGroup({
       if (/UIFontMetrics|scaledFontForFont/.test(lineAround(m, hit.index!)) || /UIFontTextStyle|ForTextStyle|UIFontMetrics|scaledFontForFont/.test(statement)) continue;
       // A size worked out from the view's side, width or bounds scales lettering to artwork, like initials on a placeholder;
       // `label.font.pointSize` keeps the size the label already has.
-      if (/^\w+\s*:\s*[^:\]]*?(?:side|width|height|bounds|frame|\.pointSize)\b/i.test(statement)) continue;
+      if (/^\w+\s*:\s*[^:\]]*?(?:(?<![A-Za-z])(?:side|width|height|bounds|frame)|For(?:Side|Width|Height|Bounds)|\.pointSize)\b/.test(statement)) continue;
       report('fixed-font', hit.index!);
     }
     for (const hit of m.matchAll(/\bUIViewContentModeScaleToFill\b/g)) report('stretched-image', hit.index!);
@@ -242,8 +242,11 @@ export const stretched = defineGroup({
 /** Whether the idiom check at `at` only anchors a popover (`if pad { activity.popoverPresentationController.barButtonItem = button }`): presentation, not layout. */
 function anchorsPopover(m: string, at: number): boolean {
   const open = m.indexOf('{', at);
-  if (open < 0 || /[;}]/.test(m.slice(at, open)) || open - at > 200) return false;
+  // The brace must open this condition's own block, on the same line.
+  if (open < 0 || open - at > 200 || /[;}\n]/.test(m.slice(at, open))) return false;
   const close = closeOf(m, open);
-  const statements = close < 0 ? [] : m.slice(open + 1, close - 1).split(/[;\n]/).map((l) => l.trim()).filter(Boolean);
+  // An else branch could lay out the phone; only a lone popover anchor is presentation.
+  if (close < 0 || /^\s*else\b/.test(m.slice(close, close + 40))) return false;
+  const statements = m.slice(open + 1, close - 1).split(/[;\n]/).map((l) => l.trim()).filter(Boolean);
   return statements.length > 0 && statements.every((l) => /popoverPresentationController|UIModalPresentationPopover|\.popover\b/.test(l));
 }

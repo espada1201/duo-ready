@@ -257,7 +257,8 @@ export const fold = defineGroup({
       // A spinner or a label has nothing to lose; a fresh identity just restarts it.
       const root = chainRoot(src, hit.index!);
       if (root?.name && (root.body ? STATELESS.test(root.name) && !keepsState(m.slice(root.body.open, root.body.close), facts.views, m) : STATELESS.test(root.name) || facts.views.get(root.name) === false)) continue;
-      // Set in an initializer, the id is made once: the view keeps one identity for its life.
+      // Set in a class's initializer, the id is made once: the view keeps one identity for its life. A SwiftUI
+      // struct's init runs again whenever its parent's body does, so it isn't.
       if (inInitializer(src, hit.index!)) continue;
       report('state-reset', hit.index!, '.id(UUID()) gives the view a new identity on every update, so its state never survives a fold.');
     }
@@ -361,7 +362,13 @@ function inInitializer(src: SwiftSource, at: number): boolean {
   for (let b: Block | null = blockAt(src.root, at); b?.parent; b = b.parent) {
     const head = src.masked.slice(Math.max(0, b.open - 400), b.open).split(/[{};]/).pop()!;
     if (/\bvar\s+body\b|\bsome\s+View\b/.test(head)) return false;
-    if (/(?:^|\s)init\s*[?!]?\s*\(/.test(head)) return true;
+    if (/(?:^|\s)init\s*[?!]?\s*\(/.test(head)) {
+      for (let t: Block | null = b.parent; t?.parent; t = t.parent) {
+        const type = /\b(class|struct|enum|actor|extension)\s+\w+[^{};]*$/.exec(src.masked.slice(Math.max(0, t.open - 400), t.open));
+        if (type) return type[1] === 'class';
+      }
+      return false;
+    }
   }
   return false;
 }
@@ -369,5 +376,6 @@ function inInitializer(src: SwiftSource, at: number): boolean {
 /** A log line only prints the screen, and an image context's scale matches on both of Duo's displays. */
 function notLayout(m: string, at: number): boolean {
   const line = lineAround(m, at);
-  return /^\s*(?:NSLog|print|debugPrint|os_log|DDLog\w*|\w*[lL]og(?:ger)?\s*\.\s*\w+)\s*\(/.test(line) || /\bUIGraphicsBeginImageContextWithOptions\b/.test(line);
+  if (/^\s*(?:NSLog|print|debugPrint|os_log|DDLog\w*|(?:log|logger|\w*Log(?:ger)?)\s*\.\s*\w+)\s*\(/.test(line)) return true;
+  return /\bUIGraphicsBeginImageContextWithOptions\b/.test(line) && /^\[?\s*UIScreen\s*(?:\.\s*main(?:Screen)?|\s+mainScreen\s*\])\s*(?:\.\s*|\s+)(?:scale|nativeScale)\b/.test(m.slice(at, at + 60));
 }

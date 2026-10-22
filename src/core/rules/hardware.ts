@@ -39,7 +39,7 @@ export const hardware = defineGroup({
   },
 
   swift({ file, src, masked: m, report }) {
-    // Touch ID named anywhere, even only in its label (`NSLocalizedString(@"touch_id_name", …)`), means the file handles it.
+    // Touch ID named anywhere, even only in its label (`String(localized: "Touch ID")`), means the file handles it.
     if (!TOUCH_ID_CODE.test(file.content)) {
       for (const hit of m.matchAll(/\.faceID\b/g)) report('biometry-faceid', hit.index!);
     }
@@ -55,7 +55,8 @@ export const hardware = defineGroup({
 });
 
 /** The code already handles Touch ID too: `.touchID`, `LABiometryTypeTouchID`, or a `touchIdDescription` beside the Face ID one. */
-const TOUCH_ID_CODE = /touch_?id/i;
+// `touchIdDescription` and `touch_id_name` count; `touchIdx` doesn't.
+const TOUCH_ID_CODE = /(?:[tT]ouch[ _]?(?:ID|Id|id)|TOUCH_?ID)(?![a-z])/;
 
 const FACE_ID_COPY = 'User-facing text mentions Face ID, which iPhone Duo doesn’t have.';
 const TRUE_DEPTH = 'The TrueDepth camera comes with Face ID; iPhone Duo has neither.';

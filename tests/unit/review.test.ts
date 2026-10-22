@@ -1105,3 +1105,20 @@ describe('presentation, logging and labels', () => {
     expect(ids([{ path: 'A.m', content: 'NSString *name = NSLocalizedString(@"settings_touch_id_name", @"Touch ID");\nif (ctx.biometryType == LABiometryTypeFaceID) { name = @"x"; }' }])).not.toContain('biometry-faceid');
   });
 });
+
+describe('review of the held-out skips', () => {
+  const swiftIds = (content: string) => ids([{ path: 'A.swift', content }]);
+  it('still flags what the skips should not reach', () => {
+    expect(swiftIds('struct Row: View {\n  let content: AnyView\n  init() {\n    content = AnyView(Foo().id(UUID()))\n  }\n  var body: some View { content }\n}')).toContain('state-reset');
+    expect(swiftIds('let cols = UIDevice.current.userInterfaceIdiom == .pad ? 4 : 2\nif let p = a.popoverPresentationController { p.sourceView = v }')).toContain('idiom-layout');
+    expect(swiftIds('if UIDevice.current.userInterfaceIdiom == .pad {\n  vc.popoverPresentationController?.sourceView = view\n} else {\n  width = 300\n}')).toContain('idiom-layout');
+    expect(swiftIds('dialog.show(width: UIScreen.main.bounds.width)')).toContain('uiscreen-main');
+    expect(swiftIds('UIGraphicsBeginImageContextWithOptions(UIScreen.main.bounds.size, false, 0)')).toContain('uiscreen-main');
+    expect(swiftIds('UIGraphicsBeginImageContextWithOptions(size, false, UIScreen.main.scale)')).toEqual([]);
+    expect(swiftIds('override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {\n  webView!.reload()\n}')).toContain('webview-viewport');
+    expect(swiftIds('self.webImageView.contentMode = .scaleToFill')).toContain('stretched-image');
+    expect(ids([{ path: 'A.m', content: 'label.font = [UIFont systemFontOfSize:outside];' }])).toContain('fixed-font');
+    expect(swiftIds('Image("hero")\n  .resizable()\n  .scaledToFill()\n  .frame(width: 390, height: 200)\n  .cornerRadius(12)')).toContain('fixed-device-size');
+    expect(ids([{ path: 'A.m', content: 'NSInteger touchIdx = 0;\nif (ctx.biometryType == LABiometryTypeFaceID) { }' }])).toContain('biometry-faceid');
+  });
+});
