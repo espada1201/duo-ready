@@ -12,6 +12,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   deploy:
+    # Pages on a private repo needs a paid plan, so the job waits until the repo is public.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
