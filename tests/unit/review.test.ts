@@ -878,3 +878,13 @@ describe('fourth held-out review', () => {
     expect(swiftIds('let size = CGSize(width: 375, height: 667)')).toContain('fixed-device-size');
   });
 });
+
+describe('views built in the same file', () => {
+  const head = 'struct V: View {\n  @Environment(\\.horizontalSizeClass) var horizontalSizeClass\n';
+  it('reads a local helper before calling a size-class swap stateful', () => {
+    const stateless = head + '  var buttons: some View {\n    if horizontalSizeClass == .compact {\n      VStack { cashButton() }\n    } else {\n      HStack { cashButton() }\n    }\n  }\n  func cashButton() -> some View {\n    Button("Cash") {}\n  }\n}';
+    const stateful = head + '  var form: some View {\n    if horizontalSizeClass == .compact {\n      VStack { fields }\n    } else {\n      HStack { fields }\n    }\n  }\n  var fields: some View {\n    TextField("Name", text: $name)\n  }\n}';
+    expect(ids([{ path: 'A.swift', content: stateless }])).not.toContain('state-reset');
+    expect(ids([{ path: 'A.swift', content: stateful }])).toContain('state-reset');
+  });
+});

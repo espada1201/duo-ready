@@ -1,7 +1,7 @@
 import { blockAt, declaredTypes, headerOf, labelOffset, type Block, type SwiftSource } from '../swift';
 import type { Fix } from '../types';
 import { lineAround } from '../text';
-import { chainRoot, defineGroup, chainHas, declaredAt, matchBefore, PREPARE, sizeClassPattern } from './engine';
+import { chainRoot, defineGroup, chainHas, closeOf, declaredAt, matchBefore, PREPARE, sizeClassPattern } from './engine';
 
 const SCENES = 'Apple, WWDC25 “Make your UIKit app more flexible” (UIScene required after iOS 26)';
 
@@ -76,10 +76,24 @@ const VIEW_NAME = /(?:View|Field|Editor|Player|Picker|List|Grid|Sheet|Screen|Pag
 export const callsIn = (code: string) => [...code.matchAll(/\b([A-Z]\w*)\s*[({]/g)].map((c) => c[1]);
 
 /** Whether the views called in `code` keep state: a stateful built-in, a project view that does, or a view from elsewhere. */
-export function keepsState(code: string, views: Map<string, boolean>): boolean {
-  // Content passed in or built elsewhere (`content: content`, `imageContent()`, a `body` property) could hold anything.
-  if (/(?<![.\w])[a-z]\w*\s*\(\s*\)|\bcontent\s*:\s*[a-z]\w*\s*[,)]|^\s*[a-z]\w*\s*$/m.test(code)) return true;
+export function keepsState(code: string, views: Map<string, boolean>, file = '', depth = 0): boolean {
+  // Content passed in (`content: content`) could hold anything.
+  if (/\bcontent\s*:\s*[a-z]\w*\s*[,)]/.test(code)) return true;
+  // A view built elsewhere (`cashButton()`, `regularHeaderView`) is read from this file's own `func` or `var`, if it's there.
+  for (const hit of code.matchAll(/(?<![.\w])([a-z]\w*)\s*\(\s*\)|^\s*([a-z]\w*)\s*$|\{\s*([a-z]\w*)\s*\}/gm)) {
+    const body = depth < 3 ? memberBody(file, hit[1] ?? hit[2] ?? hit[3]) : null;
+    if (body === null || keepsState(body, views, file, depth + 1)) return true;
+  }
   return callsIn(code).some((v) => STATEFUL.test(v) || (!STATELESS.test(v) && (views.get(v) ?? VIEW_NAME.test(v))));
+}
+
+/** The body of `var name: some View { … }` or `func name(…) -> some View { … }` in `masked`. */
+function memberBody(masked: string, name: string): string | null {
+  const head = new RegExp(`\\b(?:var\\s+${name}\\s*:\\s*some\\s+View|func\\s+${name}\\s*\\([^)]*\\)\\s*->\\s*some\\s+View)\\s*\\{`).exec(masked);
+  if (!head) return null;
+  const open = head.index + head[0].length - 1;
+  const close = closeOf(masked, open);
+  return close < 0 ? null : masked.slice(open + 1, close - 1);
 }
 
 /** Marks each project view stateful when it declares state, uses a stateful built-in, or shows a view that is. */
@@ -218,12 +232,12 @@ export const fold = defineGroup({
       if (cond === null || !sibling || headerOf(src, sibling) !== 'else') continue;
       // Swapping Text and Image loses nothing; only views that hold state of their own lose it.
       const branches = m.slice(b.open, b.close) + m.slice(sibling.open, sibling.close);
-      if (keepsState(branches, facts.views)) report('state-reset', cond);
+      if (keepsState(branches, facts.views, m)) report('state-reset', cond);
     }
     for (const hit of m.matchAll(/\.id\s*\(\s*UUID\s*\(\s*\)\s*\)/g)) {
       // A spinner or a label has nothing to lose; a fresh identity just restarts it.
       const root = chainRoot(src, hit.index!);
-      if (root?.name && (root.body ? STATELESS.test(root.name) && !keepsState(m.slice(root.body.open, root.body.close), facts.views) : STATELESS.test(root.name) || facts.views.get(root.name) === false)) continue;
+      if (root?.name && (root.body ? STATELESS.test(root.name) && !keepsState(m.slice(root.body.open, root.body.close), facts.views, m) : STATELESS.test(root.name) || facts.views.get(root.name) === false)) continue;
       report('state-reset', hit.index!, '.id(UUID()) gives the view a new identity on every update, so its state never survives a fold.');
     }
 
