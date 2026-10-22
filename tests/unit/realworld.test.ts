@@ -43,6 +43,19 @@ describe('orientation', () => {
     expect(swift('let t = "Use Face ID to unlock app"')).toEqual(['biometry-faceid']);
   });
 
+  it('treats a resizable image in a fixed square frame as an icon', () => {
+    expect(swift('Image("a")\n  .resizable()\n  .frame(width: 24, height: 24)')).toEqual([]);
+    expect(swift('Image("a")\n  .resizable()\n  .frame(width: Size.icon, height: Size.icon, alignment: .center)')).toEqual([]);
+    expect(swift('Image("a")\n  .resizable()\n  .frame(width: 220, height: 160)')).toEqual(['stretched-image']);
+    expect(swift('Image("a")\n  .resizable()\n  .frame(maxWidth: 128, maxHeight: 128)')).toEqual(['stretched-image']);
+    expect(swift('Image("a")\n  .resizable()\n  .frame(height: 200)')).toEqual(['stretched-image']);
+  });
+
+  it('skips Home Screen widget code', () => {
+    expect(swift('struct V: View {\n  @Environment(\\.widgetFamily) var family\n  var body: some View { Image("a").resizable() }\n}')).toEqual([]);
+    expect(swift('WidgetCenter.shared.reloadAllTimelines()\nlet s = UIScreen.main.scale')).toEqual(['uiscreen-main']);
+  });
+
   it('skips build scripts and fastlane helpers', () => {
     for (const path of ['Dangerfile.swift', 'Package.swift', 'fastlane/SnapshotHelper.swift']) expect(isRelevant(path)).toBe(false);
   });

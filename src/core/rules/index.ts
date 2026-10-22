@@ -39,9 +39,15 @@ type Parsed =
   | { kind: 'plist'; file: SourceFile; plist: PlistContext['plist'] }
   | { kind: 'pbxproj' | 'manifest' | 'html'; file: SourceFile };
 
+const WIDGET = /\b(?:TimelineProvider|TimelineEntry|WidgetConfiguration|WidgetBundle|widgetAccentedRenderingMode)\b|@Environment\s*\(\s*\\\.widgetFamily\s*\)/;
+
 function parse(file: SourceFile): Parsed | null {
   const name = file.path.split('/').pop()!;
-  if (name.endsWith('.swift')) return { kind: 'swift', file, src: parseSwift(file.content) };
+  if (name.endsWith('.swift')) {
+    const src = parseSwift(file.content);
+    // Home Screen widgets are laid out by WidgetKit, not in the app's window.
+    return WIDGET.test(src.masked) ? null : { kind: 'swift', file, src };
+  }
   if (name.endsWith('.plist')) {
     const plist = parsePlist(file.content);
     // Watch apps and extensions have their own Info.plist; only the iPhone app's matters here.
