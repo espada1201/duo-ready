@@ -108,6 +108,8 @@ export const stretched = defineGroup({
       report('fixed-font', hit.index!);
     }
 
+    // The project's own `square(size:)`-style modifiers frame an image the way `.frame(width: s, height: s)` does.
+    const square = facts.squareModifiers.length ? new RegExp(`^(?:${facts.squareModifiers.join('|')})$`) : null;
     for (const hit of m.matchAll(/\.resizable\s*\(\s*\)/g)) {
       const end = hit.index! + hit[0].length;
       if (chainHas(m, end, /^(aspectRatio|scaledToFit|scaledToFill)$/)) continue;
@@ -117,7 +119,7 @@ export const stretched = defineGroup({
       // it neither distorts nor follows the window. Photos and avatars (uiImage:, AsyncImage) can be
       // any shape, so they still count.
       const icon = matchBefore(m, hit.index!, /(?:\bImage\s*\(\s*(?:(?:systemName|decorative)\s*:[^()]*|"[^"]*"|\.?[A-Za-z_][\w.]*)\s*\)|\.swiftUIImage)\s*$/) !== null;
-      if (icon && chainHas(m, end, /^frame$/, /^\s*width\s*:\s*([^,]+?)\s*,\s*height\s*:\s*\1\s*(?:,|$)/)) continue;
+      if (icon && (chainHas(m, end, /^frame$/, /^\s*width\s*:\s*([^,]+?)\s*,\s*height\s*:\s*\1\s*(?:,|$)/) || (square && chainHas(m, end, square)))) continue;
       const indent = /\n([ \t]*)\.resizable/.exec(file.content.slice(Math.max(0, hit.index! - 200), end));
       // A full-bleed background should keep filling the window, not letterbox inside it.
       const scale = chainHas(m, end, /^(ignoresSafeArea|edgesIgnoringSafeArea)$/) ? '.scaledToFill()' : '.scaledToFit()';

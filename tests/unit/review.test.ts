@@ -505,3 +505,10 @@ it('sees a fixed font beside a text-style font in Swift', () => {
   expect(ids([{ path: 'A.swift', content: 'label.font = UIFont.systemFont(ofSize: UIFontDescriptor.preferredFontDescriptor(withTextStyle: .body).pointSize)' }])).toEqual([]);
 });
 
+
+it('treats a project modifier that frames a square as a square frame', () => {
+  const square = { path: 'UI/View+Square.swift', content: 'extension View {\n  public func square(size: CGFloat, alignment: Alignment = .center) -> some View {\n    frame(width: size, height: size, alignment: alignment)\n  }\n}' };
+  const icon = { path: 'UI/Row.swift', content: 'struct Row: View {\n  var body: some View {\n    Image(DS.Icon.star)\n      .resizable()\n      .square(size: 20)\n  }\n}' };
+  expect(ids([square, icon])).not.toContain('stretched-image');
+  expect(ids([icon])).toContain('stretched-image');
+});

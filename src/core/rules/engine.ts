@@ -35,6 +35,8 @@ export interface ProjectFacts {
   ownVideoPlayer: boolean;
   /** Properties like `UIDevice.isPad` whose whole body is an idiom comparison. */
   idiomWrappers: string[];
+  /** View modifiers like `square(size:)` whose whole body is `frame(width: size, height: size)`. */
+  squareModifiers: string[];
   /** LastUpgradeCheck, e.g. "2600". */
   upgradeCheck: string | null;
   /** An Info.plist or project.pbxproj was given. */

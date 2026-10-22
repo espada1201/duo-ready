@@ -63,6 +63,7 @@ function isWatchCode(masked: string): boolean {
 /** Comments in .xcconfig (`//`) and YAML (`#`) files, so a commented-out setting isn't read. */
 const stripConfigComments = (text: string) => text.replace(/(^|[ \t])(?:\/\/|#).*$/gm, '$1');
 /** `var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }`, with nothing else in the body. */
+const SQUARE_MODIFIER = /\bfunc\s+(\w+)\s*\(\s*(?:_\s+)?(\w+)\s*:\s*CGFloat\b[^)]*\)\s*->\s*some\s+View\s*\{\s*(?:return\s+)?(?:self\s*\.\s*)?frame\s*\(\s*width\s*:\s*\2\s*,\s*height\s*:\s*\2\b/g;
 const IDIOM_WRAPPER = /\bvar\s+(\w+)\s*:\s*Bool\s*\{\s*(?:return\s+)?(?:[\w.]+\.)?userInterfaceIdiom\s*==\s*\.(?:pad|phone)\s*\}/g;
 const WIDGET = /\b(?:TimelineProvider|TimelineEntry|WidgetConfiguration|WidgetBundle|widgetAccentedRenderingMode)\b|@Environment\s*\(\s*\\\.widgetFamily\s*\)/;
 
@@ -101,6 +102,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
     deploymentTarget: null,
     otherPlatforms: false,
     idiomWrappers: [],
+    squareModifiers: [],
     ownVideoPlayer: false,
     upgradeCheck: null,
     hasProjectFiles: false,
@@ -117,6 +119,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
       if (appDelegate && !facts.appDelegate) facts.appDelegate = { file: p.file, offset: appDelegate.index };
       if (/\b(?:struct|class|enum|actor)\s+VideoPlayer\b/.test(m)) facts.ownVideoPlayer = true;
       for (const hit of m.matchAll(IDIOM_WRAPPER)) if (!facts.idiomWrappers.includes(hit[1])) facts.idiomWrappers.push(hit[1]);
+      for (const hit of m.matchAll(SQUARE_MODIFIER)) if (!facts.squareModifiers.includes(hit[1])) facts.squareModifiers.push(hit[1]);
     } else if (p.kind === 'objc') {
       const m = p.src.masked;
       if (/\bUIWindowSceneDelegate\b/.test(m)) facts.sceneDelegate = true;
