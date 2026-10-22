@@ -49,6 +49,12 @@ describe('duo-ready CLI', () => {
     expect(sarif.runs[0].results).toHaveLength(31);
     expect(sarif.runs[0].results[0].locations[0].physicalLocation.region.startLine).toBeGreaterThan(0);
     expect(sarif.runs[0].tool.driver.rules.length).toBeGreaterThan(15);
+
+    dir = mkdtempSync(join(tmpdir(), 'duo-'));
+    mkdirSync(join(dir, 'Tracking Protection'));
+    writeFileSync(join(dir, 'Tracking Protection', 'View #1.swift'), 'let s = UIScreen.main.scale');
+    const spaced = JSON.parse(capture([dir, '--format', 'sarif', '--fail-on', 'never']).out);
+    expect(spaced.runs[0].results[0].locations[0].physicalLocation.artifactLocation.uri).toMatch(/Tracking%20Protection\/View%20%231\.swift$/);
   });
 
   it('--dry-run shows the diff and writes nothing; --fix rewrites files in place', () => {

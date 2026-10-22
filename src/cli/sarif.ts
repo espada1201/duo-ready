@@ -32,7 +32,7 @@ export function toSarif(result: AuditResult, version: string, prefix = ''): obje
           locations: [
             {
               physicalLocation: {
-                artifactLocation: { uri: prefix ? `${prefix}/${f.path}` : f.path },
+                artifactLocation: { uri: toUri(prefix ? `${prefix}/${f.path}` : f.path) },
                 region: { startLine: f.line, startColumn: f.column },
               },
             },
@@ -42,3 +42,6 @@ export function toSarif(result: AuditResult, version: string, prefix = ''): obje
     ],
   };
 }
+
+/** SARIF locations are URI references: spaces, # and % in folder names must be percent-encoded. */
+const toUri = (path: string) => path.split('/').map(encodeURIComponent).join('/');
