@@ -1,5 +1,5 @@
 import { INNER } from '../duo';
-import { tierFromUpgradeCheck, tierLabel, upgradeCheck, xcodeVersion } from '../sdk';
+import { APP_TARGET, tierFromUpgradeCheck, tierLabel, upgradeCheck, xcodeVersion } from '../sdk';
 import { lineAround } from '../text';
 import { blockAt } from '../swift';
 import { chainHas, chainRoot, defineGroup, PREPARE, POSE } from './engine';
@@ -75,6 +75,8 @@ export const blackBars = defineGroup({
       // A context-menu preview or popover has its own size.
       if (blockAt(src.root, hit.index!).argument === 'preview' || /presentationCompactAdaptation|popover/.test(m.slice(hit.index!, hit.index! + 120))) continue;
       if (NOT_SCREEN.test(around(m, hit.index!)) || (n === 320 && /\bheight\s*:\s*50\b/.test(lineAround(m, hit.index!)))) continue;
+      // `super.init(frame: CGRect(x: 0, y: 0, width: 375, height: 250))` is a starting size; layout replaces it.
+      if (/\bsuper\s*\.\s*init\s*\(\s*frame\s*:\s*CGRect\s*\([^()]*$/.test(m.slice(Math.max(0, hit.index! - 80), hit.index))) continue;
       // `let width = bounds.width > 0 ? bounds.width : 320` only falls back before the first layout pass.
       if (/\?[^:\n]*$/.test(m.slice(m.lastIndexOf('\n', hit.index!) + 1, hit.index))) continue;
       const line = m.lastIndexOf('\n', hit.index!);
@@ -113,12 +115,13 @@ export const blackBars = defineGroup({
     if (full && full.value === true) report('requires-full-screen', full.offset);
   },
 
-  pbxproj({ file, report }) {
+  pbxproj({ file, facts, report }) {
     const full = /INFOPLIST_KEY_UIRequiresFullScreen\s*=\s*YES;/.exec(file.content);
     if (full) report('requires-full-screen', full.index);
     const check = upgradeCheck(file.content);
     const tier = check ? tierFromUpgradeCheck(check.value) : '27.1';
-    if (check && tier !== '27.1') {
+    // A framework project builds with the app's SDK, so only the app's own project counts when there is one.
+    if (check && tier !== '27.1' && (!facts.hasAppProject || APP_TARGET.test(file.content))) {
       report('old-sdk', check.offset, `Last upgraded with Xcode ${xcodeVersion(check.value)}; Duo users likely see ${tierLabel(tier)}.`);
     }
   },

@@ -152,7 +152,7 @@ export const stretched = defineGroup({
       if (matchBefore(m, hit.index!, /(?:\bImage\s*\(\s*blurHash\s*:[^()]*(?:\([^()]*\)[^()]*)*\)\??|(?:^|[^.\w])\w+\s*\(\s*Image\s*\((?:[^()]|\([^()]*\))*\))\s*$/) !== null) continue;
       // A fixed width and height (or the project's square(size:)) never follow the window, so Duo can't stretch the image any more than an iPhone does.
       if (square && chainHas(m, end, square, /^\s*(?:size\s*:\s*)?(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+(?:,|$)/)) continue;
-      if (chainHas(m, end, /^frame$/, FIXED_FRAME) || sizedOutside(m, blockAt(src.root, hit.index!))) continue;
+      if (chainHas(m, end, /^frame$/, FIXED_FRAME) || chainHas(m, end, /^frame$/, /^\s*\.square\s*\(/) || sizedOutside(m, blockAt(src.root, hit.index!))) continue;
       // A view its callers keep to an aspect ratio (`ImageView(url: u).scaledToFit()`) can't stretch.
       if (facts.aspectViews.has(enclosingType(m, blockAt(src.root, hit.index!)) ?? '')) continue;
       // `.modifier(IconFrame(size: 24))`: a frame modifier the project wrote.

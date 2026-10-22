@@ -834,3 +834,24 @@ describe('idiom wording', () => {
     expect(ids([{ path: 'A.swift', content: 'func layout() {\n  if UIDevice.current.userInterfaceIdiom == .pad { columns = 2 }\n}' }])).toContain('idiom-layout');
   });
 });
+
+describe('third held-out review', () => {
+  const swiftIds = (content: string, path = 'A.swift') => ids([{ path, content }]);
+  const pbx = (check: string, app: boolean) => `LastUpgradeCheck = ${check};\n${app ? 'productType = "com.apple.product-type.application";' : 'productType = "com.apple.product-type.framework";'}\nSDKROOT = iphoneos;`;
+  it('reads the SDK from the app project, not its frameworks', () => {
+    const found = ids([{ path: 'App.xcodeproj/project.pbxproj', content: pbx('2710', true) }, { path: 'Models/Models.xcodeproj/project.pbxproj', content: pbx('2700', false) }]);
+    expect(found).not.toContain('old-sdk');
+    expect(ids([{ path: 'Models/Models.xcodeproj/project.pbxproj', content: pbx('2700', false) }])).toContain('old-sdk');
+  });
+  it.each([
+    ['a square frame helper', 'IconProvider.tor\n  .resizable()\n  .frame(.square(16))'],
+    ['a theme applied to every scene', 'UIApplication.shared.connectedScenes.map({ scene in\n  (scene as? UIWindowScene)?.windows ?? []\n}).forEach({ windows in\n  for window in windows { window.overrideUserInterfaceStyle = .dark }\n})'],
+    ['a starting frame handed to super', 'override init(frame: CGRect) {\n  super.init(frame: CGRect(x: 0, y: 0, width: 375, height: 250))\n}'],
+  ])('ignores %s', (_, code) => {
+    expect(swiftIds(code)).toEqual([]);
+  });
+  it('skips lowercase platform and sample folders', () => {
+    expect(swiftIds('let s = UIScreen.main.bounds', 'apps/macos/Sources/A.swift')).toEqual([]);
+    expect(swiftIds('let s = UIScreen.main.bounds', 'sampleapps/Bug/A.swift')).toEqual([]);
+  });
+});

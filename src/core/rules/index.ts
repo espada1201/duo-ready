@@ -5,7 +5,7 @@ import { callsIn, resolveViews } from './fold';
 import { parseObjC } from '../objc';
 import { parsePlist } from '../plist';
 import { blockAt, declaredTypes, headerOf, parseSwift, walk, type Block, type SwiftSource } from '../swift';
-import { configDeploymentTarget, deploymentTarget, upgradeCheck } from '../sdk';
+import { APP_TARGET, configDeploymentTarget, deploymentTarget, upgradeCheck } from '../sdk';
 import { lineAround, lineStarts, position } from '../text';
 import type { Finding, SourceFile } from '../types';
 import { blackBars } from './blackBars';
@@ -51,7 +51,7 @@ const WATCH_DIR = /(^|\/)[^/]*Watch[^/]*(?:App|Kit|Extension|OS)\//;
 const OTHER_PLATFORM = /\b(?:WATCHOS|MACOSX|TVOS|XROS)_DEPLOYMENT_TARGET\b|SDKROOT\s*=\s*(?:watchos|macosx|appletvos|xros)\b|SUPPORTED_PLATFORMS\s*[=:][^\n]*\b(?:watchos|macosx|appletvos|xros)\b|\b(?:platform|supportedDestinations):[^\n]*\b(?:watchOS|tvOS|macOS|visionOS)\b|^[ \t]+(?:watchOS|tvOS|macOS|visionOS):[ \t]*["']?\d/m;
 
 /** Mac, TV and Vision targets beside the iPhone app: `Pocket Casts TV App/`, `App_macOS.swift`. */
-const OTHER_PLATFORM_PATH = /(^|\/)[^/]*(?:tvOS|watchOS|macOS|visionOS|[ _-]TV(?:[ _-](?:App|Extension|Top ?Shelf))?|[ _-]Mac(?:[ _-]App)?)\/|[_+-](?:tvOS|watchOS|macOS|visionOS|TV|Mac)\.swift$/;
+const OTHER_PLATFORM_PATH = /(^|\/)(?:[^/]*(?:tvOS|watchOS|macOS|visionOS)|tvos|watchos|macos|visionos)\/|(^|\/)[^/]*(?:[ _-]TV(?:[ _-](?:App|Extension|Top ?Shelf))?|[ _-]Mac(?:[ _-]App)?)\/|[_+-](?:tvOS|watchOS|macOS|visionOS|TV|Mac)\.swift$/;
 
 /**
  * Code for another platform's target: a watch app, or a Mac or TV app that imports AppKit or TVUIKit.
@@ -111,6 +111,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
     sceneDelegate: false,
     sceneManifest: false,
     multipleScenes: false,
+    hasAppProject: false,
     appDelegate: null,
     deploymentTarget: null,
     otherPlatforms: false,
@@ -158,7 +159,13 @@ function learn(parsed: Parsed[]): ProjectFacts {
       facts.hasProjectFiles = true;
       if (/INFOPLIST_KEY_UIApplicationSceneManifest_Generation\s*=\s*YES/.test(p.file.content)) facts.sceneManifest = true;
       if (MULTIPLE_SCENES.test(p.file.content)) facts.multipleScenes = true;
-      facts.upgradeCheck ??= upgradeCheck(p.file.content)?.value ?? null;
+      // The app's own project says which SDK it ships with; framework projects follow the app's.
+      const check = upgradeCheck(p.file.content)?.value ?? null;
+      if (!APP_TARGET.test(p.file.content)) facts.upgradeCheck ??= check;
+      else if (!facts.hasAppProject) {
+        facts.hasAppProject = true;
+        facts.upgradeCheck = check ?? facts.upgradeCheck;
+      }
       if (OTHER_PLATFORM.test(p.file.content)) facts.otherPlatforms = true;
       lower(deploymentTarget(p.file.content));
     } else if (p.kind === 'config') {

@@ -5,6 +5,9 @@ import type { SdkTier } from './types';
 const LAST_UPGRADE = /LastUpgradeCheck\s*=\s*(\d{4});/;
 const DEPLOYMENT_TARGET = /IPHONEOS_DEPLOYMENT_TARGET\s*=\s*"?(\d+(?:\.\d+)?)"?\s*;/g;
 
+/** A project.pbxproj that builds an app, not only frameworks or packages. */
+export const APP_TARGET = /productType\s*=\s*"com\.apple\.product-type\.application"/;
+
 /** `LastUpgradeCheck` from a project.pbxproj, e.g. "2600", with its offset. */
 export function upgradeCheck(pbxproj: string): { value: string; offset: number } | null {
   const hit = LAST_UPGRADE.exec(pbxproj);

@@ -243,6 +243,8 @@ export const fold = defineGroup({
     // `connectedScenes.flatMap { ... }.first { $0.isKeyWindow }`, often split over lines.
     for (const hit of m.matchAll(/\bUIApplication\s*\.\s*shared\s*\.\s*connectedScenes\b(?!\s*\.\s*first\b)/g)) {
       const statement = /^[^;]*?(?=\n[ \t]*\n|;|$)/.exec(m.slice(hit.index!, hit.index! + 400))![0];
+      // Applying something to every scene's windows (`.forEach`, `for window in`) assumes nothing about which is in front.
+      if (/\.forEach\b|\bfor\s+\w+\s+in\b/.test(statement)) continue;
       if (/\.windows\b|isKeyWindow/.test(statement) && (facts.multipleScenes || !/activationState\s*==\s*\.foregroundActive/.test(statement))) report('key-window', hit.index!);
     }
 
