@@ -1,6 +1,9 @@
 import { ancestors, labelOffset, type Block } from '../swift';
 import { chainHas, closeOf, defineGroup, matchBefore, POSE, PREPARE, sizeClassPattern } from './engine';
 
+/** Converting the keyboard frame into the view and intersecting it with the view's bounds measures the real overlap, whatever shape the keyboard takes. */
+const OVERLAP = /\bconvert(?:Rect)?\s*[(:][\s\S]*(?:\.intersection\s*\(|CGRectIntersection\s*\()/;
+
 const SCROLLERS = new Set(['List', 'ScrollView', 'LazyVStack', 'LazyHStack', 'Form']);
 /** Closures whose content is presented elsewhere, so it is not laid out inside the enclosing scroller. */
 const PRESENTED = new Set(['NavigationLink', 'sheet', 'fullScreenCover', 'popover', 'navigationDestination', 'inspector']);
@@ -77,7 +80,7 @@ export const hinge = defineGroup({
 
     if (!/\bkeyboardLayoutGuide\b/.test(m)) {
       for (const hit of m.matchAll(/\b(?:UIResponder\s*\.\s*)?keyboardFrame(?:End|Begin)UserInfoKey\b|\bUIKeyboardFrame(?:End|Begin)UserInfoKey\b/g)) {
-        report('keyboard-frame', hit.index!);
+        if (!OVERLAP.test(m.slice(hit.index!, hit.index! + 800))) report('keyboard-frame', hit.index!);
       }
     }
 
@@ -117,7 +120,9 @@ export const hinge = defineGroup({
       }
     }
     if (!/\bkeyboardLayoutGuide\b/.test(m)) {
-      for (const hit of m.matchAll(/\bUIKeyboardFrame(?:End|Begin)UserInfoKey\b/g)) report('keyboard-frame', hit.index!);
+      for (const hit of m.matchAll(/\bUIKeyboardFrame(?:End|Begin)UserInfoKey\b/g)) {
+        if (!OVERLAP.test(m.slice(hit.index!, hit.index! + 800))) report('keyboard-frame', hit.index!);
+      }
     }
   },
 

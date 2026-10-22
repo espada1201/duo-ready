@@ -697,3 +697,16 @@ describe('full-screen media only', () => {
     expect(ids([{ path: 'A.m', content: 'AVPlayerLayer *l = [AVPlayerLayer playerLayerWithPlayer:p];' }])).toContain('hinge-media');
   });
 });
+
+describe('keyboard overlap', () => {
+  it('ignores handlers that measure the keyboard against the view', () => {
+    const swift = 'let end = (n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue ?? .zero\nlet local = view.convert(end, from: nil)\nlet overlap = view.bounds.intersection(local).height';
+    const objc = 'CGRect end = [n.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];\nCGRect local = [self.view convertRect:end fromView:nil];\nCGFloat h = CGRectIntersection(self.view.bounds, local).size.height;';
+    expect(ids([{ path: 'A.swift', content: swift }])).not.toContain('keyboard-frame');
+    expect(ids([{ path: 'A.m', content: objc }])).not.toContain('keyboard-frame');
+  });
+  it('still flags subtracting the keyboard height from the screen', () => {
+    const swift = 'let end = (n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue ?? .zero\nbottom.constant = end.height';
+    expect(ids([{ path: 'A.swift', content: swift }])).toContain('keyboard-frame');
+  });
+});
