@@ -91,19 +91,28 @@ function closeOf(masked: string, open: number): number {
   return -1;
 }
 
-/** End offset of a chain of `.modifier(...) { ... }` calls starting at `from`, trailing closures included. */
-export function afterModifiers(masked: string, from: number): number {
-  const name = /^\s*\.\w+\s*/y;
+export interface ModifierCall {
+  name: string;
+  /** Text inside the call's parentheses; trailing closures are not included. */
+  args: string;
+}
+
+/** The chain of `.modifier(...) { ... }` calls starting at `from`, trailing closures included, and where it ends. */
+export function modifierChain(masked: string, from: number): { end: number; calls: ModifierCall[] } {
+  const name = /\s*\.(\w+)\s*/y;
   const closure = /\s*(?:\w+\s*:\s*)?(?=\{)/y;
+  const calls: ModifierCall[] = [];
   let at = from;
   for (;;) {
-    name.lastIndex = 0;
-    const hit = name.exec(masked.slice(at));
-    if (!hit) return at;
+    name.lastIndex = at;
+    const hit = name.exec(masked);
+    if (!hit) return { end: at, calls };
     let end = at + hit[0].length;
+    let args = '';
     if (masked[end] === '(') {
       const close = closeOf(masked, end);
-      if (close < 0) return at;
+      if (close < 0) return { end: at, calls };
+      args = masked.slice(end + 1, close - 1);
       end = close;
     }
     for (let closures = 0; ; closures++) {
@@ -115,9 +124,14 @@ export function afterModifiers(masked: string, from: number): number {
       if (close < 0) break;
       end = close;
     }
+    calls.push({ name: hit[1], args });
     at = end;
   }
 }
+
+/** Whether the chain at `from` calls `name`, optionally with arguments matching `args`. */
+export const chainHas = (masked: string, from: number, name: RegExp, args?: RegExp): boolean =>
+  modifierChain(masked, from).calls.some((c) => name.test(c.name) && (!args || args.test(c.args)));
 
 /** Offset of `re` (anchored with `$`) in the text just before `open`, such as the `if` that owns a block. */
 export function matchBefore(masked: string, open: number, re: RegExp): number | null {

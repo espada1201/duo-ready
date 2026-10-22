@@ -1,8 +1,10 @@
 import { INNER } from '../duo';
 import { tierFromUpgradeCheck, tierLabel, upgradeCheck, xcodeVersion } from '../sdk';
+import { lineAround } from '../text';
 import { PREPARE, POSE, type RuleGroup } from './engine';
 
 // iPhone point sizes from the iPhone SE through the 17 Pro Max.
+const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize)\b/i;
 const PHONE_WIDTHS = new Set([320, 375, 390, 393, 402, 414, 428, 430, 440]);
 const PHONE_HEIGHTS = new Set([568, 667, 736, 812, 844, 852, 874, 896, 926, 932, 956]);
 
@@ -52,6 +54,8 @@ export const blackBars: RuleGroup = {
     for (const hit of m.matchAll(/\b(width|height|maxWidth|maxHeight|minWidth|minHeight)\s*(?::|==|<=|>=|<|>)\s*(\d{3})(?:\.0)?\b/g)) {
       const n = Number(hit[2]);
       const isWidth = /width/i.test(hit[1]);
+      // Popovers, rendered images and thumbnails have their own sizes, not the screen's.
+      if (NOT_SCREEN.test(lineAround(m, hit.index!))) continue;
       if ((isWidth && PHONE_WIDTHS.has(n)) || (!isWidth && PHONE_HEIGHTS.has(n))) {
         report('fixed-device-size', hit.index!, `${n} pt is an iPhone ${isWidth ? 'screen width' : 'screen height'}; Duo windows are other sizes and change live.`);
       }

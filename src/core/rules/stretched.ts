@@ -1,5 +1,6 @@
+import { blockAt } from '../swift';
 import { eolOf, lineAround } from '../text';
-import { afterModifiers, declaredAt, PREPARE, type RuleGroup } from './engine';
+import { chainHas, declaredAt, PREPARE, type RuleGroup } from './engine';
 
 const VIEWPORT_WIDTH = /viewport[^\n>]{0,160}?\bwidth\s*=\s*(\d{3,4})\b/g;
 const viewportMessage = (width: string) => `The web viewport is fixed at ${width} px instead of device-width.`;
@@ -71,12 +72,16 @@ export const stretched: RuleGroup = {
 
     for (const hit of m.matchAll(/\.system\s*\(\s*size\s*:|\bUIFont\s*\.\s*(?:systemFont|boldSystemFont|italicSystemFont|monospacedSystemFont)\s*\(\s*ofSize\s*:|\bUIFont\s*\(\s*name\s*:[^)]*size\s*:|\.custom\s*\([^)]*size\s*:/g)) {
       if (/relativeTo\s*:|UIFontMetrics|scaledFont/.test(lineAround(m, hit.index!) + callText(m, hit.index!))) continue;
+      // `let f = UIFont(...)` later passed to `scaledFont(for: f)` scales too.
+      const name = /\b(?:let|var)\s+(\w+)\s*(?::\s*\w+\s*)?=\s*$/.exec(m.slice(Math.max(0, hit.index! - 60), hit.index))?.[1];
+      const scope = blockAt(src.root, hit.index!);
+      if (name && new RegExp(`scaledFont\\s*\\(\\s*for\\s*:\\s*${name}\\b`).test(m.slice(scope.open + 1, scope.close))) continue;
       report('fixed-font', hit.index!);
     }
 
     for (const hit of m.matchAll(/\.resizable\s*\(\s*\)/g)) {
       const end = hit.index! + hit[0].length;
-      if (/\.(aspectRatio|scaledToFit|scaledToFill)\b/.test(m.slice(end, afterModifiers(m, end)))) continue;
+      if (chainHas(m, end, /^(aspectRatio|scaledToFit|scaledToFill)$/)) continue;
       const indent = /\n([ \t]*)\.resizable/.exec(file.content.slice(Math.max(0, hit.index! - 200), end));
       report('stretched-image', hit.index!, undefined, {
         confidence: 'review',

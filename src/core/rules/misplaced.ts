@@ -1,6 +1,6 @@
 import { eolOf, lineIndent } from '../text';
 import { labelOffset } from '../swift';
-import { afterModifiers, PREPARE, type RuleGroup } from './engine';
+import { chainHas, PREPARE, type RuleGroup } from './engine';
 
 export const misplaced: RuleGroup = {
   id: 'misplaced',
@@ -45,6 +45,10 @@ export const misplaced: RuleGroup = {
   swift({ file, src, masked: m, blocks, report }) {
     // `UINavigationBar().bounds` only measures a default bar.
     for (const hit of m.matchAll(/\b(UITabBar|UIToolbar|UINavigationBar)\s*\((?!\s*\)\s*\.)/g)) {
+      // A toolbar above the keyboard (inputAccessoryView) is not a screen's bar.
+      const name = /\b(?:let|var)\s+(\w+)\s*(?::\s*\w+\s*)?=\s*$/.exec(m.slice(Math.max(0, hit.index! - 60), hit.index))?.[1];
+      if (/inputAccessoryView\s*=\s*$/.test(m.slice(Math.max(0, hit.index! - 40), hit.index))) continue;
+      if (name && new RegExp(`inputAccessoryView\\s*=\\s*${name}\\b`).test(m)) continue;
       report('hand-built-bar', hit.index!, `${hit[1]} created by hand won’t get Duo’s vertical bar layout.`);
     }
     for (const hit of m.matchAll(/\bstruct\s+(\w*(?:TabBar|Toolbar|NavBar|NavigationBar|BottomBar)(?:View)?)\s*:\s*[^{]*\bView\b/g)) {
@@ -72,9 +76,8 @@ export const misplaced: RuleGroup = {
 
     for (const b of blocks) {
       if (b.label !== 'TabView' || b.argument) continue;
-      const modifiers = m.slice(b.close + 1, afterModifiers(m, b.close + 1));
       // A paged TabView is a carousel, not tabs.
-      if (/\.defaultTabBarPlacement\b|\.sidebarAdaptable\b|\.tabViewStyle\s*\(\s*(?:\.page|PageTabViewStyle)\b/.test(modifiers)) continue;
+      if (chainHas(m, b.close + 1, /^defaultTabBarPlacement$/) || chainHas(m, b.close + 1, /^tabViewStyle$/, /^\s*(?:\.sidebarAdaptable|\.page|PageTabViewStyle)\b/)) continue;
       report('tab-sidebar', labelOffset(src, b), undefined, {
         confidence: 'review',
         description: 'Show tabs as a sidebar on the inner display. Needs the iOS 27.1 SDK; behind an availability check if you deploy to earlier iOS.',

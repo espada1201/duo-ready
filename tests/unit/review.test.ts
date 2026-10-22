@@ -143,6 +143,8 @@ describe('second review', () => {
     expect(fixes('TabView(selection: $t) {\n  A()\n}\n.onChange(of: t) { _, n in log(n) }\n.tabViewStyle(.sidebarAdaptable)')).toEqual([]);
     expect(fixes('Image("a")\n  .resizable()\n  .overlay(alignment: .top) { Badge() }\n  .aspectRatio(1, contentMode: .fit)')).toEqual([]);
     expect(fixes('Image("a")\n  .resizable()\n  .frame(width: min(300, max(100, (200))))\n  .scaledToFill()')).toEqual([]);
+    // An aspect modifier inside an overlay's closure doesn't cover the outer image.
+    expect(ids(swift('Image("a")\n  .resizable()\n  .overlay { badge.resizable().scaledToFit() }'))).toEqual(['stretched-image']);
   });
 
   it('keeps an explicit column NavigationView and asks for review when other platforms build', () => {
@@ -154,5 +156,14 @@ describe('second review', () => {
   it('a plist without app keys does not count as the app’s Info.plist', () => {
     const files = [{ path: 'GoogleService-Info.plist', content: '<plist><dict><key>API_KEY</key><string>x</string></dict></plist>' }, { path: 'A.swift', content: 'let a = 1' }];
     expect(audit(files).partial).toBe(true);
+  });
+
+  it('skips scaled fonts, keyboard toolbars and popover sizes, but not the real thing', () => {
+    expect(ids(swift('func f() {\n  guard let f = UIFont(name: "Avenir", size: 17) else { return }\n  label.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: f)\n}'))).toEqual([]);
+    expect(ids(swift('let f = UIFont(name: "Avenir", size: 17)'))).toEqual(['fixed-font']);
+    expect(ids(swift('let bar = UIToolbar()\nfield.inputAccessoryView = bar'))).toEqual([]);
+    expect(ids(swift('let bar = UIToolbar()\nview.addSubview(bar)'))).toEqual(['hand-built-bar']);
+    expect(ids(swift('preferredContentSize = CGSize(width: 320, height: 400)'))).toEqual([]);
+    expect(ids(swift('view.frame = CGRect(x: 0, y: 0, width: 390, height: 10)'))).toEqual(['fixed-device-size']);
   });
 });

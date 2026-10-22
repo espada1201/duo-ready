@@ -1,7 +1,7 @@
 import { blockAt, declaredTypes, headerOf, labelOffset, type Block, type SwiftSource } from '../swift';
 import type { Fix } from '../types';
 import { lineAround } from '../text';
-import { afterModifiers, declaredAt, matchBefore, PREPARE, type RuleGroup } from './engine';
+import { chainHas, declaredAt, matchBefore, PREPARE, type RuleGroup } from './engine';
 
 const SCENES = 'Apple, WWDC25 “Make your UIKit app more flexible” (UIScene required after iOS 26)';
 
@@ -177,7 +177,7 @@ export const fold: RuleGroup = {
       const at = labelOffset(src, b);
       const target = facts.deploymentTarget;
       const edits = [{ start: at, end: at + 'NavigationView'.length, text: 'NavigationStack' }];
-      const columns = /\.navigationViewStyle\s*\(\s*(?:\.columns|DoubleColumn)/.test(m.slice(b.close + 1, afterModifiers(m, b.close + 1)));
+      const columns = chainHas(m, b.close + 1, /^navigationViewStyle$/, /^\s*(?:\.columns|DoubleColumn)/);
       if (columns || countStatements(m.slice(b.open + 1, b.close)) !== 1) report('navigation-view', at);
       else if (target !== null && target < 16) {
         report('navigation-view', at, `NavigationStack needs iOS 16 and this project deploys to iOS ${target}. Switch when you raise the deployment target.`);
