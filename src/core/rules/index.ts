@@ -50,10 +50,16 @@ const WATCH_DIR = /(^|\/)[^/]*Watch[^/]*(?:App|Kit|Extension|OS)\//;
 /** Builds for watchOS, macOS, tvOS or visionOS too, in a pbxproj, .xcconfig or XcodeGen spec. */
 const OTHER_PLATFORM = /\b(?:WATCHOS|MACOSX|TVOS|XROS)_DEPLOYMENT_TARGET\b|SDKROOT\s*=\s*(?:watchos|macosx|appletvos|xros)\b|SUPPORTED_PLATFORMS\s*[=:][^\n]*\b(?:watchos|macosx|appletvos|xros)\b|\b(?:platform|supportedDestinations):[^\n]*\b(?:watchOS|tvOS|macOS|visionOS)\b|^[ \t]+(?:watchOS|tvOS|macOS|visionOS):[ \t]*["']?\d/m;
 
-/** Watch app code: its own target and display, never in the iPhone app's window. A shared file that imports WatchKit only under `#if os(watchOS)` is still iPhone code. */
-function isWatchCode(masked: string): boolean {
-  if (/@WK(?:Extension|Application)DelegateAdaptor\b/.test(masked)) return true;
-  for (const hit of masked.matchAll(/\bimport\s+WatchKit\b/g)) {
+/** Mac, TV and Vision targets beside the iPhone app: `Pocket Casts TV App/`, `App_macOS.swift`. */
+const OTHER_PLATFORM_PATH = /(^|\/)[^/]*(?:tvOS|watchOS|macOS|visionOS|[ _-]TV(?:[ _-](?:App|Extension|Top ?Shelf))?|[ _-]Mac(?:[ _-]App)?)\/|[_+-](?:tvOS|watchOS|macOS|visionOS|TV|Mac)\.swift$/;
+
+/**
+ * Code for another platform's target: a watch app, or a Mac or TV app that imports AppKit or TVUIKit.
+ * A shared file that imports one only under `#if os(watchOS)` is still iPhone code.
+ */
+function isOtherPlatformCode(masked: string): boolean {
+  if (/@WK(?:Extension|Application)DelegateAdaptor\b|@NSApplicationDelegateAdaptor\b/.test(masked)) return true;
+  for (const hit of masked.matchAll(/\bimport\s+(?:WatchKit|AppKit|TVUIKit|TVServices)\b/g)) {
     const before = masked.slice(0, hit.index);
     const depth = (before.match(/^[ \t]*#if\b/gm)?.length ?? 0) - (before.match(/^[ \t]*#endif\b/gm)?.length ?? 0);
     if (depth <= 0) return true;
@@ -72,14 +78,14 @@ const WIDGET = /\b(?:TimelineProvider|TimelineEntry|WidgetConfiguration|WidgetBu
 function parse(file: SourceFile): Parsed | null {
   const name = file.path.split('/').pop()!;
   if (name.endsWith('.swift')) {
-    if (WATCH_DIR.test(file.path)) return null;
+    if (WATCH_DIR.test(file.path) || OTHER_PLATFORM_PATH.test(file.path)) return null;
     const src = parseSwift(file.content);
     // Unit, UI and snapshot tests run in CI, wherever their folder is.
-    if (isWatchCode(src.masked) || /^[ \t]*(?:@testable\s+)?import\s+(?:XCTest|Testing|SnapshotTesting|Quick|Nimble)\b/m.test(src.masked)) return null;
+    if (isOtherPlatformCode(src.masked) || /^[ \t]*(?:@testable\s+)?import\s+(?:XCTest|Testing|SnapshotTesting|Quick|Nimble)\b/m.test(src.masked)) return null;
     // Home Screen widgets are laid out by WidgetKit, not in the app's window.
     return WIDGET.test(src.masked) ? null : { kind: 'swift', file, src };
   }
-  if (/\.(mm?|h)$/.test(name)) return { kind: 'objc', file, src: parseObjC(file.content) };
+  if (/\.(mm?|h)$/.test(name)) return OTHER_PLATFORM_PATH.test(file.path) ? null : { kind: 'objc', file, src: parseObjC(file.content) };
   if (name.endsWith('.plist')) {
     const plist = parsePlist(file.content);
     // Watch apps and extensions have their own Info.plist; only the iPhone app's matters here.
@@ -193,19 +199,32 @@ const below = (version: string) => parseFloat(version) <= DUO_OS;
 const debug = new WeakMap<SwiftSource, [number, number][]>();
 
 /** `#if DEBUG` up to its `#else` or `#endif`: code App Store builds leave out. */
+/** A compile condition Duo builds never meet: `DEBUG`, another platform (`os(macOS) || os(tvOS)`, `!os(iOS)`) or Mac Catalyst. */
+function offDuo(condition: string): boolean {
+  const c = condition.replace(/\/\/.*$/, '').trim();
+  if (/^DEBUG$/.test(c) || /^!\s*os\s*\(\s*iOS\s*\)$/.test(c) || /^targetEnvironment\s*\(\s*macCatalyst\s*\)$/.test(c)) return true;
+  // Only platforms joined by ||, none of them iOS.
+  return /^os\s*\(\s*\w+\s*\)(?:\s*\|\|\s*os\s*\(\s*\w+\s*\))*$/.test(c) && !/\bos\s*\(\s*iOS\s*\)/.test(c);
+}
+
 function debugRegions(src: SwiftSource): [number, number][] {
   let out = debug.get(src);
   if (out) return out;
   out = [];
   const re = /^[ \t]*#(if|elseif|else|endif)\b(.*)$/gm;
-  const stack: { debug: boolean; from: number }[] = [];
+  const stack: { debug: boolean; from: number; iosOnly: boolean }[] = [];
   for (let hit = re.exec(src.masked); hit; hit = re.exec(src.masked)) {
     const top = stack[stack.length - 1];
-    if (hit[1] === 'if') stack.push({ debug: /^\s*DEBUG\s*$/.test(hit[2]), from: hit.index });
+    if (hit[1] === 'if') stack.push({ debug: offDuo(hit[2]), from: hit.index, iosOnly: /^\s*os\s*\(\s*iOS\s*\)\s*$/.test(hit[2]) });
     else if (top) {
       if (top.debug) out.push([top.from, hit.index]);
       if (hit[1] === 'endif') stack.pop();
-      else top.debug = false;
+      else {
+        // `#else` after `#if os(iOS)` is every other platform.
+        top.debug = hit[1] === 'elseif' ? offDuo(hit[2]) : top.iosOnly;
+        top.from = hit.index;
+        top.iosOnly = false;
+      }
     }
   }
   debug.set(src, out);

@@ -97,7 +97,12 @@ export function resolveViews(own: Map<string, { state: boolean; calls: string[] 
 }
 
 const CAMERA_FILE = /\b(videoOrientation|videoRotationAngle)\b/;
-const NOT_LAYOUT = /AVCapture|XCUI|videoOrientation|videoRotation|rawValue|imageOrientation|CGImagePropertyOrientation/;
+const NOT_LAYOUT = /AVCapture|XCUI|videoOrientation|videoRotation|rawValue|imageOrientation|CGImagePropertyOrientation|\w*OrientationAtPresentation|orientationAtPresentation|preferred\w*Orientation\w*|requestGeometryUpdate/;
+/** The flagged line and the one before it, where `var preferredLandscapeOrientation: UIInterfaceOrientation {` names what a value is for. */
+const withLineBefore = (m: string, at: number): string => {
+  const start = m.lastIndexOf('\n', at - 1);
+  return lineAround(m, at) + (start > 0 ? lineAround(m, start - 1) : '');
+};
 
 export const fold = defineGroup({
   id: 'fold',
@@ -199,7 +204,7 @@ export const fold = defineGroup({
 
     const cameraFile = CAMERA_FILE.test(m);
     for (const hit of m.matchAll(/\bUIDevice\s*\.\s*current\s*\.\s*orientation(?:\s*\.\s*is(?:Landscape|Portrait))?\b|\binterfaceOrientation\b|\bstatusBarOrientation\b|\b\w*[oO]rientation\s*\.\s*is(?:Landscape|Portrait)\b/g)) {
-      if (cameraFile || NOT_LAYOUT.test(lineAround(m, hit.index!))) continue;
+      if (cameraFile || NOT_LAYOUT.test(withLineBefore(m, hit.index!))) continue;
       if (declaredAt(m, hit.index!)) continue;
       report('orientation-layout', hit.index!);
     }
@@ -228,6 +233,9 @@ export const fold = defineGroup({
     }
 
     for (const hit of m.matchAll(/\bUIApplication\s*\.\s*shared\s*\.\s*(windows|keyWindow|connectedScenes\s*\.\s*first(?!\s*\??\s*\.\s*delegate)|delegate\s*\??\s*\.\s*window)\b/g)) {
+      // `connectedScenes.first(where: { $0.activationState == .foregroundActive })` picks the scene in use;
+      // a UI-test speed-up never runs for users.
+      if (/activationState\s*==\s*\.foregroundActive/.test(m.slice(hit.index!, hit.index! + 200)) || /UITest|uiTest/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
       report('key-window', hit.index!);
     }
     // `connectedScenes.flatMap { ... }.first { $0.isKeyWindow }`, often split over lines.
@@ -241,6 +249,8 @@ export const fold = defineGroup({
       const at = labelOffset(src, b);
       const target = facts.deploymentTarget;
       const edits = [{ start: at, end: at + 'NavigationView'.length, text: 'NavigationStack' }];
+      // `.navigationViewStyle(.stack)` already behaves as one NavigationStack column.
+      if (chainHas(m, b.close + 1, /^navigationViewStyle$/, /^\s*(?:\.stack\b|StackNavigationViewStyle\b)/)) continue;
       const columns = chainHas(m, b.close + 1, /^navigationViewStyle$/, /^\s*(?:\.columns|DoubleColumn)/);
       if (columns || countStatements(m.slice(b.open + 1, b.close)) !== 1) report('navigation-view', at);
       else if (target !== null && target < 16) {

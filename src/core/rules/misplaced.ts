@@ -77,11 +77,14 @@ export const misplaced = defineGroup({
       if (name && new RegExp(`inputAccessoryView\\s*=\\s*${name}\\b`).test(m.slice(scope.open + 1, scope.close))) continue;
       // A factory in `extension UIToolbar` makes bars for its callers, which decide where they go.
       if (insideExtensionOf(m, scope, hit[1])) continue;
+      // A toolbar inside a picker or keyboard accessory type is built to sit above the keyboard.
+      if (ACCESSORY_TYPE.test(enclosingType(m, scope) ?? '')) continue;
       report('hand-built-bar', hit.index!, `${hit[1] ?? hit[2]} created by hand won’t get Duo’s vertical bar layout.`);
     }
     for (const hit of m.matchAll(/\bstruct\s+(\w*(?:TabBar|Toolbar|NavBar|NavigationBar|BottomBar)(?:View)?)\s*:\s*[^{]*\bView\b/g)) {
-      // An onboarding pager's footer is shown once, under one flow, not the app's chrome.
-      if (/Onboarding|Welcome|Intro|Tutorial|Walkthrough/.test(hit[1])) continue;
+      // An onboarding pager's footer is shown once, under one flow, not the app's chrome; a composer or
+      // formatting strip rides on the keyboard.
+      if (/Onboarding|Welcome|Intro|Tutorial|Walkthrough|Composer|Formatting|Keyboard|Accessory|Input/.test(hit[1])) continue;
       report('hand-built-bar', hit.index!, `${hit[1]} is a custom bar; it will stay horizontal while system bars go vertical.`);
     }
 
@@ -133,4 +136,15 @@ function leftEdgeOnly(m: string, at: number): boolean {
   // Read only this recognizer's setup, not the next one's.
   const next = after.search(/UIScreenEdgePanGestureRecognizer/);
   return /\bedges\s*=\s*(?:\.left|\[\s*\.left\s*\]|UIRectEdgeLeft)\b(?!\s*[|,])/.test(next < 0 ? after : after.slice(0, next));
+}
+
+const ACCESSORY_TYPE = /Accessory|Keyboard|Input|Picker|Composer|Formatting/;
+
+/** Name of the class or struct whose body holds `scope`. */
+function enclosingType(m: string, scope: Block | null): string | null {
+  for (let b = scope; b?.parent; b = b.parent) {
+    const type = /\b(?:class|struct|extension)\s+(\w+)[^{}]*$/.exec(m.slice(Math.max(0, b.open - 200), b.open));
+    if (type) return type[1];
+  }
+  return null;
 }

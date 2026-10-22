@@ -761,3 +761,42 @@ describe('tall columns', () => {
     expect(ids([{ path: 'A.swift', content: 'VStack {\n  Text("a")\n}\n.frame(maxWidth: 600, maxHeight: .infinity)' }])).toContain('centered-column');
   });
 });
+
+describe('other platforms', () => {
+  const swiftIds = (content: string, path = 'A.swift') => ids([{ path, content }]);
+  it('skips Mac and TV targets and branches', () => {
+    expect(swiftIds('let s = UIScreen.main.bounds', 'Pocket Casts TV App/Player.swift')).toEqual([]);
+    expect(swiftIds('let s = UIScreen.main.bounds', 'App/App_macOS.swift')).toEqual([]);
+    expect(swiftIds('import AppKit\nlet s = UIScreen.main.bounds')).toEqual([]);
+    expect(swiftIds('#if os(macOS)\nlet s = UIScreen.main.bounds\n#endif')).toEqual([]);
+    expect(swiftIds('#if os(iOS)\nlet a = 1\n#elseif os(tvOS)\nlet s = UIScreen.main.bounds\n#endif')).toEqual([]);
+    expect(swiftIds('#if os(iOS)\nlet a = 1\n#else\nlet s = UIScreen.main.bounds\n#endif')).toEqual([]);
+  });
+  it('keeps iOS code and features named like a platform', () => {
+    expect(swiftIds('let s = UIScreen.main.bounds', 'App/Live TV Guide/Grid.swift')).toContain('uiscreen-main');
+    expect(swiftIds('#if os(iOS) || os(macOS)\nlet s = UIScreen.main.bounds\n#endif')).toContain('uiscreen-main');
+    expect(swiftIds('#if os(macOS)\nlet a = 1\n#else\nlet s = UIScreen.main.bounds\n#endif')).toContain('uiscreen-main');
+  });
+});
+
+describe('held-out review', () => {
+  const swiftIds = (content: string, path = 'A.swift') => ids([{ path, content }]);
+  it.each([
+    ['a NavigationView in stack style', 'NavigationView {\n  List {}\n}\n.navigationViewStyle(StackNavigationViewStyle())'],
+    ['an icon in a project frame modifier', 'image\n  .resizable()\n  .modifier(CompoundIconFrame(fontSize: 20))'],
+    ['a placeholder inside a chain that keeps the aspect ratio', 'KFImage.resource(r)\n  .placeholder { _ in\n    placeholder.resizable()\n  }\n  .resizable()\n  .aspectRatio(1, contentMode: .fit)'],
+    ['a composer toolbar', 'struct ComposerToolbar: View {\n  var body: some View { HStack {} }\n}'],
+    ['a picker accessory toolbar', 'final class PickerToolbarViewController: UIViewController {\n  override func loadView() {\n    let toolbar = UIToolbar()\n    self.view = toolbar\n  }\n}'],
+    ['the foreground-active scene', 'let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive })'],
+    ['a video export size', 'var videoSize: CGSize {\n  CGSize(width: 390, height: 694)\n}'],
+    ['a width fallback before layout', 'let width = view.bounds.width > 0 ? view.bounds.width : 320'],
+    ['an orientation handed to a presented player', 'player.orientationAtPresentation = view.window?.windowScene?.interfaceOrientation ?? .portrait'],
+    ['a preferred rotation', 'private var preferredLandscapeOrientation: UIInterfaceOrientation {\n  UIDevice.current.orientation == .landscapeRight ? .landscapeLeft : .landscapeRight\n}'],
+  ])('ignores %s', (_, code) => {
+    expect(swiftIds(code)).toEqual([]);
+  });
+  it('still flags a NavigationView that shows columns and a screen toolbar', () => {
+    expect(swiftIds('NavigationView {\n  List {}\n  Text("d")\n}')).toContain('navigation-view');
+    expect(swiftIds('final class PlayerViewController: UIViewController {\n  let bar = UIToolbar()\n}')).toContain('hand-built-bar');
+  });
+});

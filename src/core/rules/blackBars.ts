@@ -5,7 +5,7 @@ import { blockAt } from '../swift';
 import { chainHas, chainRoot, defineGroup, PREPARE, POSE } from './engine';
 
 // iPhone point sizes from the iPhone SE through the 17 Pro Max.
-const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize|estimated\w*|snapshot\w*|drawHierarchy|render\w*|\w*Preview|GADAdSize\w*|adSize|bannerSize)\b/i;
+const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize|estimated\w*|snapshot\w*|drawHierarchy|render\w*|\w*Preview|GADAdSize\w*|adSize|bannerSize|video\w*Size|export\w*|canvas\w*|renderSize|outputSize)\b/i;
 /** A few lines either side, where a size's purpose is named: `func preferredContentSize`, `renderAsImage()` on the next line. */
 function around(m: string, at: number): string {
   let from = at;
@@ -75,6 +75,8 @@ export const blackBars = defineGroup({
       // A context-menu preview or popover has its own size.
       if (blockAt(src.root, hit.index!).argument === 'preview' || /presentationCompactAdaptation|popover/.test(m.slice(hit.index!, hit.index! + 120))) continue;
       if (NOT_SCREEN.test(around(m, hit.index!)) || (n === 320 && /\bheight\s*:\s*50\b/.test(lineAround(m, hit.index!)))) continue;
+      // `let width = bounds.width > 0 ? bounds.width : 320` only falls back before the first layout pass.
+      if (/\?[^:\n]*$/.test(m.slice(m.lastIndexOf('\n', hit.index!) + 1, hit.index))) continue;
       const line = m.lastIndexOf('\n', hit.index!);
       if (((isWidth && PHONE_WIDTHS.has(n)) || (!isWidth && PHONE_HEIGHTS.has(n))) && !lines.has(line)) {
         lines.add(line);

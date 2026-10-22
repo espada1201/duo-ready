@@ -33,8 +33,8 @@ function callText(masked: string, from: number): string {
 /** `width: 40, height: 40` or `width: Layout.icon, height: Layout.icon`: both set, neither read from a window, geometry or container. */
 const FIXED_FRAME = /^\s*width\s*:\s*(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+,\s*height\s*:\s*(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+(?:,|$)/i;
 
-/** Whether a block around the image (`AsyncImage { image in … } placeholder: { … }`, a `Group`, a `switch`) ends in a fixed frame. */
-function framedOutside(m: string, block: Block): boolean {
+/** Whether a block around the image (`AsyncImage { image in … } placeholder: { … }`, a `Group`, a `switch`, KFImage's `.placeholder { }`) ends in a fixed frame or an aspect ratio. */
+function sizedOutside(m: string, block: Block): boolean {
   for (let b: Block | null = block, depth = 0; b?.parent && depth < 3; b = b.parent, depth++) {
     let at = b.close + 1;
     // Skip the call's other labelled closures: `} placeholder: { … }`.
@@ -43,7 +43,7 @@ function framedOutside(m: string, block: Block): boolean {
       if (close < 0) break;
       at = close;
     }
-    if (chainHas(m, at, /^frame$/, FIXED_FRAME)) return true;
+    if (chainHas(m, at, /^frame$/, FIXED_FRAME) || chainHas(m, at, /^(?:aspectRatio|scaledToFit|scaledToFill)$/)) return true;
   }
   return false;
 }
@@ -141,7 +141,9 @@ export const stretched = defineGroup({
       if (matchBefore(m, hit.index!, /(?:\bImage\s*\(\s*blurHash\s*:[^()]*(?:\([^()]*\)[^()]*)*\)\??|(?:^|[^.\w])\w+\s*\(\s*Image\s*\((?:[^()]|\([^()]*\))*\))\s*$/) !== null) continue;
       // A fixed width and height (or the project's square(size:)) never follow the window, so Duo can't stretch the image any more than an iPhone does.
       if (square && chainHas(m, end, square, /^\s*(?:size\s*:\s*)?(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+(?:,|$)/)) continue;
-      if (chainHas(m, end, /^frame$/, FIXED_FRAME) || framedOutside(m, blockAt(src.root, hit.index!))) continue;
+      if (chainHas(m, end, /^frame$/, FIXED_FRAME) || sizedOutside(m, blockAt(src.root, hit.index!))) continue;
+      // `.modifier(IconFrame(size: 24))`: a frame modifier the project wrote.
+      if (chainHas(m, end, /^modifier$/, /^\s*\w*Frame\b/)) continue;
       const indent = /\n([ \t]*)\.resizable/.exec(file.content.slice(Math.max(0, hit.index! - 200), end));
       // A full-bleed background should keep filling the window, not letterbox inside it.
       const scale = chainHas(m, end, /^(ignoresSafeArea|edgesIgnoringSafeArea)$/) ? '.scaledToFill()' : '.scaledToFit()';
