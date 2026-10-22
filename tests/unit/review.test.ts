@@ -634,3 +634,27 @@ it('skips a TabView whose sidebar placement is set where its property is used', 
 it('skips a capped bar a few points tall', () => {
   expect(ids([{ path: 'A.swift', content: 'ZStack {\n  track\n}\n.frame(maxWidth: 360)\n.frame(height: 4)' }])).toEqual([]);
 });
+
+describe('third precision review', () => {
+  const swiftIds = (content: string, path = 'A.swift') => ids([{ path, content }]);
+  it.each([
+    ['.id(UUID()) on a row of a spinner past #if lines', 'HStack {\n  ProgressView()\n  Spacer()\n}\n#if !os(visionOS)\n.listRowBackground(Color.clear)\n#endif\n.id(UUID())'],
+    ['an icon picked by a ternary in a square frame', 'struct S: View {\n  var body: some View {\n    Image(open ? Icons.up : Icons.down)\n      .resizable()\n      .frame(width: 16, height: 16)\n  }\n}'],
+    ['a placeholder handed to a sized avatar', 'AvatarView(url: url, diameter: 72, placeholderImage: Image("gravatar").resizable())'],
+    ['a context-menu preview width', 'Text(log)\n  .contextMenu {\n    Button("Copy") {}\n  } preview: {\n    Text(log)\n      .frame(width: 320)\n  }'],
+    ['a popover width', 'VStack { Text("a") }\n  .frame(idealWidth: 280, maxWidth: 320)\n  .presentationCompactAdaptation(.popover)'],
+    ['an action sheet style picked by idiom', 'let style: UIAlertController.Style = UIDevice.current.userInterfaceIdiom == .pad ? .alert : .actionSheet; let a = UIAlertController(title: nil, message: nil, preferredStyle: style)'],
+    ['a scene delegate lookup', 'let d = UIApplication.shared.connectedScenes.first?.delegate as? SceneDelegate'],
+    ['a QR scanner viewfinder', 'let layer = AVCaptureVideoPreviewLayer(session: s)\noutput.metadataObjectTypes = [.qr]'],
+  ])('ignores %s', (_, code) => {
+    expect(swiftIds(code)).toEqual([]);
+  });
+  it('skips files that import a test framework, wherever they are', () => {
+    expect(swiftIds('import XCTest\nlet size = CGSize(width: 375, height: 667)', 'App/SortViewTest.swift')).toEqual([]);
+    expect(swiftIds('let s = UIScreen.main.bounds', 'Kickstarter-Framework-iOSTests/A.swift')).toEqual([]);
+  });
+  it('accepts a scene configuration supplied in code', () => {
+    const app = 'class AppDelegate: UIResponder, UIApplicationDelegate {\n  func application(_ a: UIApplication, configurationForConnecting s: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration { fatalError() }\n}';
+    expect(ids([{ path: 'A.swift', content: app }, { path: 'S.swift', content: 'class SceneDelegate: NSObject, UIWindowSceneDelegate {}' }])).not.toContain('no-scene-lifecycle');
+  });
+});

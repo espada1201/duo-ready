@@ -65,7 +65,11 @@ export const hinge = defineGroup({
     if (!/\breservedRegions\b|\bArrangementView\b/.test(m)) {
       // SwiftUI's VideoPlayer comes from AVKit; where the app declares its own, only files importing AVKit mean Apple's.
       const avkit = !facts.ownVideoPlayer || /\bimport\s+(?:AVKit|_AVKit_SwiftUI)\b/.test(m);
-      for (const hit of m.matchAll(/\b(VideoPlayer|AVPlayerLayer|AVCaptureVideoPreviewLayer)\s*\(/g)) if (hit[1] !== 'VideoPlayer' || avkit) report('hinge-media', hit.index!);
+      // A code scanner's viewfinder still reads a code the hinge crosses.
+      const scanner = /\bmetadataObjectTypes\b|\b(?:QR|qr|Barcode|barcode)\w*/.test(m);
+      for (const hit of m.matchAll(/\b(VideoPlayer|AVPlayerLayer|AVCaptureVideoPreviewLayer)\s*\(/g)) {
+        if ((hit[1] !== 'VideoPlayer' || avkit) && !(scanner && hit[1] === 'AVCaptureVideoPreviewLayer')) report('hinge-media', hit.index!);
+      }
     }
 
     if (!/\bkeyboardLayoutGuide\b/.test(m)) {

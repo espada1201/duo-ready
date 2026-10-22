@@ -74,7 +74,8 @@ function parse(file: SourceFile): Parsed | null {
   if (name.endsWith('.swift')) {
     if (WATCH_DIR.test(file.path)) return null;
     const src = parseSwift(file.content);
-    if (isWatchCode(src.masked)) return null;
+    // Unit, UI and snapshot tests run in CI, wherever their folder is.
+    if (isWatchCode(src.masked) || /^[ \t]*(?:@testable\s+)?import\s+(?:XCTest|Testing|SnapshotTesting|Quick|Nimble)\b/m.test(src.masked)) return null;
     // Home Screen widgets are laid out by WidgetKit, not in the app's window.
     return WIDGET.test(src.masked) ? null : { kind: 'swift', file, src };
   }
@@ -119,6 +120,8 @@ function learn(parsed: Parsed[]): ProjectFacts {
       const m = p.src.masked;
       if (/@main(?:\s+@\w+(?:\([^)]*\))?|\s+(?:public|internal|final|nonisolated))*\s+struct\s+\w+\s*:\s*[^{]*\bApp\b/.test(m)) facts.swiftUIApp = true;
       if (/\bUIWindowSceneDelegate\b/.test(m)) facts.sceneDelegate = true;
+      // A scene configuration supplied in code works without the Info.plist manifest.
+      if (/\bconfigurationForConnecting\b/.test(m)) facts.sceneManifest = true;
       const appDelegate = /\bclass\s+\w+\s*:\s*[^{]*\bUIApplicationDelegate\b/.exec(m);
       if (appDelegate && !facts.appDelegate) facts.appDelegate = { file: p.file, offset: appDelegate.index };
       if (/\b(?:struct|class|enum|actor)\s+VideoPlayer\b/.test(m)) facts.ownVideoPlayer = true;
@@ -147,6 +150,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
     } else if (p.kind === 'config') {
       const config = stripConfigComments(p.file.content);
       if (OTHER_PLATFORM.test(config)) facts.otherPlatforms = true;
+      if (/\bUIApplicationSceneManifest\b/.test(config)) facts.sceneManifest = true;
       lower(configDeploymentTarget(config));
     }
   }

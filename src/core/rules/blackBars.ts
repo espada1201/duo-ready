@@ -1,6 +1,7 @@
 import { INNER } from '../duo';
 import { tierFromUpgradeCheck, tierLabel, upgradeCheck, xcodeVersion } from '../sdk';
 import { lineAround } from '../text';
+import { blockAt } from '../swift';
 import { chainHas, chainRoot, defineGroup, PREPARE, POSE } from './engine';
 
 // iPhone point sizes from the iPhone SE through the 17 Pro Max.
@@ -56,11 +57,14 @@ export const blackBars = defineGroup({
     // `CGRect(width: 320, height: 568)` is one hard-coded size, so one finding per line.
     const lines = new Set<number>();
     // `width <= 320` against a live size is a breakpoint, which adapts; `width: 320` and `== 320` pin one phone.
-    for (const hit of m.matchAll(/\b(width|height|maxWidth|maxHeight|minWidth|minHeight)\s*(?::|==)\s*(\d{3})(?:\.0)?\b/g)) {
+    // A maxWidth cap is a column, which centered-column covers.
+    for (const hit of m.matchAll(/\b(width|height|minWidth|minHeight)\s*(?::|==)\s*(\d{3})(?:\.0)?\b/g)) {
       const n = Number(hit[2]);
       const isWidth = /width/i.test(hit[1]);
       // Popovers, rendered images and thumbnails have their own sizes, not the screen's.
       // 320 × 50 is the standard ad banner, not a screen.
+      // A context-menu preview or popover has its own size.
+      if (blockAt(src.root, hit.index!).argument === 'preview' || /presentationCompactAdaptation|popover/.test(m.slice(hit.index!, hit.index! + 120))) continue;
       if (NOT_SCREEN.test(lineAround(m, hit.index!)) || (n === 320 && /\bheight\s*:\s*50\b/.test(lineAround(m, hit.index!)))) continue;
       const line = m.lastIndexOf('\n', hit.index!);
       if (((isWidth && PHONE_WIDTHS.has(n)) || (!isWidth && PHONE_HEIGHTS.has(n))) && !lines.has(line)) {
@@ -73,7 +77,7 @@ export const blackBars = defineGroup({
       // A capped image (`.resizable()...frame(maxWidth: 400)`) is a picture, not a column.
       if (/\.resizable\s*\(\s*\)[^{}\n]*(?:\n[ \t]*\.[^{}\n]*)*\n?[ \t]*$/.test(m.slice(Math.max(0, hit.index! - 250), hit.index))) continue;
       // A capped button or progress bar is a control, not a column of content.
-      if (CONTROL.test(chainRoot(src, hit.index!) ?? '')) continue;
+      if (CONTROL.test(chainRoot(src, hit.index!)?.name ?? '')) continue;
       // A few points tall is a bar or divider, not a column of content.
       if (/\bheight\s*:\s*1?\d(?:\.\d+)?\s*[,)]/.test(lineAround(m, hit.index!)) || chainHas(m, m.indexOf(')', hit.index!) + 1, /^frame$/, /\bheight\s*:\s*1?\d(?:\.\d+)?\s*(?:,|$)/)) continue;
       if (n >= 320 && n <= 720) report('centered-column', hit.index!, `A ${n} pt column fills about ${Math.round((n / INNER.w) * 100)}% of the open inner display.`);

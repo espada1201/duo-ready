@@ -216,7 +216,8 @@ export const fold = defineGroup({
     }
     for (const hit of m.matchAll(/\.id\s*\(\s*UUID\s*\(\s*\)\s*\)/g)) {
       // A spinner or a label has nothing to lose; a fresh identity just restarts it.
-      if (STATELESS.test(chainRoot(src, hit.index!) ?? '')) continue;
+      const root = chainRoot(src, hit.index!);
+      if (root?.name && (root.body ? STATELESS.test(root.name) && !keepsState(m.slice(root.body.open, root.body.close), facts.views) : STATELESS.test(root.name) || facts.views.get(root.name) === false)) continue;
       report('state-reset', hit.index!, '.id(UUID()) gives the view a new identity on every update, so its state never survives a fold.');
     }
 
@@ -226,7 +227,7 @@ export const fold = defineGroup({
       report('portrait-only', hit.index!, `${hit[1].startsWith('For') ? 'The app delegate locks every screen' : 'This screen locks itself'} to portrait. The inner display ignores the lock, so the layout gets a landscape canvas anyway.`);
     }
 
-    for (const hit of m.matchAll(/\bUIApplication\s*\.\s*shared\s*\.\s*(windows|keyWindow|connectedScenes\s*\.\s*first|delegate\s*\??\s*\.\s*window)\b/g)) {
+    for (const hit of m.matchAll(/\bUIApplication\s*\.\s*shared\s*\.\s*(windows|keyWindow|connectedScenes\s*\.\s*first(?!\s*\??\s*\.\s*delegate)|delegate\s*\??\s*\.\s*window)\b/g)) {
       report('key-window', hit.index!);
     }
     // `connectedScenes.flatMap { ... }.first { $0.isKeyWindow }`, often split over lines.

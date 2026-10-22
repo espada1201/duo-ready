@@ -183,12 +183,21 @@ export function sizeClassPattern(masked: string): string {
 }
 
 /** The view a modifier chain starts from: `Button` for `Button { } label: { }.buttonStyle(…).frame(…)`. */
-export function chainRoot(src: SwiftSource, at: number): string | null {
+export function chainRoot(src: SwiftSource, at: number): { name: string | null; body?: Block } | null {
   const m = src.masked;
   for (let i = at, guard = 0; guard < 30; guard++) {
     let j = i - 1;
     while (j >= 0 && /\s/.test(m[j])) j--;
-    if (m[j] === '}') return blockAt(src.root, j - 1).label;
+    // `#if os(iOS)` / `#endif` lines inside a chain hold no calls.
+    const lineStart = m.lastIndexOf('\n', j) + 1;
+    if (/^[ \t]*#/.test(m.slice(lineStart, j + 1))) {
+      i = lineStart;
+      continue;
+    }
+    if (m[j] === '}') {
+      const body = blockAt(src.root, j - 1);
+      return { name: body.label, body };
+    }
     let start = j + 1;
     if (m[j] === ')') {
       for (let depth = 0; j >= 0; j--) {
@@ -201,7 +210,7 @@ export function chainRoot(src: SwiftSource, at: number): string | null {
     if (!name) return null;
     let k = start - (m.slice(Math.max(0, start - 80), start).length - name.index) - 1;
     while (k >= 0 && /\s/.test(m[k])) k--;
-    if (m[k] !== '.') return name[1];
+    if (m[k] !== '.') return { name: name[1] };
     i = k;
   }
   return null;
