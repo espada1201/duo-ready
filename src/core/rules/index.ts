@@ -131,6 +131,18 @@ function screenAt(src: SwiftSource, offset: number): string | undefined {
 /** `static func previewView(...)`, `func frameForPreview()`: helpers only previews call. A plain `showLinkPreview()` is app code. */
 const PREVIEW_FUNC = /\b(?:static\s+func\s+preview\w*|func\s+\w*For(?:Xcode)?Previews?)\s*(?:<[^>{]*>)?\s*\([^{]*$/;
 
+const heads = new WeakMap<SwiftSource, [number, number][]>();
+
+/** From each `#Preview` to its opening brace. */
+function previewHeads(src: SwiftSource): [number, number][] {
+  let out = heads.get(src);
+  if (!out) {
+    out = [...src.masked.matchAll(/#Preview\b/g)].map((hit) => [hit.index!, src.masked.indexOf('{', hit.index!)] as [number, number]);
+    heads.set(src, out);
+  }
+  return out;
+}
+
 /** Xcode previews never ship, so their fixed sizes and fonts aren't the app's problem. */
 function inPreview(src: SwiftSource, offset: number): boolean {
   const m = src.masked;
@@ -138,11 +150,7 @@ function inPreview(src: SwiftSource, offset: number): boolean {
     if (b.label === 'Preview' || PREVIEW_FUNC.test(m.slice(Math.max(0, b.open - 300), b.open))) return true;
   }
   // `#Preview("Face ID button") {`: the title is part of the preview too.
-  for (const hit of m.matchAll(/#Preview\b/g)) {
-    if (hit.index! > offset) break;
-    const open = m.indexOf('{', hit.index!);
-    if (open > offset) return true;
-  }
+  if (previewHeads(src).some(([from, to]) => offset >= from && offset < to)) return true;
   return declaredTypes(src).some(
     (t) => t.block && (t.inherits.includes('PreviewProvider') || /Previews?$/.test(t.name)) && offset > t.start && offset < t.block.close,
   );

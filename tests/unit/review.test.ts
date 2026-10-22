@@ -288,3 +288,12 @@ describe('fourth review: apps the scanner had never seen', () => {
     expect(audit([{ path: 'App/Main.swift', content: out }, yml]).findings.map((f) => f.ruleId)).not.toContain('tab-sidebar');
   });
 });
+
+describe('scale', () => {
+  it('stays linear with thousands of findings in one file', () => {
+    const content = 'Image("a")\n.resizable()\n'.repeat(20000);
+    const start = performance.now();
+    expect(audit(swift(content)).findings).toHaveLength(20000);
+    expect(performance.now() - start).toBeLessThan(3000);
+  });
+});
