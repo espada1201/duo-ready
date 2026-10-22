@@ -1,0 +1,22 @@
+# Audit a chosen folder
+
+Choosing a project folder reads its Swift, Info.plist, Xcode project and HTML in the browser. Paths start inside the chosen folder, so a project kept in a folder named `build` still audits.
+
+## Sub-features
+
+- `folder-pick` audits a folder chosen with the file picker.
+- `folder-empty` explains a folder with nothing to audit.
+
+## How to get to it (user POV)
+
+- On `#audit`, choose `Choose folder`, or drop a folder on the drop zone.
+
+## Driving it with verify.mjs
+
+Preconditions: a temporary copy of `sample/Encore` in a folder named `build`.
+
+- **Pick.** Set `folder-input` to that folder. 31 `.finding` items render.
+
+## Gotchas
+
+- Drag and drop can't be driven by Playwright's file input. It shares `readEntries` with no automated coverage, so test it by hand after changes there.
