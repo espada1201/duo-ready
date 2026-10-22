@@ -1,5 +1,5 @@
 import { eolOf, lineAround, lineIndent } from '../text';
-import { blockAt, labelOffset, type Block } from '../swift';
+import { blockAt, headerOf, labelOffset, type Block } from '../swift';
 import { defineGroup, chainHas, PREPARE } from './engine';
 
 /** The sidebar modifier, kept to iOS when the project also builds for platforms that lack it. */
@@ -98,8 +98,11 @@ export const misplaced = defineGroup({
       if (!fixedSymmetric.has(hit.index!)) report('symmetric-safe-area', hit.index!);
     }
 
+    // A TabView built in a property or function often gets its placement where that is used.
+    const placedElsewhere = /\.defaultTabBarPlacement\s*\(|\.tabViewStyle\s*\(\s*\.sidebarAdaptable\b/.test(m);
     for (const b of blocks) {
       if (b.label !== 'TabView' || b.argument) continue;
+      if (placedElsewhere && b.parent && /\b(?:var\s+\w+\s*:\s*some\s+View|func\s+\w+[^{]*->\s*some\s+View)\s*$/.test(headerOf(src, b.parent))) continue;
       // A paged TabView is a carousel, not tabs.
       if (chainHas(m, b.close + 1, /^defaultTabBarPlacement$/) || chainHas(m, b.close + 1, /^tabViewStyle$/, /^\s*(?:\.sidebarAdaptable|\.page|PageTabViewStyle)\b/)) continue;
       report('tab-sidebar', labelOffset(src, b), undefined, {

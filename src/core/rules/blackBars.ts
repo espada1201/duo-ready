@@ -1,7 +1,7 @@
 import { INNER } from '../duo';
 import { tierFromUpgradeCheck, tierLabel, upgradeCheck, xcodeVersion } from '../sdk';
 import { lineAround } from '../text';
-import { chainRoot, defineGroup, PREPARE, POSE } from './engine';
+import { chainHas, chainRoot, defineGroup, PREPARE, POSE } from './engine';
 
 // iPhone point sizes from the iPhone SE through the 17 Pro Max.
 const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize|estimated\w*|snapshot\w*|drawHierarchy|render\w*|GADAdSize\w*|adSize|bannerSize)\b/i;
@@ -74,6 +74,8 @@ export const blackBars = defineGroup({
       if (/\.resizable\s*\(\s*\)[^{}\n]*(?:\n[ \t]*\.[^{}\n]*)*\n?[ \t]*$/.test(m.slice(Math.max(0, hit.index! - 250), hit.index))) continue;
       // A capped button or progress bar is a control, not a column of content.
       if (CONTROL.test(chainRoot(src, hit.index!) ?? '')) continue;
+      // A few points tall is a bar or divider, not a column of content.
+      if (/\bheight\s*:\s*1?\d(?:\.\d+)?\s*[,)]/.test(lineAround(m, hit.index!)) || chainHas(m, m.indexOf(')', hit.index!) + 1, /^frame$/, /\bheight\s*:\s*1?\d(?:\.\d+)?\s*(?:,|$)/)) continue;
       if (n >= 320 && n <= 720) report('centered-column', hit.index!, `A ${n} pt column fills about ${Math.round((n / INNER.w) * 100)}% of the open inner display.`);
     }
   },

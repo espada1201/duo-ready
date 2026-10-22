@@ -624,3 +624,13 @@ describe('second precision review', () => {
     expect(swiftIds('let s = UIScreen.main.bounds', 'InboxTesting/Helpers.swift')).toEqual([]);
   });
 });
+
+it('skips a TabView whose sidebar placement is set where its property is used', () => {
+  const code = 'struct App: View {\n  var body: some View {\n    tabs.defaultTabBarPlacement(.sidebar)\n  }\n  var tabs: some View {\n    TabView {\n      Text("a")\n    }\n  }\n}';
+  expect(ids([{ path: 'A.swift', content: code }])).not.toContain('tab-sidebar');
+  expect(ids([{ path: 'A.swift', content: code.replace('.defaultTabBarPlacement(.sidebar)', '') }])).toContain('tab-sidebar');
+});
+
+it('skips a capped bar a few points tall', () => {
+  expect(ids([{ path: 'A.swift', content: 'ZStack {\n  track\n}\n.frame(maxWidth: 360)\n.frame(height: 4)' }])).toEqual([]);
+});
