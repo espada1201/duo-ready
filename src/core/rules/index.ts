@@ -106,13 +106,14 @@ function parse(file: SourceFile): Parsed | null {
 }
 
 function learn(parsed: Parsed[]): ProjectFacts {
+  let appWeight = -1;
   const facts: ProjectFacts = {
     swiftUIApp: false,
     sceneDelegate: false,
     sceneManifest: false,
     multipleScenes: false,
     singleScene: false,
-    hasAppProject: false,
+    appProject: null,
     appDelegate: null,
     deploymentTarget: null,
     otherPlatforms: false,
@@ -168,9 +169,14 @@ function learn(parsed: Parsed[]): ProjectFacts {
       // The app's own project says which SDK it ships with; framework projects follow the app's.
       const check = upgradeCheck(p.file.content)?.value ?? null;
       if (!APP_TARGET.test(p.file.content)) facts.upgradeCheck ??= check;
-      else if (!facts.hasAppProject) {
-        facts.hasAppProject = true;
-        facts.upgradeCheck = check ?? facts.upgradeCheck;
+      else {
+        // Framework projects often carry a test-host app too; the shipping app is the one with extensions, else the biggest.
+        const weight = (p.file.content.match(/product-type\.app-extension"/g)?.length ?? 0) * 1e8 + p.file.content.length;
+        if (weight > appWeight) {
+          appWeight = weight;
+          facts.appProject = p.file.path;
+          facts.upgradeCheck = check ?? facts.upgradeCheck;
+        }
       }
       if (OTHER_PLATFORM.test(p.file.content)) facts.otherPlatforms = true;
       lower(deploymentTarget(p.file.content));

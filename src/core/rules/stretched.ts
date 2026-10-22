@@ -181,7 +181,8 @@ export const stretched = defineGroup({
     // HTML in string literals: the mask blanks it, so read the raw text inside strings.
     for (const hit of file.content.matchAll(VIEWPORT_WIDTH)) {
       const at = hit.index! + hit[0].length - hit[1].length;
-      if (src.strings[at]) report('webview-viewport', hit.index!, viewportMessage(hit[1]));
+      // HTML in a Swift string only reaches a viewport through a web view.
+      if (src.strings[at] && /\b(?:WKWebView|UIWebView|loadHTMLString|SFSafariViewController)\b/.test(m)) report('webview-viewport', hit.index!, viewportMessage(hit[1]));
     }
     for (const hit of m.matchAll(ON_RESIZE)) {
       const open = m.indexOf('{', hit.index!);

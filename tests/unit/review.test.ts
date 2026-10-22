@@ -962,3 +962,28 @@ describe('hairlines', () => {
     expect(f.message).toMatch(/hairline/);
   });
 });
+
+describe('seventh held-out review', () => {
+  const swiftIds = (content: string, path: string) => ids([{ path, content }]);
+  it('skips test folders with spaces, developer tools, previews and debug screens', () => {
+    for (const path of ['wire-ios/Wire-iOS Tests/Utils/A.swift', 'App/Sources/Developer/DeveloperTools/A.swift', 'UI/Preview/A.swift', 'Monal/Classes/DebugView.swift']) {
+      expect(swiftIds('let s = UIScreen.main.bounds', path)).toEqual([]);
+    }
+  });
+  it('reads the SDK once, from the shipping app project', () => {
+    const pbx = (check: string, extensions: number) => `LastUpgradeCheck = ${check};\nproductType = "com.apple.product-type.application";\n${'productType = "com.apple.product-type.app-extension";\n'.repeat(extensions)}SDKROOT = iphoneos;`;
+    const found = ids([
+      { path: 'Sync/Sync.xcodeproj/project.pbxproj', content: pbx('1310', 0) },
+      { path: 'App/App.xcodeproj/project.pbxproj', content: pbx('1310', 2) },
+    ]);
+    expect(found.filter((id) => id === 'old-sdk')).toHaveLength(1);
+  });
+});
+
+describe('every window', () => {
+  it('ignores code that touches every window, and viewport strings with no web view', () => {
+    expect(ids([{ path: 'A.swift', content: 'UIApplication.shared.windows.forEach { $0.tintColor = .red }' }])).toEqual([]);
+    expect(ids([{ path: 'A.swift', content: 'let html = "<meta name=\\"viewport\\" content=\\"width=320\\">"' }])).toEqual([]);
+    expect(ids([{ path: 'A.swift', content: 'let html = "<meta name=\\"viewport\\" content=\\"width=320\\">"\nwebView.loadHTMLString(html, baseURL: nil)\nlet w = WKWebView()' }])).toContain('webview-viewport');
+  });
+});

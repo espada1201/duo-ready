@@ -1,5 +1,5 @@
 import { INNER } from '../duo';
-import { APP_TARGET, tierFromUpgradeCheck, tierLabel, upgradeCheck, xcodeVersion } from '../sdk';
+import { tierFromUpgradeCheck, tierLabel, upgradeCheck, xcodeVersion } from '../sdk';
 import { lineAround } from '../text';
 import { blockAt, headerOf, type SwiftSource } from '../swift';
 import { chainHas, chainRoot, defineGroup, PREPARE, POSE } from './engine';
@@ -123,8 +123,8 @@ export const blackBars = defineGroup({
     if (full) report('requires-full-screen', full.index);
     const check = upgradeCheck(file.content);
     const tier = check ? tierFromUpgradeCheck(check.value) : '27.1';
-    // A framework project builds with the app's SDK, so only the app's own project counts when there is one.
-    if (check && tier !== '27.1' && (!facts.hasAppProject || APP_TARGET.test(file.content))) {
+    // Framework projects build with the app's SDK, so only the app's own project counts when there is one.
+    if (check && tier !== '27.1' && (facts.appProject === null || file.path === facts.appProject)) {
       report('old-sdk', check.offset, `Last upgraded with Xcode ${xcodeVersion(check.value)}; Duo users likely see ${tierLabel(tier)}.`);
     }
   },

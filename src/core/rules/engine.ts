@@ -49,8 +49,8 @@ export interface ProjectFacts {
   upgradeCheck: string | null;
   /** An Info.plist or project.pbxproj was given. */
   hasProjectFiles: boolean;
-  /** Some Xcode project in the folder builds an app (not only frameworks or packages). */
-  hasAppProject: boolean;
+  /** Path of the Xcode project that builds the shipping app, when one builds an app at all. */
+  appProject: string | null;
 }
 
 export type Report<Id extends string = string> = (ruleId: Id, offset: number, message?: string, fix?: Fix) => void;

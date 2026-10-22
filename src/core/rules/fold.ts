@@ -270,6 +270,8 @@ export const fold = defineGroup({
       // the scene in use; with multiple scenes, two can be in the foreground side by side. A UI-test hook never runs for users.
       // With one scene, `connectedScenes.first` is that scene.
       if (facts.singleScene && !facts.multipleScenes && hit[1].startsWith('connectedScenes')) continue;
+      // Touching every window (`windows.forEach`, `for w in UIApplication.shared.windows`) assumes nothing about which is key.
+      if (hit[1] === 'windows' && (/^\s*\.\s*forEach\b/.test(m.slice(hit.index! + hit[0].length, hit.index! + hit[0].length + 30)) || /\bfor\s+\w+\s+in\s+$/.test(m.slice(Math.max(0, hit.index! - 40), hit.index)))) continue;
       if ((!facts.multipleScenes && /activationState\s*==\s*\.foregroundActive/.test(m.slice(hit.index!, hit.index! + 200))) || /UITest|uiTest/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
       report('key-window', hit.index!, oneWindow(facts) ? ONE_WINDOW : undefined);
     }
