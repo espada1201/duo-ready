@@ -174,8 +174,10 @@ export const stretched = defineGroup({
       });
     }
     for (const hit of m.matchAll(/\.contentMode\s*=\s*\.scaleToFill\b/g)) {
-      // Avatars, icons and thumbnails sit in fixed square frames.
-      if (!SMALL_IMAGE.test(lineAround(m, hit.index!))) report('stretched-image', hit.index!);
+      // Avatars, icons and thumbnails sit in fixed square frames: named on the line, just above it, or by the view type.
+      const before = m.slice(Math.max(0, hit.index! - 200), hit.index).split('\n').slice(-3).join('\n');
+      if (SMALL_IMAGE.test(lineAround(m, hit.index!) + before + (enclosingType(m, blockAt(src.root, hit.index!)) ?? ''))) continue;
+      report('stretched-image', hit.index!);
     }
 
     // HTML in string literals: the mask blanks it, so read the raw text inside strings.
@@ -189,7 +191,8 @@ export const stretched = defineGroup({
       // A protocol requirement has no body: the next brace belongs to something else.
       if (/\bfunc\b|[};]/.test(m.slice(hit.index! + 4, open))) continue;
       const body = blocks.find((b) => b.open === open);
-      const reload = body && /\.reload\s*\(\s*\)|\.loadHTMLString\s*\(|\.load\s*\(\s*URLRequest/.exec(m.slice(body.open, body.close));
+      // `listController.reload()` refreshes a list; only a web view's reload loses a page.
+      const reload = body && /\b\w*[wW]eb\w*\??\.reload\s*\(\s*\)|\.loadHTMLString\s*\(|\.load\s*\(\s*URLRequest/.exec(m.slice(body.open, body.close));
       if (reload) report('webview-viewport', body.open + reload.index, 'Web content reloads when the size changes, so a fold throws away its scroll position and input.');
     }
 

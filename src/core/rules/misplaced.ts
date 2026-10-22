@@ -80,6 +80,8 @@ export const misplaced = defineGroup({
       if (lazy && new RegExp(`inputAccessoryView\\s*=\\s*(?:self\\.)?${lazy}\\b`).test(m)) continue;
       // A factory in `extension UIToolbar` makes bars for its callers, which decide where they go.
       if (insideExtensionOf(m, scope, hit[1])) continue;
+      // A stand-in bar drawn during a custom transition is gone once the transition ends.
+      if (TRANSITION_TYPE.test(enclosingType(m, scope) ?? '') || /\btransitionContext\b/.test(m.slice(scope.open, scope.close))) continue;
       // A toolbar inside a picker or keyboard accessory type is built to sit above the keyboard.
       if (ACCESSORY_TYPE.test(enclosingType(m, scope) ?? '')) continue;
       report('hand-built-bar', hit.index!, `${hit[1] ?? hit[2]} created by hand won’t get Duo’s vertical bar layout.`);
@@ -145,4 +147,5 @@ function leftEdgeOnly(m: string, at: number): boolean {
   return /\bedges\s*=\s*(?:\.left\b|\[\s*\.left\s*\]|UIRectEdgeLeft\b)(?!\s*[|,])/.test(next < 0 ? after : after.slice(0, next));
 }
 
+const TRANSITION_TYPE = /Segue|Transition|Animator/;
 const ACCESSORY_TYPE = /Accessory|Keyboard|Input|Picker|Composer|Formatting/;

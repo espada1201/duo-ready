@@ -998,3 +998,24 @@ describe('sizes that are not screens', () => {
     expect(swiftIds(code)).toEqual([]);
   });
 });
+
+describe('eighth held-out review', () => {
+  const swiftIds = (content: string) => ids([{ path: 'A.swift', content }]);
+  it('ignores a flow-layout footer size inside a switch', () => {
+    expect(swiftIds('func collectionView(_ c: UICollectionView, layout l: UICollectionViewLayout, referenceSizeForFooterInSection s: Int) -> CGSize\n{\n  switch s {\n  case 0:\n    return CGSize(width: 320, height: 20)\n  default:\n    return .zero\n  }\n}')).toEqual([]);
+  });
+  it('ignores a stretched avatar named just above or by its view type', () => {
+    expect(swiftIds('let button = UIButton()\nbutton.layer.cornerRadius = avatarHeight / 2\nbutton.imageView?.contentMode = .scaleToFill')).toEqual([]);
+    expect(swiftIds('class AvatarImageView: UIImageView {\n  func setup() {\n    self.contentMode = .scaleToFill\n  }\n}')).toEqual([]);
+    expect(swiftIds('class HeroView: UIView {\n  func setup() {\n    imageView.contentMode = .scaleToFill\n  }\n}')).toContain('stretched-image');
+  });
+  it('flags a reload on resize only for web content', () => {
+    const resize = (call: string) => swiftIds(`override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {\n  ${call}\n}`);
+    expect(resize('self.listContentController.reload()')).toEqual([]);
+    expect(resize('webView.reload()')).toContain('webview-viewport');
+  });
+  it('ignores a stand-in toolbar drawn during a custom transition', () => {
+    expect(swiftIds('class GamesSegue: UIStoryboardSegue {\n  func animate() {\n    let bar = UIToolbar(frame: .zero)\n  }\n}')).toEqual([]);
+    expect(swiftIds('func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {\n  let bar = UIToolbar(frame: .zero)\n  transitionContext.containerView.addSubview(bar)\n}')).toEqual([]);
+  });
+});
