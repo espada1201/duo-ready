@@ -1136,3 +1136,10 @@ describe('twelfth held-out review', () => {
     expect(nav?.fix?.confidence).toBe('safe');
   });
 });
+
+describe('font fallbacks', () => {
+  it('ignores a fallback font and a Dynamic Type helper', () => {
+    expect(ids([{ path: 'A.swift', content: 'let f = self.linkFont ?? self.font ?? UIFont.systemFont(ofSize: 12.0)' }])).toEqual([]);
+    expect(ids([{ path: 'Helpers/DynamicFontHelper.swift', content: 'func font(_ size: CGFloat) -> UIFont {\n  return UIFont.systemFont(ofSize: size, weight: .medium)\n}' }])).toEqual([]);
+  });
+});

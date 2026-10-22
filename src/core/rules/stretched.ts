@@ -144,6 +144,8 @@ export const stretched = defineGroup({
       // A point size on an SF Symbol sizes an icon; PDF and draw(_:) output has no Dynamic Type to follow.
       if (/\bImage\s*\(\s*system(?:Name|Symbol)\s*:[^()]*\)(?:\s*\.\w+\s*\((?:[^()]|\([^()]*\))*\))*\s*\.font\s*\(\s*$/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
       if (inDrawing(m, blockAt(src.root, hit.index!))) continue;
+      // `self.font ?? UIFont.systemFont(ofSize: 12)` is a fallback for a font set elsewhere; a Dynamic Type helper scales its sizes itself.
+      if (/\?\?\s*$/.test(m.slice(Math.max(0, hit.index! - 20), hit.index)) || /Dynamic(?:Font|Type)/.test(file.path + (enclosingType(m, blockAt(src.root, hit.index!)) ?? ''))) continue;
       // `let f = UIFont(...)` later passed to `scaledFont(for: f)` scales too.
       const name = scaled && /\b(?:let|var)\s+(\w+)\s*(?::\s*\w+\s*)?=\s*$/.exec(m.slice(Math.max(0, hit.index! - 60), hit.index))?.[1];
       const scope = blockAt(src.root, hit.index!);
