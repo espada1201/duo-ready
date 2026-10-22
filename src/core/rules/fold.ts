@@ -63,6 +63,10 @@ function iPhoneBuildSettings(pbxproj: string): { text: string; offset: number }[
 
 const isPortraitOnly = (orientations: string[]) => orientations.length > 0 && orientations.every((o) => o.includes('Portrait'));
 
+// Rotating camera output or reporting a sensor reads orientation for a reason that isn't layout.
+const CAMERA_FILE = /\b(videoOrientation|videoRotationAngle)\b/;
+const NOT_LAYOUT = /AVCapture|XCUI|videoOrientation|videoRotation|rawValue|imageOrientation|CGImagePropertyOrientation/;
+
 export const fold = defineGroup({
   id: 'fold',
   title: 'Breaks when you fold or unfold',
@@ -161,10 +165,9 @@ export const fold = defineGroup({
       report('uiscreen-main', hit.index!, message ?? (member ? `UIScreen.main.${member} is ambiguous on a two-display phone.` : undefined), fix);
     }
 
-    const cameraFile = /\b(videoOrientation|videoRotationAngle)\b/.test(m);
+    const cameraFile = CAMERA_FILE.test(m);
     for (const hit of m.matchAll(/\bUIDevice\s*\.\s*current\s*\.\s*orientation(?:\s*\.\s*is(?:Landscape|Portrait))?\b|\binterfaceOrientation\b|\bstatusBarOrientation\b|\b\w*[oO]rientation\s*\.\s*is(?:Landscape|Portrait)\b/g)) {
-      // Rotating camera output or reporting a sensor reads orientation for a reason that isn't layout.
-      if (cameraFile || /AVCapture|XCUI|videoOrientation|videoRotation|rawValue|imageOrientation|CGImagePropertyOrientation/.test(lineAround(m, hit.index!))) continue;
+      if (cameraFile || NOT_LAYOUT.test(lineAround(m, hit.index!))) continue;
       if (declaredAt(m, hit.index!)) continue;
       report('orientation-layout', hit.index!);
     }
@@ -222,9 +225,9 @@ export const fold = defineGroup({
   objc({ masked: m, report }) {
     for (const hit of m.matchAll(/\[\s*UIScreen\s+mainScreen\s*\]|\bUIScreen\s*\.\s*mainScreen\b/g)) report('uiscreen-main', hit.index!, '[UIScreen mainScreen] is ambiguous on a two-display phone.');
     for (const hit of m.matchAll(/\bsharedApplication\s*\]?\s*(?:\.\s*|\s+)(?:keyWindow|windows|delegate\s*\]?\s*(?:\.\s*|\s+)window)\b/g)) report('key-window', hit.index!);
-    const camera = /\b(videoOrientation|videoRotationAngle)\b/.test(m);
+    const camera = CAMERA_FILE.test(m);
     for (const hit of m.matchAll(/\bstatusBarOrientation\b|\[\s*\[\s*UIDevice\s+currentDevice\s*\]\s+orientation\s*\]|\bUIDevice\s*\.\s*currentDevice\s*\.\s*orientation\b|\bUI(?:Interface|Device)OrientationIs(?:Landscape|Portrait)\b|\binterfaceOrientation\b/g)) {
-      if (!camera && !/AVCapture|videoOrientation|imageOrientation/.test(lineAround(m, hit.index!))) report('orientation-layout', hit.index!);
+      if (!camera && !NOT_LAYOUT.test(lineAround(m, hit.index!))) report('orientation-layout', hit.index!);
     }
     for (const hit of m.matchAll(/\bsupportedInterfaceOrientations(?:ForWindow\s*:[^{]{0,300})?\s*\{\s*return\s+\(?\s*UIInterfaceOrientationMaskPortrait\s*\)?\s*;\s*\}/g)) {
       report('portrait-only', hit.index!, 'This code locks to portrait. The inner display ignores the lock, so the layout gets a landscape canvas anyway.');

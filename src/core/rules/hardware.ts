@@ -31,18 +31,9 @@ export const hardware = defineGroup({
     if (!/\bLABiometryTypeTouchID\b/.test(m)) {
       for (const hit of m.matchAll(/\bLABiometryTypeFaceID\b/g)) report('biometry-faceid', hit.index!);
     }
-    for (const hit of file.content.matchAll(/Face ID/g)) {
-      const i = hit.index!;
-      const note = /\bcomment\s*:\s*@?"[^"\n]*$|NSLocalizedString\s*\(\s*@"[^"\n]*"\s*,\s*@"[^"\n]*$/.test(file.content.slice(Math.max(0, i - 200), i));
-      if (strings[i] && strings[i + 6] && !note && !/Touch ID|fingerprint|passcode/i.test(lineAround(file.content, i))) {
-        report('biometry-faceid', i, 'User-facing text mentions Face ID, which iPhone Duo doesn’t have.');
-      }
-    }
+    for (const i of faceIdCopy(file.content, strings, /\bcomment\s*:\s*@?"[^"\n]*$|NSLocalizedString\s*\(\s*@"[^"\n]*"\s*,\s*@"[^"\n]*$/)) report('biometry-faceid', i, FACE_ID_COPY);
     for (const hit of m.matchAll(/\bAVCaptureDeviceTypeBuiltInTrueDepthCamera\b/g)) {
-      const open = m.lastIndexOf('@[', hit.index!);
-      const close = m.indexOf(']', hit.index!);
-      const list = open !== -1 && close !== -1 && !m.slice(open, hit.index).includes(']') ? m.slice(open, close) : '';
-      if ((list.match(/\bAVCaptureDeviceTypeBuiltIn\w+/g) ?? []).length < 2) report('camera-hardware', hit.index!, 'The TrueDepth camera comes with Face ID; iPhone Duo has neither.');
+      if (!amongLenses(m, hit.index!, '@[', /\bAVCaptureDeviceTypeBuiltIn\w+/g)) report('camera-hardware', hit.index!, TRUE_DEPTH);
     }
   },
 
@@ -50,28 +41,35 @@ export const hardware = defineGroup({
     if (!/\.touchID\b/.test(m)) {
       for (const hit of m.matchAll(/\.faceID\b/g)) report('biometry-faceid', hit.index!);
     }
-    // Copy lives in strings, which the mask blanks: look at the raw text inside strings.
-    for (const hit of file.content.matchAll(/Face ID/g)) {
-      const i = hit.index!;
-      // Copy on the same line that also offers Touch ID or a passcode reads fine on Duo; the line,
-      // not the literal, so interpolation inside the string doesn't hide the alternative.
-      // A translator note (`NSLocalizedString(..., comment: "...")`) is never shown.
-      const note = /\bcomment\s*:\s*"[^"\n]*$/.test(file.content.slice(Math.max(0, i - 200), i));
-      if (src.strings[i] && src.strings[i + 6] && !note && !/Touch ID|fingerprint|passcode/i.test(lineAround(file.content, i))) {
-        report('biometry-faceid', i, 'User-facing text mentions Face ID, which iPhone Duo doesn’t have.');
-      }
-    }
+    for (const i of faceIdCopy(file.content, src.strings, /\bcomment\s*:\s*"[^"\n]*$/)) report('biometry-faceid', i, FACE_ID_COPY);
 
     for (const hit of m.matchAll(new RegExp(FORCED_CAMERA, 'g'))) {
       report('camera-hardware', hit.index!, 'Force-unwrapping a capture device crashes when that camera isn’t there.');
     }
     for (const hit of m.matchAll(/\.builtInTrueDepthCamera\b/g)) {
-      // One lens among several in a discovery list is the pattern this rule recommends.
-      const open = m.lastIndexOf('[', hit.index!);
-      const close = m.indexOf(']', hit.index!);
-      const list = open !== -1 && close !== -1 && !m.slice(open, hit.index).includes(']') && !m.slice(hit.index, close).includes('[') ? m.slice(open, close) : '';
-      if ((list.match(/\.builtIn\w+/g) ?? []).length > 1) continue;
-      if (!FORCED_CAMERA.test(lineAround(m, hit.index!))) report('camera-hardware', hit.index!, 'The TrueDepth camera comes with Face ID; iPhone Duo has neither.');
+      if (!amongLenses(m, hit.index!, '[', /\.builtIn\w+/g) && !FORCED_CAMERA.test(lineAround(m, hit.index!))) report('camera-hardware', hit.index!, TRUE_DEPTH);
     }
   },
 });
+
+const FACE_ID_COPY = 'User-facing text mentions Face ID, which iPhone Duo doesn’t have.';
+const TRUE_DEPTH = 'The TrueDepth camera comes with Face ID; iPhone Duo has neither.';
+
+/**
+ * Offsets of "Face ID" in user-facing strings. Copy lives in strings, which the mask blanks, so this reads
+ * the raw text. A line that also offers Touch ID or a passcode reads fine on Duo (the line, not the literal,
+ * so interpolation can't hide the alternative), and a translator `note` is never shown.
+ */
+function faceIdCopy(content: string, strings: Uint8Array, note: RegExp): number[] {
+  return [...content.matchAll(/Face ID/g)]
+    .map((hit) => hit.index!)
+    .filter((i) => strings[i] && strings[i + 6] && !note.test(content.slice(Math.max(0, i - 200), i)) && !/Touch ID|fingerprint|passcode/i.test(lineAround(content, i)));
+}
+
+/** Whether the lens at `at` is one of several in a discovery list opened by `open`, the pattern camera-hardware recommends. */
+function amongLenses(m: string, at: number, open: string, lens: RegExp): boolean {
+  const from = m.lastIndexOf(open, at);
+  const close = m.indexOf(']', at);
+  if (from === -1 || close === -1 || m.slice(from, at).includes(']') || m.slice(at, close).includes('[')) return false;
+  return (m.slice(from, close).match(lens) ?? []).length > 1;
+}

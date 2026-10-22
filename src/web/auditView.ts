@@ -1,9 +1,8 @@
 import { strToU8, zipSync } from 'fflate';
 import { applyFixes, isRelevant } from '../core/audit';
 import { patchFor, type Hunk } from '../core/diff';
-import { describeCounts, gainLabel, GRADE_LEGEND, objcNote, PARTIAL_NOTE, plural, screensFirst, severityLabel, summaryLine, unreadableNote } from '../core/findings';
+import { describeCounts, fixCounts, gainLabel, GRADE_LEGEND, objcNote, PARTIAL_NOTE, plural, SCREENS_NOTE, screensFirst, severityLabel, summaryLine, tierNote, unreadableNote } from '../core/findings';
 import { PAIN_POINTS, RULE_BY_ID } from '../core/rules';
-import { tierLabel } from '../core/sdk';
 import { groupBy } from '../core/text';
 import type { AuditResult, Finding, SdkTier, Severity, SourceFile } from '../core/types';
 import { analyse, type Analysis } from './analyse';
@@ -317,7 +316,7 @@ function results(state: AuditState, set: (s: AuditState) => void, openPreview: (
       r.partial ? h('p', { class: 'partial', 'data-testid': 'partial' }, PARTIAL_NOTE) : null,
       r.unreadable.length ? h('p', { class: 'partial', 'data-testid': 'unreadable' }, unreadableNote(r.unreadable)) : null,
       r.objcFiles ? h('p', { class: 'partial', 'data-testid': 'objc' }, objcNote(r.objcFiles)) : null,
-      r.tier ? h('p', {}, `Today Duo users likely see ${tierLabel(r.tier.value)}. `, h('span', { class: 'hint' }, `Based on ${r.tier.source}.`)) : null,
+      r.tier ? h('p', {}, `${tierNote(r.tier)}. `, h('span', { class: 'hint' }, `Based on ${r.tier.source}.`)) : null,
       h(
         'div',
         { class: 'summary-actions' },
@@ -352,7 +351,7 @@ function results(state: AuditState, set: (s: AuditState) => void, openPreview: (
           return h('li', { class: n ? 'has' : unchecked ? 'unchecked' : 'none' }, h('a', { href: `#rules/pain-${p.id}` }, p.title), n ? mark : h('strong', {}, mark));
         }),
       ),
-      fixable ? h('p', { class: 'hint' }, fixHint(fixable, r.findings.filter((f) => f.fix?.confidence === 'safe').length)) : null,
+      fixable ? h('p', { class: 'hint' }, fixHint(fixable, fixCounts(r.findings).safe)) : null,
     ),
   );
 
@@ -415,7 +414,7 @@ function results(state: AuditState, set: (s: AuditState) => void, openPreview: (
           {},
           screens.map((s) => h('li', {}, h('strong', {}, s.screen), ' ', h('span', { class: 'hint' }, `${gainLabel(s)} · ${describeCounts(s.findings)} · ${s.path}`))),
         ),
-        h('p', { class: 'hint' }, 'Each rule costs points once however often it fires, so a rule that also fires elsewhere pays off only once every instance is fixed.'),
+        h('p', { class: 'hint' }, SCREENS_NOTE),
       )
     : null;
 

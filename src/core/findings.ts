@@ -1,5 +1,6 @@
 // Shared ways of summarising findings, used by the CLI and the lab alike.
 
+import { tierLabel } from './sdk';
 import { joinEnglish } from './text';
 import type { AuditResult, Finding, Severity } from './types';
 
@@ -30,11 +31,22 @@ export const fixLabel = (f: Finding) => (f.fix ? ` [${f.fix.confidence} fix]` : 
 export const objcNote = (n: number) =>
   `${n === 1 ? '1 Objective-C file' : `${n} Objective-C files`} got the core checks (screen, idiom, orientation, keyboard, fonts, bars, gestures, cameras). Fixes and the SwiftUI checks are Swift only.`;
 
+/** Why fixing one screen may not move the score yet. */
+export const SCREENS_NOTE = 'Each rule costs points once, however often it fires, so a rule that also fires elsewhere only pays off once every instance is fixed.';
+
+/** What Duo users see today, from the SDK the app was last built with. */
+export const tierNote = (tier: NonNullable<AuditResult['tier']>) => `Today, Duo users likely see ${tierLabel(tier.value)}`;
+
+export const fixCounts = (findings: Finding[]) => ({
+  safe: findings.filter((f) => f.fix?.confidence === 'safe').length,
+  review: findings.filter((f) => f.fix?.confidence === 'review').length,
+});
+
 export const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 
 export function summaryLine(r: AuditResult): string {
   const n = countBySeverity(r.findings);
-  return `${plural(r.files, 'file')} (${r.swiftFiles} Swift) · ${plural(n.error, 'error')} · ${plural(n.warning, 'warning')} · ${plural(n.info, 'note')}`;
+  return `${plural(r.files, 'file')} (${r.swiftFiles} Swift${r.objcFiles ? `, ${r.objcFiles} Objective-C` : ''}) · ${plural(n.error, 'error')} · ${plural(n.warning, 'warning')} · ${plural(n.info, 'note')}`;
 }
 
 /** Cost of a set of findings: each rule counts once, weighted by severity. The score is 100 minus this. */

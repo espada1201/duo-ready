@@ -2,9 +2,8 @@ import { existsSync, lstatSync, readdirSync, readFileSync, statSync, writeFileSy
 import { dirname, join, relative, resolve } from 'node:path';
 import { applyFixes, audit, isRelevant, isRelevantDir, MAX_BYTES } from '../core/audit';
 import { patchFor } from '../core/diff';
-import { describeCounts, fixLabel, gainLabel, GRADE_LEGEND, objcNote, PARTIAL_NOTE, plural, screensFirst, SEVERITY_ORDER, severityLabel, summaryLine, unreadableNote } from '../core/findings';
+import { describeCounts, fixCounts, fixLabel, gainLabel, GRADE_LEGEND, objcNote, PARTIAL_NOTE, plural, SCREENS_NOTE, screensFirst, SEVERITY_ORDER, severityLabel, summaryLine, tierNote, unreadableNote } from '../core/findings';
 import { PAIN_POINTS, RULE_BY_ID } from '../core/rules';
-import { tierLabel } from '../core/sdk';
 import { groupBy } from '../core/text';
 import type { AuditResult, SourceFile } from '../core/types';
 import { toSarif } from './sarif';
@@ -144,19 +143,17 @@ function textReport(result: AuditResult, c: ReturnType<typeof paint>): string {
     const width = Math.max(...screens.map((s) => s.screen.length));
     const gainWidth = Math.max(...screens.map((s) => gainLabel(s).length));
     for (const s of screens) lines.push(`  ${s.screen.padEnd(width)}  ${gainLabel(s).padEnd(gainWidth)}  ${describeCounts(s.findings)}  ${c.dim(s.path)}`);
-    lines.push(c.dim('  Each rule costs points once, however often it fires, so a rule that also fires elsewhere'));
-    lines.push(c.dim('  only pays off once every instance is fixed.'));
+    lines.push(c.dim(`  ${SCREENS_NOTE}`));
     lines.push('');
   }
 
-  const safe = result.findings.filter((f) => f.fix?.confidence === 'safe').length;
-  const review = result.findings.filter((f) => f.fix?.confidence === 'review').length;
+  const { safe, review } = fixCounts(result.findings);
   lines.push(`${c.bold(`Duo readiness ${result.score}/100`)}  ${result.grade}  ${c.dim(GRADE_LEGEND)}`);
   lines.push(summaryLine(result));
   if (result.partial) lines.push(c.yellow(PARTIAL_NOTE));
   if (result.unreadable.length) lines.push(c.yellow(unreadableNote(result.unreadable)));
   if (result.objcFiles) lines.push(c.yellow(objcNote(result.objcFiles)));
-  if (result.tier) lines.push(`Today, Duo users likely see ${tierLabel(result.tier.value)} (based on ${result.tier.source}).`);
+  if (result.tier) lines.push(`${tierNote(result.tier)} (based on ${result.tier.source}).`);
   if (safe || review) lines.push(`${plural(safe, 'safe fix', 'safe fixes')} (--fix), ${plural(review, 'review fix', 'review fixes')} (--fix all). Try --dry-run first.`);
   return lines.join('\n');
 }

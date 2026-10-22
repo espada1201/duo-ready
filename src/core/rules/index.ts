@@ -62,8 +62,9 @@ function isWatchCode(masked: string): boolean {
 
 /** Comments in .xcconfig (`//`) and YAML (`#`) files, so a commented-out setting isn't read. */
 const stripConfigComments = (text: string) => text.replace(/(^|[ \t])(?:\/\/|#).*$/gm, '$1');
-/** `var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }`, with nothing else in the body. */
+/** `func square(size: CGFloat) -> some View { frame(width: size, height: size) }`. */
 const SQUARE_MODIFIER = /\bfunc\s+(\w+)\s*\(\s*(?:_\s+)?(\w+)\s*:\s*CGFloat\b[^)]*\)\s*->\s*some\s+View\s*\{\s*(?:return\s+)?(?:self\s*\.\s*)?frame\s*\(\s*width\s*:\s*\2\s*,\s*height\s*:\s*\2\b/g;
+/** `var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }`, with nothing else in the body. */
 const IDIOM_WRAPPER = /\bvar\s+(\w+)\s*:\s*Bool\s*\{\s*(?:return\s+)?(?:[\w.]+\.)?userInterfaceIdiom\s*==\s*\.(?:pad|phone)\s*\}/g;
 const WIDGET = /\b(?:TimelineProvider|TimelineEntry|WidgetConfiguration|WidgetBundle|widgetAccentedRenderingMode)\b|@Environment\s*\(\s*\\\.widgetFamily\s*\)/;
 
