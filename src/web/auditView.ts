@@ -1,5 +1,6 @@
 import { strToU8, zipSync } from 'fflate';
 import { applyFixes, audit, isRelevant } from '../core/audit';
+import { PAIN_POINTS } from '../core/painPoints';
 import { RULE_BY_ID, tierLabel } from '../core/rules';
 import type { AuditResult, Finding, SourceFile } from '../core/types';
 import { h } from './dom';
@@ -256,6 +257,14 @@ function results(state: AuditState, openPreview: (tier: string | null) => void):
         { class: 'summary-actions' },
         downloadButton,
         h('button', { type: 'button', class: 'button', onclick: () => openPreview(r.tier?.value ?? null) }, 'Preview on Duo', icon('arrow', 16)),
+      ),
+      h(
+        'ul',
+        { class: 'pain-chips', 'aria-label': 'Findings by reviewer pain point' },
+        PAIN_POINTS.map((p) => {
+          const n = r.findings.filter((f) => p.rules.includes(f.ruleId)).length;
+          return h('li', { class: n ? 'has' : 'none' }, h('a', { href: `#rules/${p.rules[0]}` }, p.title), h('strong', {}, n ? String(n) : '✓'));
+        }),
       ),
       fixable.length ? h('p', { class: 'hint' }, `${fixable.length} findings have fixes. Safe ones are pre-selected; review the rest before you tick them.`) : null,
     ),

@@ -155,6 +155,70 @@ export const RULES: Rule[] = [
     instead: 'Bridge reservedRegions(kind:) and ArrangementView through a native module or platform channel.',
     source: PREPARE,
   },
+  {
+    id: 'state-reset',
+    title: 'State resets when the phone opens or closes',
+    severity: 'warning',
+    why: 'Opening or closing Duo changes the size class mid-task. Views swapped on size class, or given a fresh .id, are rebuilt and lose their @State: scroll position, typed text, playback.',
+    instead: 'Keep one view and change only its layout with AnyLayout or ViewThatFits; keep what matters in @SceneStorage.',
+    source: PREPARE,
+  },
+  {
+    id: 'key-window',
+    title: 'Assumes a single window',
+    severity: 'warning',
+    why: 'Duo runs scenes on two displays. The key window or first scene may be on the other display, so sheets, alerts and sizes land in the wrong place.',
+    instead: 'Use the window and scene of the view you are working in (view.window, view.window?.windowScene).',
+    source: PREPARE,
+  },
+  {
+    id: 'fixed-font',
+    title: 'Fixed font size',
+    severity: 'info',
+    why: 'Fixed point sizes ignore Dynamic Type, so text that suits a 6-inch phone looks small on the 7.6-inch inner display.',
+    instead: 'Use text styles (.body, .headline), Font.custom(_:size:relativeTo:) or UIFontMetrics.',
+    source: 'Apple Human Interface Guidelines, Typography',
+  },
+  {
+    id: 'stretched-image',
+    title: 'Image can stretch',
+    severity: 'warning',
+    why: 'A resizable image with no aspect ratio fills whatever frame it gets. On Duo’s new window shapes that means the stretched artwork reviewers saw.',
+    instead: 'Add .scaledToFit() or .scaledToFill(), or use contentMode .scaleAspectFit.',
+    source: 'Apple Human Interface Guidelines, Images',
+  },
+  {
+    id: 'biometry-faceid',
+    title: 'Assumes Face ID',
+    severity: 'warning',
+    why: 'iPhone Duo has no Face ID. Unlock flows and copy written for Face ID hide the option or tell people to use hardware they don’t have.',
+    instead: 'Switch on LABiometryType and handle .touchID, and word prompts generically (“Unlock with biometrics”, or the type’s name at runtime).',
+    source: 'Apple LocalAuthentication documentation (LABiometryType)',
+  },
+  {
+    id: 'camera-hardware',
+    title: 'Assumes a specific camera',
+    severity: 'warning',
+    why: 'Duo’s cameras differ from the Pro iPhones, and with no Face ID there is no TrueDepth camera. Force-unwrapping a lens that isn’t there crashes.',
+    instead: 'Find cameras with AVCaptureDevice.DiscoverySession, fall back gracefully, and never force-unwrap a device.',
+    source: 'Apple AVFoundation documentation (Choosing a capture device)',
+  },
+  {
+    id: 'hinge-media',
+    title: 'Full-screen media ignores the hinge',
+    severity: 'info',
+    why: 'Half-folded, the hinge runs through a full-screen video or camera preview. Apple’s guidance for tabletop use is viewing content on top and controls on the bottom.',
+    instead: 'Read reservedRegions(kind: .division) and place the video in one region and controls in the other.',
+    source: POSE,
+  },
+  {
+    id: 'edge-gesture',
+    title: 'Screen-edge swipe',
+    severity: 'info',
+    why: 'On the inner display the trailing edge holds the status bar and vertical system bars, and the fold adds a new edge in the middle. Edge swipes there fight the system.',
+    instead: 'Prefer standard navigation gestures; if you need an edge pan, test it in every pose.',
+    source: PREPARE,
+  },
 ];
 
 export const RULE_BY_ID = new Map(RULES.map((r) => [r.id, r]));
@@ -323,6 +387,82 @@ function checkSwift(file: SourceFile, findings: Finding[]) {
     const n = Number(hit[1]);
     if (n >= 320 && n <= 720) report('centered-column', hit.index!, `A ${n} pt column fills about ${Math.round((n / 890) * 100)}% of the open inner display.`);
   }
+
+  // Swapping view types on size class rebuilds them, so @State is lost on fold.
+  for (const b of blocks) {
+    const sibling = b.parent?.children[b.parent.children.indexOf(b) + 1];
+    const head = m.slice(Math.max(0, b.open - 80), b.open);
+    const cond = /\bif\s+\w*[sS]izeClass\w*\s*[!=]=\s*\.\w+\s*$/.exec(head);
+    if (cond && sibling && headerOf(src, sibling) === 'else') report('state-reset', b.open - head.length + cond.index);
+  }
+  for (const hit of m.matchAll(/\.id\s*\(\s*UUID\s*\(\s*\)\s*\)/g)) {
+    report('state-reset', hit.index!, '.id(UUID()) gives the view a new identity on every update, so its state never survives a fold.');
+  }
+
+  for (const hit of m.matchAll(/\bUIApplication\s*\.\s*shared\s*\.\s*(windows|keyWindow|connectedScenes\s*\.\s*first|delegate\s*\??\s*\.\s*window)\b/g)) {
+    report('key-window', hit.index!);
+  }
+
+  for (const hit of m.matchAll(/\.system\s*\(\s*size\s*:|\bUIFont\s*\.\s*(?:systemFont|boldSystemFont|italicSystemFont|monospacedSystemFont)\s*\(\s*ofSize\s*:|\bUIFont\s*\(\s*name\s*:[^)]*size\s*:|\.custom\s*\([^)]*size\s*:/g)) {
+    const line = lineAround(m, hit.index!);
+    if (/relativeTo\s*:|UIFontMetrics|scaledFont/.test(line)) continue;
+    report('fixed-font', hit.index!);
+  }
+
+  for (const hit of m.matchAll(/\.resizable\s*\(\s*\)/g)) {
+    const end = hit.index! + hit[0].length;
+    const chain = m.slice(end, afterModifiers(m, end));
+    if (/\.(aspectRatio|scaledToFit|scaledToFill)\b/.test(chain)) continue;
+    const indent = /\n([ \t]*)\.resizable/.exec(file.content.slice(Math.max(0, hit.index! - 200), end));
+    const eol = file.content.includes('\r\n') ? '\r\n' : '\n';
+    report('stretched-image', hit.index!, undefined, {
+      confidence: 'review',
+      description: 'Keep the image’s aspect ratio.',
+      edits: [{ start: end, end, text: indent ? `${eol}${indent[1]}.scaledToFit()` : '.scaledToFit()' }],
+    });
+  }
+  for (const hit of m.matchAll(/\.contentMode\s*=\s*\.scaleToFill\b/g)) report('stretched-image', hit.index!);
+
+  const handlesTouchID = /\.touchID\b/.test(m);
+  if (!handlesTouchID) {
+    for (const hit of m.matchAll(/\.faceID\b/g)) report('biometry-faceid', hit.index!);
+  }
+  // Copy lives in strings, which the mask blanks: look at the raw text where the mask is blank.
+  for (const hit of file.content.matchAll(/Face ID/g)) {
+    const i = hit.index!;
+    if (m.slice(i, i + 7) === '       ' && !isComment(file.content, i)) report('biometry-faceid', i, 'User-facing text mentions Face ID, which iPhone Duo doesn’t have.');
+  }
+
+  for (const hit of m.matchAll(/\bAVCaptureDevice\s*\.\s*default\s*\((?:[^()]|\([^()]*\))*\)\s*!/g)) {
+    report('camera-hardware', hit.index!, 'Force-unwrapping a capture device crashes when that camera isn’t there.');
+  }
+  for (const hit of m.matchAll(/\.builtInTrueDepthCamera\b/g)) {
+    if (!/\bAVCaptureDevice\s*\.\s*default\s*\((?:[^()]|\([^()]*\))*\)\s*!/.test(lineAround(m, hit.index!))) {
+      report('camera-hardware', hit.index!, 'The TrueDepth camera comes with Face ID; iPhone Duo has neither.');
+    }
+  }
+
+  if (!/\breservedRegions\b|\bArrangementView\b/.test(m)) {
+    for (const hit of m.matchAll(/\b(VideoPlayer|AVPlayerLayer|AVCaptureVideoPreviewLayer)\s*\(/g)) report('hinge-media', hit.index!);
+  }
+
+  for (const hit of m.matchAll(/\bUIScreenEdgePanGestureRecognizer\s*\(/g)) report('edge-gesture', hit.index!);
+}
+
+function lineAround(text: string, offset: number): string {
+  const start = text.lastIndexOf('\n', offset) + 1;
+  const end = text.indexOf('\n', offset);
+  return text.slice(start, end === -1 ? undefined : end);
+}
+
+/** True when `offset` is inside a // or /* comment rather than a string literal. */
+function isComment(text: string, offset: number): boolean {
+  const line = lineAround(text, offset);
+  const col = offset - (text.lastIndexOf('\n', offset) + 1);
+  const slashes = line.indexOf('//');
+  if (slashes !== -1 && slashes < col && !line.slice(0, slashes).includes('"')) return true;
+  const open = text.lastIndexOf('/*', offset);
+  return open !== -1 && text.lastIndexOf('*/', offset) < open;
 }
 
 /** End offset of a chain of `.modifier(...)` calls following a closing brace. */

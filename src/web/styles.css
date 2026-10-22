@@ -1223,3 +1223,75 @@ label.button:focus-within {
     transition: none !important;
   }
 }
+
+.fold-check {
+  margin-bottom: 12px;
+}
+
+.fold-check p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.pain {
+  margin-top: 36px;
+}
+
+.pain-head {
+  max-width: 76ch;
+  margin-bottom: 14px;
+}
+
+.pain-head h3 {
+  font-size: 22px;
+  text-transform: none;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.pain-head p {
+  margin: 4px 0;
+  color: var(--ink-2);
+}
+
+.pain-head span {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pain-chips {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pain-chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  font-size: 13px;
+}
+
+.pain-chips a {
+  text-decoration: none;
+}
+
+.pain-chips strong {
+  font: 600 12px/1 var(--mono);
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--signal-soft);
+  color: var(--signal);
+}
+
+.pain-chips .none strong {
+  background: var(--ok-soft);
+  color: var(--ok);
+}

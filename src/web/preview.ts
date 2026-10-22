@@ -1,7 +1,7 @@
 import { POSTURES, type Posture, type Presentation, type Rect } from '../core/duo';
 import { RULE_BY_ID } from '../core/rules';
 import { h, segmented, toggle } from './dom';
-import { BUILDS, layoutEncore, type Build, type EncoreLayout, type Piece } from './encoreLayout';
+import { BUILDS, continuity, layoutEncore, type Build, type EncoreLayout, type Piece } from './encoreLayout';
 import { icon } from './icons';
 
 export interface PreviewState {
@@ -11,6 +11,8 @@ export interface PreviewState {
   safeArea: boolean;
   camera: boolean;
   screenshot: string | null;
+  /** The pose before the last change, for the fold continuity check. */
+  previous: Posture | null;
 }
 
 const TRACKS = ['Low Tide', 'Paper Lanterns', 'Overpass', 'Static Bloom', 'Half Light', 'North Window', 'Glass Hours', 'Undertow', 'Small Hours'];
@@ -192,7 +194,35 @@ function readout(layout: EncoreLayout, state: PreviewState): HTMLElement {
     problems.length
       ? h('ul', { class: 'problems', 'data-testid': 'problems' }, problems)
       : h('p', { class: 'all-clear', 'data-testid': 'problems' }, icon('check', 16), ' No collisions. Content stays clear of the hinge, camera and status bar.'),
+    foldCheck(state),
     state.build === 'ready' ? snippet(layout) : null,
+  );
+}
+
+function foldCheck(state: PreviewState): HTMLElement {
+  const label = (id: Posture) => POSTURES.find((p) => p.id === id)!.label.toLowerCase();
+  if (!state.previous) {
+    return h('div', { class: 'fold-check', 'data-testid': 'continuity' }, h('h3', {}, 'Fold test'), h('p', { class: 'hint' }, 'Switch between Closed and Open to see whether Encore keeps your place.'));
+  }
+  const c = continuity(state.previous, state.posture, state.build);
+  const list = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items[0]);
+  return h(
+    'div',
+    { class: 'fold-check', 'data-testid': 'continuity' },
+    h('h3', {}, `Fold test: ${label(state.previous)} → ${label(state.posture)}`),
+    c.lost.length
+      ? h(
+          'p',
+          { class: 'problem' },
+          `The size class changed and Encore rebuilt its views. Lost: ${list(c.lost)}. `,
+          h('a', { href: '#rules/state-reset' }, 'Why'),
+        )
+      : h(
+          'p',
+          { class: 'all-clear' },
+          icon('check', 16),
+          c.resized ? ` Kept ${list(c.kept)}: the layout changed, the views didn’t.` : ' The size class didn’t change, so nothing was rebuilt.',
+        ),
   );
 }
 
@@ -235,7 +265,7 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
       'Pose',
       POSTURES.map((p) => ({ value: p.id, label: p.label, title: p.detail })),
       state.posture,
-      (posture) => set({ posture }),
+      (posture) => set({ posture, previous: state.posture }),
       'poses',
     ),
     segmented(

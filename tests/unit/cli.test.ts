@@ -22,15 +22,15 @@ describe('duo-ready CLI', () => {
     expect(code).toBe(1);
     expect(out).toContain('Encore/Encore/NowPlayingView.swift');
     expect(out).toMatch(/Duo readiness \d+\/100 {2}Not ready/);
-    expect(out).toContain('2 safe fixes (--fix), 2 more for review (--fix=all).');
+    expect(out).toContain('2 safe fixes (--fix), 3 more for review (--fix=all).');
   });
 
   it('emits JSON and SARIF that tools can consume', () => {
     const json = JSON.parse(capture(['sample', '--format', 'json']).out);
-    expect(json.findings).toHaveLength(19);
+    expect(json.findings).toHaveLength(28);
     const sarif = JSON.parse(capture(['sample', '--format=sarif', '--fail-on', 'never']).out);
     expect(sarif.version).toBe('2.1.0');
-    expect(sarif.runs[0].results).toHaveLength(19);
+    expect(sarif.runs[0].results).toHaveLength(28);
     expect(sarif.runs[0].results[0].locations[0].physicalLocation.region.startLine).toBeGreaterThan(0);
     expect(sarif.runs[0].tool.driver.rules.length).toBeGreaterThan(15);
   });

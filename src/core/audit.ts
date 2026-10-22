@@ -8,9 +8,9 @@ export function isRelevant(path: string): boolean {
   return RELEVANT.test(path) && !SKIP_DIR.test(path);
 }
 
-const PENALTY = { error: 10, warning: 4, info: 1 } as const;
-/** One rule can cost at most two of its own hits, so a single habit can't zero the score. */
-const MAX_HITS_PER_RULE = 2;
+const PENALTY = { error: 8, warning: 3, info: 1 } as const;
+/** Each rule costs once however often it fires: the score measures kinds of problem, not volume. */
+const MAX_HITS_PER_RULE = 1;
 
 function score(findings: Finding[]): number {
   const hits = new Map<string, number>();

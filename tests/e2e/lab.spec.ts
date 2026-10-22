@@ -36,6 +36,19 @@ test('preview walks from letterboxed legacy app to a fixed app that clears the h
   await expect(page.locator('.enc-mini')).toBeVisible();
 });
 
+test('fold test shows unchanged code losing its place and the fixed build keeping it', async ({ page }) => {
+  await page.goto('./');
+  await expect(page.getByTestId('continuity')).toContainText('Switch between Closed and Open');
+  await choose(page, 'iOS 27.1 SDK');
+  await choose(page, 'Closed');
+  await choose(page, 'Open');
+  await expect(page.getByTestId('continuity')).toContainText('Fold test: closed → open');
+  await expect(page.getByTestId('continuity')).toContainText('Lost: the album you had open');
+  await choose(page, '27.1 + duo-ready');
+  await choose(page, 'Closed');
+  await expect(page.getByTestId('continuity')).toContainText('the layout changed, the views didn’t');
+});
+
 test('pose control works from the keyboard and keeps focus', async ({ page }) => {
   await page.goto('./');
   await page.getByRole('radio', { name: 'Open', exact: true }).focus();
@@ -58,8 +71,9 @@ test('auditing the sample app lists findings and downloads working fixes', async
   await page.goto('./#audit');
   await page.getByRole('button', { name: 'Try the sample app' }).click();
   await expect(page.getByTestId('grade')).toHaveText('Not ready');
-  await expect(page.locator('.finding')).toHaveCount(19);
+  await expect(page.locator('.finding')).toHaveCount(28);
   await expect(page.getByTestId('download')).toHaveText('Download 2 fixes');
+  await expect(page.getByRole('list', { name: 'Findings by reviewer pain point' })).toContainText('Assumes iPhone hardware3');
 
   // Opt into the review-level sidebar fix too.
   const sidebar = page.locator('.finding[data-rule="tab-sidebar"] input[type=checkbox]');
@@ -83,7 +97,7 @@ test('auditing the sample app lists findings and downloads working fixes', async
 test('auditing a chosen folder, pasted code, and a folder with nothing to audit', async ({ page }) => {
   await page.goto('./#audit');
   await page.getByTestId('folder-input').setInputFiles('sample');
-  await expect(page.locator('.finding')).toHaveCount(19);
+  await expect(page.locator('.finding')).toHaveCount(28);
 
   await page.getByRole('button', { name: 'Paste Swift' }).click();
   await page.getByLabel('Swift source').fill('final class A: UIViewController {\n  func f() { let s = UIScreen.main.scale }\n}');
@@ -102,5 +116,5 @@ test('rule links deep-link and focus the rule', async ({ page }) => {
   await page.keyboard.press('Enter');
   await expect(page.locator('main')).toBeFocused();
   await expect(page).toHaveURL(/#rules\/hand-built-bar$/);
-  await expect(page.locator('.rule')).toHaveCount(17);
+  await expect(page.locator('.rule')).toHaveCount(25);
 });

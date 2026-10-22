@@ -10,10 +10,10 @@ type Tab = 'preview' | 'audit' | 'rules';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'preview', label: 'Preview' },
   { id: 'audit', label: 'Audit' },
-  { id: 'rules', label: 'Rules & CLI' },
+  { id: 'rules', label: 'Why it breaks' },
 ];
 
-let preview: PreviewState = { posture: 'open', build: 'legacy-26', regions: true, safeArea: false, camera: false, screenshot: null };
+let preview: PreviewState = { posture: 'open', build: 'legacy-26', regions: true, safeArea: false, camera: false, screenshot: null, previous: null };
 let auditState: AuditState = initialAudit();
 const root = document.getElementById('app')!;
 

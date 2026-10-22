@@ -97,6 +97,7 @@ describe('rules', () => {
     const files = swift('if horizontalSizeClass == .regular {\n  HStack { A(); B() }\n} else {\n  A().frame(maxWidth: 500)\n}');
     const found = audit(files).findings;
     expect(found.map((f) => [f.ruleId, f.line])).toEqual([
+      ['state-reset', 1],
       ['manual-two-pane', 1],
       ['centered-column', 4],
     ]);
@@ -149,16 +150,26 @@ describe('sample project (Encore)', () => {
       'portrait-only Encore.xcodeproj/project.pbxproj:28',
       'portrait-only Encore/Info.plist:11',
       'idiom-layout Encore/LibraryView.swift:24',
+      'state-reset Encore/LibraryView.swift:28',
       'fixed-device-size Encore/LibraryView.swift:51',
       'hand-built-bar Encore/LibraryView.swift:55',
       'hand-built-bar Encore/PlayerViewController.swift:5',
       'symmetric-safe-area Encore/PlayerViewController.swift:17',
       'orientation-layout Encore/PlayerViewController.swift:21',
+      'camera-hardware Encore/ScannerViewController.swift:10',
+      'key-window Encore/ScannerViewController.swift:24',
+      'stretched-image Encore/UnlockView.swift:10',
+      'biometry-faceid Encore/UnlockView.swift:15',
+      'biometry-faceid Encore/UnlockView.swift:21',
       'requires-full-screen Encore/Info.plist:9',
       'tab-sidebar Encore/LibraryView.swift:8',
       'navigation-view Encore/LibraryView.swift:9',
       'manual-two-pane Encore/LibraryView.swift:28',
       'centered-column Encore/LibraryView.swift:35',
+      'hinge-media Encore/ScannerViewController.swift:14',
+      'edge-gesture Encore/ScannerViewController.swift:18',
+      'fixed-font Encore/UnlockView.swift:13',
+
     ]);
     expect(result.tier).toEqual({ value: '26', source: 'LastUpgradeCheck 2600, Xcode 26.0' });
     expect(result.grade).toBe('Not ready');

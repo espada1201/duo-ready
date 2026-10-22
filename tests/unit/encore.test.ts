@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { POSTURES } from '../../src/core/duo';
-import { layoutEncore } from '../../src/web/encoreLayout';
+import { continuity, layoutEncore } from '../../src/web/encoreLayout';
 
 const inside = (r: { x: number; y: number; w: number; h: number }, w: number, h: number) =>
   r.x >= -0.01 && r.y >= -0.01 && r.x + r.w <= w + 0.01 && r.y + r.h <= h + 0.01 && r.w >= 0 && r.h >= 0;
@@ -41,5 +41,20 @@ describe('Encore demo layout', () => {
     };
     expect(used('ready')).toBeGreaterThan(used('legacy-27.1'));
     expect(used('ready')).toBeGreaterThan(used('legacy-26'));
+  });
+});
+
+describe('fold continuity', () => {
+  it('unchanged code loses its place when opening changes the size class; the fixed build keeps it', () => {
+    expect(continuity('closed', 'open', 'legacy-27.1').lost.length).toBeGreaterThan(0);
+    expect(continuity('closed', 'open', 'ready')).toMatchObject({ resized: true, lost: [] });
+  });
+
+  it('old-SDK apps keep their place because the compatibility window never changes size class', () => {
+    expect(continuity('closed', 'open', 'legacy-26')).toMatchObject({ resized: false, lost: [] });
+  });
+
+  it('folding to book keeps the size class, so nothing is rebuilt', () => {
+    expect(continuity('open', 'book', 'legacy-27.1').resized).toBe(false);
   });
 });

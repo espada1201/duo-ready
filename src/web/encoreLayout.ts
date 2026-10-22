@@ -130,3 +130,24 @@ export function layoutEncore(posture: Posture, build: Build, cameraActive = fals
   const right = Math.max(...body.map((x) => x.rect.x + x.rect.w));
   return { presentation: p, pieces, collisions, arrangement, contentWidth: (right - left) / p.window.w };
 }
+
+export interface Continuity {
+  /** The horizontal size class changed, which is what rebuilds size-class-dependent views. */
+  resized: boolean;
+  kept: string[];
+  lost: string[];
+}
+
+const ENCORE_STATE = ['the album you had open', 'your scroll position in Up next', 'the search you were typing'];
+
+/**
+ * What Encore keeps when the pose changes. The unchanged code swaps views on size class
+ * (LibraryView.swift), so their @State is rebuilt; the fixed build keeps one view tree and
+ * changes only its layout.
+ */
+export function continuity(from: Posture, to: Posture, build: Build): Continuity {
+  const tier = BUILDS.find((b) => b.id === build)!.tier;
+  const resized = present(from, tier).sizeClass.horizontal !== present(to, tier).sizeClass.horizontal;
+  if (!resized || build === 'ready') return { resized, kept: ENCORE_STATE, lost: [] };
+  return { resized, kept: ['the track that is playing'], lost: ENCORE_STATE };
+}
