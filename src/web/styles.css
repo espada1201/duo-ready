@@ -1392,3 +1392,66 @@ label.button:focus-within {
 .rule {
   scroll-margin-top: 84px;
 }
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.filters .button {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.filters .button[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.filters .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.fix-only {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+button.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pain-chips button.count {
+  min-width: 32px;
+  min-height: 24px;
+  padding: 3px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--signal-soft);
+  color: var(--signal-ink);
+  font: 600 12px/1 var(--mono);
+  cursor: pointer;
+}
+
+.pain-chips button.count:hover {
+  border-color: var(--signal-ink);
+}
+
+.pain-chips button.count[aria-pressed='true'] {
+  background: var(--signal-ink);
+  color: var(--paper);
+}

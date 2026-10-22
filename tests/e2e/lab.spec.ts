@@ -176,6 +176,36 @@ test('pasted code survives a trip to another tab, and long paths wrap on a phone
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
+test('findings filter by severity, pain point and fixability', async ({ page }) => {
+  await page.goto('./#audit');
+  await page.getByRole('button', { name: 'Try the sample app' }).click();
+  const findings = page.locator('.finding');
+  await expect(findings).toHaveCount(31);
+
+  const errors = page.getByRole('button', { name: '8 errors' });
+  await errors.click();
+  await expect(errors).toBeFocused();
+  await expect(errors).toHaveAttribute('aria-pressed', 'true');
+  await expect(findings).toHaveCount(8);
+  await expect(page.locator('.finding.sev-error')).toHaveCount(8);
+  await expect(page.getByTestId('filter-count')).toContainText('Showing 8 of 31');
+
+  await page.getByRole('button', { name: /^All 31$/ }).click();
+  const withFix = await page.locator('.finding .fix').count();
+  expect(withFix).toBeGreaterThan(0);
+  await page.getByLabel('Only findings with a fix').check();
+  await expect(findings).toHaveCount(withFix);
+  await page.getByRole('button', { name: 'Show all' }).click();
+  await expect(findings).toHaveCount(31);
+
+  const chip = page.getByRole('button', { name: /^Show only the \d+ black bars/i });
+  const n = Number(await chip.textContent());
+  await chip.click();
+  await expect(findings).toHaveCount(n);
+  await chip.click();
+  await expect(findings).toHaveCount(31);
+});
+
 test('dropping loose Swift files audits them', async ({ page }) => {
   await page.goto('./#audit');
   const drop = await page.evaluateHandle(() => {

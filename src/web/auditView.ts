@@ -5,7 +5,7 @@ import { describeCounts, PARTIAL_NOTE, plural, screensFirst, severityLabel, summ
 import { PAIN_POINTS, RULE_BY_ID } from '../core/rules';
 import { tierLabel } from '../core/sdk';
 import { groupBy } from '../core/text';
-import type { AuditResult, Finding, SdkTier, SourceFile } from '../core/types';
+import type { AuditResult, Finding, SdkTier, Severity, SourceFile } from '../core/types';
 import { h, svg } from './dom';
 import { icon } from './icons';
 
@@ -22,9 +22,19 @@ export interface AuditState {
   paste: boolean;
   /** Pasted code not yet audited, kept across tab changes. */
   draft: string;
+  /** Which findings the list shows; the summary always counts them all. */
+  filter: Filter;
 }
 
-export const initialAudit = (): AuditState => ({ status: 'empty', source: '', files: [], result: null, selected: new Set(), previews: new Map(), error: null, paste: false, draft: '' });
+interface Filter {
+  severity: Severity | null;
+  pain: string | null;
+  fixable: boolean;
+}
+
+const NO_FILTER: Filter = { severity: null, pain: null, fixable: false };
+
+export const initialAudit = (): AuditState => ({ status: 'empty', source: '', files: [], result: null, selected: new Set(), previews: new Map(), error: null, paste: false, draft: '', filter: NO_FILTER });
 
 const SAMPLE = import.meta.glob('../../sample/**/*', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
@@ -46,7 +56,7 @@ function runAudit(files: SourceFile[], source: string): AuditState {
     if (f.fix.confidence === 'safe') selected.add(i);
     previews.set(i, hunks(byPath.get(f.path)!.content, f.fix.edits));
   });
-  return { status: 'done', source, files: relevant, result, selected, previews, error: null, paste: false, draft: '' };
+  return { status: 'done', source, files: relevant, result, selected, previews, error: null, paste: false, draft: '', filter: NO_FILTER };
 }
 
 // Paths start inside the folder the person picked, as the CLI's do, so a project kept in a
@@ -209,12 +219,12 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
   let body: HTMLElement | null = null;
   if (state.status === 'loading') body = h('p', { class: 'status-line', role: 'status' }, 'Reading files…');
   else if (state.status === 'error') body = h('p', { class: 'error', role: 'alert' }, state.error);
-  else if (state.status === 'done' && state.result) body = results(state, openPreview);
+  else if (state.status === 'done' && state.result) body = results(state, set, openPreview);
 
   return h('div', { class: 'audit' }, intro, h('div', { class: 'audit-input' }, drop, paste), body);
 }
 
-function results(state: AuditState, openPreview: (tier: SdkTier | null) => void): HTMLElement {
+function results(state: AuditState, set: (s: AuditState) => void, openPreview: (tier: SdkTier | null) => void): HTMLElement {
   const r = state.result!;
   const fixable = r.findings.filter((f) => f.fix).length;
   const label = () => {
@@ -235,6 +245,7 @@ function results(state: AuditState, openPreview: (tier: SdkTier | null) => void)
     icon('download', 16),
     downloadLabel,
   );
+  const filterBy = (patch: Partial<Filter>) => set({ ...state, filter: { ...state.filter, ...patch } });
   // Toggling a fix updates in place so keyboard focus stays on the checkbox.
   const toggleFix = (i: number, on: boolean) => {
     if (on) state.selected.add(i);
@@ -267,20 +278,62 @@ function results(state: AuditState, openPreview: (tier: SdkTier | null) => void)
         PAIN_POINTS.map((p) => {
           const n = r.findings.filter((f) => p.rules.includes(f.ruleId)).length;
           const unchecked = !n && r.partial && p.rules.some((id) => RULE_BY_ID.get(id)!.project);
-          const mark = n ? String(n) : unchecked ? 'not checked' : h('span', { 'aria-label': 'none' }, '✓');
-          return h('li', { class: n ? 'has' : unchecked ? 'unchecked' : 'none' }, h('a', { href: `#rules/pain-${p.id}` }, p.title), h('strong', {}, mark));
+          const on = state.filter.pain === p.id;
+          const mark = n
+            ? h(
+                'button',
+                {
+                  type: 'button',
+                  class: 'count',
+                  'aria-pressed': String(on),
+                  'aria-label': `Show only the ${n} ${p.title.toLowerCase()} findings`,
+                  onclick: () => filterBy({ pain: on ? null : p.id }),
+                },
+                String(n),
+              )
+            : unchecked
+              ? 'not checked'
+              : h('span', { 'aria-label': 'none' }, '✓');
+          return h('li', { class: n ? 'has' : unchecked ? 'unchecked' : 'none' }, h('a', { href: `#rules/pain-${p.id}` }, p.title), n ? mark : h('strong', {}, mark));
         }),
       ),
       fixable ? h('p', { class: 'hint' }, fixHint(fixable, r.findings.filter((f) => f.fix?.confidence === 'safe').length)) : null,
     ),
   );
 
-  const byFile = groupBy(
-    r.findings.map((f, i) => [f, i] as [Finding, number]),
-    ([f]) => f.path,
-  );
+  const { severity, pain, fixable: onlyFixable } = state.filter;
+  const painRules = pain ? PAIN_POINTS.find((p) => p.id === pain)!.rules : null;
+  const shown = r.findings
+    .map((f, i) => [f, i] as [Finding, number])
+    .filter(([f]) => (!severity || f.severity === severity) && (!painRules || painRules.includes(f.ruleId)) && (!onlyFixable || f.fix));
+  const byFile = groupBy(shown, ([f]) => f.path);
 
-  const list = r.findings.length
+  const severities: [Severity | null, string][] = [
+    [null, `All ${r.findings.length}`],
+    ...(['error', 'warning', 'info'] as const).map((sev): [Severity, string] => [sev, `${plural(r.findings.filter((f) => f.severity === sev).length, severityLabel(sev))}`]),
+  ];
+  const filters = r.findings.length
+    ? h(
+        'div',
+        { class: 'filters', role: 'group', 'aria-label': 'Filter findings' },
+        severities.map(([sev, text]) =>
+          h('button', { type: 'button', class: 'button ghost', 'aria-pressed': String(severity === sev), onclick: () => filterBy({ severity: sev }) }, text),
+        ),
+        fixable
+          ? h(
+              'label',
+              { class: 'fix-only' },
+              h('input', { type: 'checkbox', name: 'fixable-only', checked: onlyFixable, onchange: (e: Event) => filterBy({ fixable: (e.target as HTMLInputElement).checked }) }),
+              ' Only findings with a fix',
+            )
+          : null,
+        shown.length < r.findings.length
+          ? h('p', { class: 'hint', 'data-testid': 'filter-count' }, `Showing ${shown.length} of ${r.findings.length}. `, h('button', { type: 'button', class: 'link', onclick: () => filterBy(NO_FILTER) }, 'Show all'))
+          : null,
+      )
+    : null;
+
+  const list = shown.length
     ? [...byFile].map(([path, items]) =>
         h(
           'section',
@@ -293,7 +346,9 @@ function results(state: AuditState, openPreview: (tier: SdkTier | null) => void)
           ),
         ),
       )
-    : [h('p', { class: 'all-clear' }, icon('check', 16), ' No problems found. Build with Xcode 27.1 and check every pose in the simulator.')];
+    : r.findings.length
+      ? [h('p', { class: 'hint' }, 'No findings match this filter.')]
+      : [h('p', { class: 'all-clear' }, icon('check', 16), ' No problems found. Build with Xcode 27.1 and check every pose in the simulator.')];
 
   const screens = screensFirst(r.findings).slice(0, 3);
   const first = screens.length
@@ -314,7 +369,7 @@ function results(state: AuditState, openPreview: (tier: SdkTier | null) => void)
     { class: 'results' },
     summary,
     first,
-    h('div', { class: 'file-list', 'data-testid': 'findings' }, r.findings.length ? h('h3', {}, 'Findings by file') : null, list),
+    h('div', { class: 'file-list', 'data-testid': 'findings' }, r.findings.length ? h('h3', {}, 'Findings by file') : null, filters, list),
   );
 }
 
