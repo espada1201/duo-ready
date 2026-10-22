@@ -320,7 +320,7 @@ describe('fifth review: skips must not hide real screens', () => {
   });
 
   it('keeps a centered column flagged next to an unrelated resizable image', () => {
-    expect(one('struct V: View {\n  var body: some View {\n    VStack {\n      Image("a").resizable().scaledToFit()\n      Text("Welcome").frame(maxWidth: 600)\n    }\n  }\n}')).toEqual(['centered-column']);
+    expect(one('struct V: View {\n  var body: some View {\n    VStack {\n      Image("a").resizable().scaledToFit()\n      Text("Welcome")\n    }\n    .frame(maxWidth: 600)\n  }\n}')).toEqual(['centered-column']);
   });
 
   it('puts #endif on its own line when a modifier followed the TabView', () => {
@@ -853,5 +853,14 @@ describe('third held-out review', () => {
   it('skips lowercase platform and sample folders', () => {
     expect(swiftIds('let s = UIScreen.main.bounds', 'apps/macos/Sources/A.swift')).toEqual([]);
     expect(swiftIds('let s = UIScreen.main.bounds', 'sampleapps/Bug/A.swift')).toEqual([]);
+  });
+});
+
+describe('screen-level columns', () => {
+  it('flags a cap on the whole screen, not on a row inside it', () => {
+    const row = 'struct V: View {\n  var body: some View {\n    VStack {\n      Text("Poll").frame(maxWidth: 400)\n      List {}\n    }\n  }\n}';
+    const screen = 'struct V: View {\n  var body: some View {\n    if wide {\n      Form {}\n        .frame(maxWidth: 500)\n    } else {\n      Form {}\n    }\n  }\n}';
+    expect(ids([{ path: 'A.swift', content: row }])).not.toContain('centered-column');
+    expect(ids([{ path: 'A.swift', content: screen }])).toContain('centered-column');
   });
 });

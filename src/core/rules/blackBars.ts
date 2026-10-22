@@ -1,7 +1,7 @@
 import { INNER } from '../duo';
 import { APP_TARGET, tierFromUpgradeCheck, tierLabel, upgradeCheck, xcodeVersion } from '../sdk';
 import { lineAround } from '../text';
-import { blockAt } from '../swift';
+import { blockAt, headerOf, type SwiftSource } from '../swift';
 import { chainHas, chainRoot, defineGroup, PREPARE, POSE } from './engine';
 
 // iPhone point sizes from the iPhone SE through the 17 Pro Max.
@@ -96,6 +96,8 @@ export const blackBars = defineGroup({
       if (CONTROL.test(chainRoot(src, hit.index!)?.name ?? '')) continue;
       // A few points tall is a bar or divider, not a column of content.
       if (/\bheight\s*:\s*1?\d(?:\.\d+)?\s*[,)]/.test(lineAround(m, hit.index!) + chainBefore) || chainHas(m, m.indexOf(')', hit.index!) + 1, /^frame$/, /\bheight\s*:\s*1?\d(?:\.\d+)?\s*(?:,|$)/)) continue;
+      // A cap on a row, a bubble or a bar inside a screen is readable width; only a whole screen's content makes a column.
+      if (!screenLevel(src, hit.index!)) continue;
       if (n >= 320 && n <= 720) report('centered-column', hit.index!, `A ${n} pt column fills about ${Math.round((n / INNER.w) * 100)}% of the open inner display.`);
     }
   },
@@ -126,3 +128,13 @@ export const blackBars = defineGroup({
     }
   },
 });
+
+/** Whether the chain at `at` is a screen's whole content: directly in `body` (or a pasted snippet), through ifs, switches and wrappers only. */
+function screenLevel(src: SwiftSource, at: number): boolean {
+  for (let b = blockAt(src.root, at); b.parent; b = b.parent) {
+    const head = headerOf(src, b);
+    if (/\bvar\s+body\s*:\s*some\s+View$/.test(head)) return true;
+    if (!/^(?:\}\s*)?(?:else\b|if\b|switch\b|Group$|ZStack\b|NavigationStack\b|NavigationView$|ScrollView\b|GeometryReader\b)/.test(head)) return false;
+  }
+  return true;
+}
