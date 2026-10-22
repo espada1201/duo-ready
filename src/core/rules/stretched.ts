@@ -30,8 +30,14 @@ function callText(masked: string, from: number): string {
   return masked.slice(from);
 }
 
-/** `width: 40, height: 40` or `width: Layout.icon, height: Layout.icon`: both set, neither read from a window, geometry or container. */
-const FIXED_FRAME = /^\s*width\s*:\s*(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))(?:[^,()]|\([^()]*\))+,\s*height\s*:\s*(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))(?:[^,()]|\([^()]*\))+(?:,|$)/i;
+/** Lookahead: the next argument isn't read from a window, geometry or container (`.infinity`, `proxy.size.width`, `bounds.width`), which would follow the window. */
+const NOT_DYNAMIC = String.raw`(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))`;
+/** `width: 40, height: 40` or `width: Layout.icon, height: Layout.icon`: both set, neither dynamic. */
+const FIXED_FRAME = new RegExp(String.raw`^\s*width\s*:\s*${NOT_DYNAMIC}(?:[^,()]|\([^()]*\))+,\s*height\s*:\s*${NOT_DYNAMIC}(?:[^,()]|\([^()]*\))+(?:,|$)`, 'i');
+/** Modifiers that keep an image to its aspect ratio. */
+/** `size: 20` for the project's own square(size:) modifiers. */
+const FIXED_SIZE = new RegExp(String.raw`^\s*(?:size\s*:\s*)?${NOT_DYNAMIC}[^,]+(?:,|$)`);
+const KEEPS_ASPECT = /^(?:aspectRatio|scaledToFit|scaledToFill)$/;
 
 /** Whether the function holding `scope` returns text or an icon (`-> String`, `-> SymbolName`, `-> UIImage?`). */
 function returnsCopy(m: string, scope: Block | null): boolean {
@@ -52,7 +58,7 @@ function sizedOutside(m: string, block: Block): boolean {
       if (close < 0) break;
       at = close;
     }
-    if (chainHas(m, at, /^frame$/, FIXED_FRAME) || chainHas(m, at, /^(?:aspectRatio|scaledToFit|scaledToFill)$/)) return true;
+    if (chainHas(m, at, /^frame$/, FIXED_FRAME) || chainHas(m, at, KEEPS_ASPECT)) return true;
   }
   return false;
 }
@@ -144,14 +150,14 @@ export const stretched = defineGroup({
     const square = facts.squareModifiers.length ? new RegExp(`^(?:${facts.squareModifiers.join('|')})$`) : null;
     for (const hit of m.matchAll(/\.resizable\s*\(\s*\)/g)) {
       const end = hit.index! + hit[0].length;
-      if (chainHas(m, end, /^(aspectRatio|scaledToFit|scaledToFill)$/)) continue;
+      if (chainHas(m, end, KEEPS_ASPECT)) continue;
       const before = m.slice(Math.max(0, hit.index! - 300), hit.index);
       // A placeholder handed to a sized view (`AvatarView(diameter: 72, placeholderImage: Image("g").resizable())`) takes its frame there.
       if (/\b\w+\s*:\s*Image\s*\((?:[^()]|\([^()]*\))*\)\s*$/.test(before) && /^\s*[,)]/.test(m.slice(end, end + 200))) continue;
       // A blur-hash placeholder is meant to stretch; an image handed to a caller's closure gets its aspect there.
       if (matchBefore(m, hit.index!, /(?:\bImage\s*\(\s*blurHash\s*:[^()]*(?:\([^()]*\)[^()]*)*\)\??|(?:^|[^.\w])\w+\s*\(\s*Image\s*\((?:[^()]|\([^()]*\))*\))\s*$/) !== null) continue;
       // A fixed width and height (or the project's square(size:)) never follow the window, so Duo can't stretch the image any more than an iPhone does.
-      if (square && chainHas(m, end, square, /^\s*(?:size\s*:\s*)?(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+(?:,|$)/)) continue;
+      if (square && chainHas(m, end, square, FIXED_SIZE)) continue;
       if (chainHas(m, end, /^frame$/, FIXED_FRAME) || chainHas(m, end, /^frame$/, /^\s*\.square\s*\(/) || sizedOutside(m, blockAt(src.root, hit.index!))) continue;
       // A view its callers keep to an aspect ratio (`ImageView(url: u).scaledToFit()`) can't stretch.
       if (facts.aspectViews.has(enclosingType(m, blockAt(src.root, hit.index!)) ?? '')) continue;
