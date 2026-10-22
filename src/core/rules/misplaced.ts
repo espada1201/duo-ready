@@ -60,7 +60,7 @@ export const misplaced = defineGroup({
       if (!/inputAccessoryView/.test(lineAround(m, hit.index!))) report('hand-built-bar', hit.index!, `${hit[1] ?? hit[2]} created by hand won’t get Duo’s vertical bar layout.`);
     }
     for (const hit of m.matchAll(/safeAreaInsets\s*\.\s*(left|right|top|bottom)\s*\*\s*2(?![.\w])/g)) report('symmetric-safe-area', hit.index!);
-    for (const hit of m.matchAll(/\[\s*UIScreenEdgePanGestureRecognizer\s+alloc\b/g)) report('edge-gesture', hit.index!);
+    for (const hit of m.matchAll(/\[\s*UIScreenEdgePanGestureRecognizer\s+alloc\b/g)) if (!internalOnly(m, hit.index!)) report('edge-gesture', hit.index!);
   },
 
   swift({ file, src, masked: m, blocks, facts, report }) {
@@ -76,6 +76,8 @@ export const misplaced = defineGroup({
       report('hand-built-bar', hit.index!, `${hit[1] ?? hit[2]} created by hand won’t get Duo’s vertical bar layout.`);
     }
     for (const hit of m.matchAll(/\bstruct\s+(\w*(?:TabBar|Toolbar|NavBar|NavigationBar|BottomBar)(?:View)?)\s*:\s*[^{]*\bView\b/g)) {
+      // An onboarding pager's footer is shown once, under one flow, not the app's chrome.
+      if (/Onboarding|Welcome|Intro|Tutorial|Walkthrough/.test(hit[1])) continue;
       report('hand-built-bar', hit.index!, `${hit[1]} is a custom bar; it will stay horizontal while system bars go vertical.`);
     }
 
@@ -112,6 +114,10 @@ export const misplaced = defineGroup({
       });
     }
 
-    for (const hit of m.matchAll(/\bUIScreenEdgePanGestureRecognizer\s*\(/g)) report('edge-gesture', hit.index!);
+    for (const hit of m.matchAll(/\bUIScreenEdgePanGestureRecognizer\s*\(/g)) if (!internalOnly(m, hit.index!)) report('edge-gesture', hit.index!);
   },
 });
+
+/** A swipe that opens a debug menu, or sits behind an internal-build check, never reaches Duo users. */
+const internalOnly = (m: string, at: number): boolean =>
+  /debug/i.test(lineAround(m, at)) || /\b(?:is|show)(?:Internal|Debug|Dogfood|Staff|Employee)\w*\b/.test(m.slice(Math.max(0, at - 400), at));

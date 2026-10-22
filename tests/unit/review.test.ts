@@ -710,3 +710,19 @@ describe('keyboard overlap', () => {
     expect(ids([{ path: 'A.swift', content: swift }])).toContain('keyboard-frame');
   });
 });
+
+describe('internal-only gestures', () => {
+  it('ignores an edge swipe that opens a debug menu', () => {
+    const code = 'static func configure(in window: UIWindow?) {\n  guard BuildConfiguration.current.isInternal else { return }\n  let g = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(open))\n}';
+    expect(ids([{ path: 'A.swift', content: code }])).not.toContain('edge-gesture');
+    expect(ids([{ path: 'A.swift', content: 'let g = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(showDebugMenu(_:)))' }])).not.toContain('edge-gesture');
+    expect(ids([{ path: 'A.swift', content: 'let g = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(back))' }])).toContain('edge-gesture');
+  });
+});
+
+describe('onboarding footers', () => {
+  it('treats an onboarding toolbar as part of the flow, not app chrome', () => {
+    expect(ids([{ path: 'A.swift', content: 'struct WMFAppOnboardingToolbar: View {\n  var body: some View { HStack {} }\n}' }])).not.toContain('hand-built-bar');
+    expect(ids([{ path: 'A.swift', content: 'struct PlayerToolbar: View {\n  var body: some View { HStack {} }\n}' }])).toContain('hand-built-bar');
+  });
+});
