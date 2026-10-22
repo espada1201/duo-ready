@@ -44,9 +44,23 @@ type Parsed =
 /** Keys only a watch app's Info.plist has; WKAppBoundDomains and friends belong to iPhone apps too. */
 const WATCH_KEY = /^WK(WatchKitApp|CompanionAppBundleIdentifier|ApplicationType|Application|WatchOnly|RunsIndependentlyOfCompanionApp)$/;
 /** Watch app code: its own target and display, never in the iPhone app's window. */
-const WATCH_CODE = /\bimport\s+WatchKit\b|@WK(?:Extension|Application)DelegateAdaptor\b/;
-const WATCH_DIR = /(^|\/)[^/]*Watch(?:App|Kit| ?Extension|OS)[^/]*\//;
-const OTHER_PLATFORM_CONFIG = /\b(?:WATCHOS|MACOSX|TVOS|XROS)_DEPLOYMENT_TARGET\b|\bplatform:[^\n]*\b(?:watchOS|tvOS|macOS|visionOS)\b|^[ \t]+(?:watchOS|tvOS|macOS|visionOS):[ \t]*["']?\d/m;
+const WATCH_DIR = /(^|\/)[^/]*Watch[^/]*(?:App|Kit|Extension|OS)\//;
+/** Builds for watchOS, macOS, tvOS or visionOS too, in a pbxproj, .xcconfig or XcodeGen spec. */
+const OTHER_PLATFORM = /\b(?:WATCHOS|MACOSX|TVOS|XROS)_DEPLOYMENT_TARGET\b|SDKROOT\s*=\s*(?:watchos|macosx|appletvos|xros)\b|SUPPORTED_PLATFORMS\s*[=:][^\n]*\b(?:watchos|macosx|appletvos|xros)\b|\b(?:platform|supportedDestinations):[^\n]*\b(?:watchOS|tvOS|macOS|visionOS)\b|^[ \t]+(?:watchOS|tvOS|macOS|visionOS):[ \t]*["']?\d/m;
+
+/** Watch app code: its own target and display, never in the iPhone app's window. A shared file that imports WatchKit only under `#if os(watchOS)` is still iPhone code. */
+function isWatchCode(masked: string): boolean {
+  if (/@WK(?:Extension|Application)DelegateAdaptor\b/.test(masked)) return true;
+  for (const hit of masked.matchAll(/\bimport\s+WatchKit\b/g)) {
+    const before = masked.slice(0, hit.index);
+    const depth = (before.match(/^[ \t]*#if\b/gm)?.length ?? 0) - (before.match(/^[ \t]*#endif\b/gm)?.length ?? 0);
+    if (depth <= 0) return true;
+  }
+  return false;
+}
+
+/** Comments in .xcconfig (`//`) and YAML (`#`) files, so a commented-out setting isn't read. */
+const stripConfigComments = (text: string) => text.replace(/(^|[ \t])(?:\/\/|#).*$/gm, '$1');
 /** `var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }`, with nothing else in the body. */
 const IDIOM_WRAPPER = /\bvar\s+(\w+)\s*:\s*Bool\s*\{\s*(?:return\s+)?(?:[\w.]+\.)?userInterfaceIdiom\s*==\s*\.(?:pad|phone)\s*\}/g;
 const WIDGET = /\b(?:TimelineProvider|TimelineEntry|WidgetConfiguration|WidgetBundle|widgetAccentedRenderingMode)\b|@Environment\s*\(\s*\\\.widgetFamily\s*\)/;
@@ -56,7 +70,7 @@ function parse(file: SourceFile): Parsed | null {
   if (name.endsWith('.swift')) {
     if (WATCH_DIR.test(file.path)) return null;
     const src = parseSwift(file.content);
-    if (WATCH_CODE.test(src.masked)) return null;
+    if (isWatchCode(src.masked)) return null;
     // Home Screen widgets are laid out by WidgetKit, not in the app's window.
     return WIDGET.test(src.masked) ? null : { kind: 'swift', file, src };
   }
@@ -105,11 +119,12 @@ function learn(parsed: Parsed[]): ProjectFacts {
       facts.hasProjectFiles = true;
       if (/INFOPLIST_KEY_UIApplicationSceneManifest_Generation\s*=\s*YES/.test(p.file.content)) facts.sceneManifest = true;
       facts.upgradeCheck ??= upgradeCheck(p.file.content)?.value ?? null;
-      if (/\b(?:WATCHOS|MACOSX|TVOS|XROS)_DEPLOYMENT_TARGET\b|SDKROOT = (?:watchos|macosx|appletvos|xros)\b/.test(p.file.content)) facts.otherPlatforms = true;
+      if (OTHER_PLATFORM.test(p.file.content)) facts.otherPlatforms = true;
       lower(deploymentTarget(p.file.content));
     } else if (p.kind === 'config') {
-      if (OTHER_PLATFORM_CONFIG.test(p.file.content)) facts.otherPlatforms = true;
-      lower(configDeploymentTarget(p.file.content));
+      const config = stripConfigComments(p.file.content);
+      if (OTHER_PLATFORM.test(config)) facts.otherPlatforms = true;
+      lower(configDeploymentTarget(config));
     }
   }
   return facts;
@@ -151,8 +166,15 @@ function inPreview(src: SwiftSource, offset: number): boolean {
   }
   // `#Preview("Face ID button") {`: the title is part of the preview too.
   if (previewHeads(src).some(([from, to]) => offset >= from && offset < to)) return true;
+  // `enum ListPickerPreview { static var standard: some View }`: sample data for the file's #Preview,
+  // unlike a screen named `LinkPreview: View`.
+  const feedsPreviews = previewHeads(src).length > 0;
   return declaredTypes(src).some(
-    (t) => t.block && (t.inherits.includes('PreviewProvider') || /Previews?$/.test(t.name)) && offset > t.start && offset < t.block.close,
+    (t) =>
+      t.block &&
+      (t.inherits.includes('PreviewProvider') || t.name.endsWith('Previews') || (feedsPreviews && /Previews?$/.test(t.name) && !t.inherits.some((i) => SCREEN.test(i)))) &&
+      offset > t.start &&
+      offset < t.block.close,
   );
 }
 

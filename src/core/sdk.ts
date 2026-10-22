@@ -11,8 +11,11 @@ export function upgradeCheck(pbxproj: string): { value: string; offset: number }
   return hit ? { value: hit[1], offset: hit.index } : null;
 }
 
-/** XcodeGen's `deploymentTarget: { iOS: 15.0 }`, and build settings in .xcconfig files or XcodeGen YAML. */
-const CONFIG_TARGET = /deploymentTarget:[ \t]*\n(?:[ \t]+\w+:.*\n)*?[ \t]+iOS:[ \t]*["']?(\d+(?:\.\d+)?)|IPHONEOS_DEPLOYMENT_TARGET[ \t]*[:=][ \t]*["']?(\d+(?:\.\d+)?)/g;
+/**
+ * XcodeGen's `deploymentTarget` mapping, block or inline, and the build setting in .xcconfig files
+ * or YAML, including per-SDK forms like `IPHONEOS_DEPLOYMENT_TARGET[sdk=iphoneos*]`. Comments must be stripped first.
+ */
+const CONFIG_TARGET = /deploymentTarget:[ \t]*(?:\n(?:[ \t]+\w+:.*\n)*?[ \t]+|\{[^}\n]*?\b)iOS:[ \t]*["']?(\d+(?:\.\d+)?)|IPHONEOS_DEPLOYMENT_TARGET(?:\[[^\]\n]*\])?[ \t]*[:=][ \t]*["']?(\d+(?:\.\d+)?)/g;
 
 /** The lowest iOS deployment target across the project's build configurations. */
 export function deploymentTarget(pbxproj: string): number | null {

@@ -289,6 +289,65 @@ describe('fourth review: apps the scanner had never seen', () => {
   });
 });
 
+describe('fifth review: skips must not hide real screens', () => {
+  const ids = (files: SourceFile[]) => audit(files).findings.map((f) => f.ruleId);
+  const one = (content: string) => ids(swift(content));
+
+  it('audits a real screen named like a preview', () => {
+    expect(one('struct LinkPreview: View {\n  var body: some View {\n    Text("a").font(.system(size: 17))\n  }\n}')).toEqual(['fixed-font']);
+  });
+
+  it('skips sample data a file keeps for its #Preview', () => {
+    expect(one('#Preview { ListPickerPreview.standard }\nenum ListPickerPreview {\n  static var standard: some View {\n    NavigationView {\n      Text("a")\n    }\n  }\n}')).toEqual([]);
+  });
+
+  it('audits a shared file that imports WatchKit only for watchOS', () => {
+    expect(one('#if os(iOS)\nimport UIKit\n#elseif os(watchOS)\nimport WatchKit\n#endif\nlet s = UIScreen.main.scale')).toEqual(['uiscreen-main']);
+    expect(ids([{ path: 'App/WatchAppSettings/Screen.swift', content: 'let s = UIScreen.main.scale' }])).toEqual(['uiscreen-main']);
+    expect(ids([{ path: 'App/MyApp WatchKit Extension/Root.swift', content: 'let s = UIScreen.main.scale' }])).toEqual([]);
+  });
+
+  it('keeps fixed fonts flagged outside the PDF code in the same file', () => {
+    const code = 'class InvoiceVC: UIViewController {\n  override func viewDidLoad() {\n    title2.font = UIFont.systemFont(ofSize: 22)\n  }\n  func export() -> Data {\n    let r = UIGraphicsPDFRenderer(bounds: .zero)\n    return r.pdfData { _ in\n      let f = UIFont.systemFont(ofSize: 12)\n    }\n  }\n}';
+    expect(audit(swift(code)).findings.map((f) => [f.ruleId, f.line])).toEqual([['fixed-font', 3]]);
+  });
+
+  it('only treats TrueDepth as listed when it sits in the same brackets as another lens', () => {
+    expect(one('let s = DiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: .front)\nlet d = AVCaptureDevice.default(.builtInTrueDepthCamera, for: .video, position: .front)\nlet o: [String: Any] = [:]')).toEqual(['camera-hardware']);
+  });
+
+  it('keeps a centered column flagged next to an unrelated resizable image', () => {
+    expect(one('struct V: View {\n  var body: some View {\n    VStack {\n      Image("a").resizable().scaledToFit()\n      Text("Welcome").frame(maxWidth: 600)\n    }\n  }\n}')).toEqual(['centered-column']);
+  });
+
+  it('puts #endif on its own line when a modifier followed the TabView', () => {
+    const files = [
+      { path: 'App/Main.swift', content: 'struct M: View {\n  var body: some View {\n    TabView {\n      A()\n    }.tint(.red)\n  }\n}' },
+      { path: 'project.yml', content: 'targets:\n  App:\n    supportedDestinations: [iOS, visionOS]\n' },
+    ];
+    const out = applyFixes(files, audit(files).findings, 'all').files[0].content;
+    expect(out).toContain('    }\n    #if os(iOS)\n    .defaultTabBarPlacement(.sidebar)\n    #endif\n    .tint(.red)');
+  });
+
+  it.each([
+    ['inline mapping', 'options:\n  deploymentTarget: { iOS: 15.0, watchOS: 8.0 }\n', 15],
+    ['per-SDK setting', 'IPHONEOS_DEPLOYMENT_TARGET[sdk=iphoneos*] = 14.0\n', 14],
+    ['commented-out setting', '// IPHONEOS_DEPLOYMENT_TARGET = 12.0\nIPHONEOS_DEPLOYMENT_TARGET = 15.0\n', 15],
+  ])('reads the deployment target from a %s', (_, config, target) => {
+    const view = { path: 'App/Root.swift', content: 'struct R: View {\n  var body: some View {\n    NavigationView {\n      List {}\n    }\n  }\n}' };
+    const path = config.startsWith('options') ? 'project.yml' : 'Base.xcconfig';
+    expect(audit([view, { path, content: config }]).findings.find((f) => f.ruleId === 'navigation-view')!.message).toContain(`deploys to iOS ${target}`);
+  });
+
+  it('ignores a platform named only in a YAML comment', () => {
+    const files = [
+      { path: 'App/Main.swift', content: 'struct M: View {\n  var body: some View {\n    TabView {\n      A()\n    }\n  }\n}' },
+      { path: 'project.yml', content: 'targets:\n  App:\n    platform: iOS # macOS later\n' },
+    ];
+    expect(applyFixes(files, audit(files).findings, 'all').files[0].content).not.toContain('#if os(iOS)');
+  });
+});
+
 describe('scale', () => {
   it('stays linear with thousands of findings in one file', () => {
     const content = 'Image("a")\n.resizable()\n'.repeat(20000);

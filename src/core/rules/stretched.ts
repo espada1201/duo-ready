@@ -7,8 +7,16 @@ const viewportMessage = (width: string) => `The web viewport is fixed at ${width
 /** Callbacks that run when the window changes size. */
 const ON_RESIZE = /\bfunc\s+(viewWillTransition|traitCollectionDidChange|viewWillLayoutSubviews|viewDidLayoutSubviews)\b|\.onChange\s*\(\s*of\s*:\s*\w*[sS]izeClass\b/g;
 
-function inDrawFunc(m: string, scope: Block | null): boolean {
-  for (let b = scope; b?.parent; b = b.parent) if (/\bfunc\s+draw\s*\([^{]*$/.test(m.slice(Math.max(0, b.open - 120), b.open))) return true;
+const PDF = /\bUIGraphicsPDFRenderer\b|\bUIGraphicsBeginPDFContext/;
+
+/** Inside draw(_:), a function or closure that renders a PDF, or a type made for PDF output. */
+function inDrawing(m: string, scope: Block | null): boolean {
+  for (let b = scope; b?.parent; b = b.parent) {
+    const head = m.slice(Math.max(0, b.open - 120), b.open);
+    if (/\bfunc\s+draw\s*\([^{]*$/.test(head)) return true;
+    const type = /\b(?:class|struct|enum|actor|extension)\s+(\w+)[^{}]*$/.exec(head);
+    if (type ? /PDF|Pdf/.test(type[1]) : PDF.test(m.slice(b.open, b.close))) return true;
+  }
   return false;
 }
 
@@ -82,12 +90,11 @@ export const stretched = defineGroup({
     }
 
     const scaled = m.includes('scaledFont');
-    const drawing = /\bUIGraphicsPDFRenderer\b|\bUIGraphicsBeginPDFContext/.test(m);
     for (const hit of m.matchAll(/\.system\s*\(\s*size\s*:|\bUIFont\s*\.\s*(?:systemFont|boldSystemFont|italicSystemFont|monospacedSystemFont)\s*\(\s*ofSize\s*:|\bUIFont\s*\(\s*name\s*:[^)]*size\s*:|\.custom\s*\([^)]*size\s*:/g)) {
       if (/relativeTo\s*:|UIFontMetrics|scaledFont/.test(lineAround(m, hit.index!) + callText(m, hit.index!))) continue;
       // A point size on an SF Symbol sizes an icon; PDF and draw(_:) output has no Dynamic Type to follow.
-      if (/\bImage\s*\(\s*systemName\s*:[^()]*\)(?:\s*\.\w+\s*\((?:[^()]|\([^()]*\))*\))*\s*\.font\s*\(\s*$/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
-      if (drawing || inDrawFunc(m, blockAt(src.root, hit.index!))) continue;
+      if (/\bImage\s*\(\s*system(?:Name|Symbol)\s*:[^()]*\)(?:\s*\.\w+\s*\((?:[^()]|\([^()]*\))*\))*\s*\.font\s*\(\s*$/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
+      if (inDrawing(m, blockAt(src.root, hit.index!))) continue;
       // `let f = UIFont(...)` later passed to `scaledFont(for: f)` scales too.
       const name = scaled && /\b(?:let|var)\s+(\w+)\s*(?::\s*\w+\s*)?=\s*$/.exec(m.slice(Math.max(0, hit.index! - 60), hit.index))?.[1];
       const scope = blockAt(src.root, hit.index!);

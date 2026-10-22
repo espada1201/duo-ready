@@ -46,8 +46,10 @@ export const hardware = defineGroup({
     }
     for (const hit of m.matchAll(/\.builtInTrueDepthCamera\b/g)) {
       // One lens among several in a discovery list is the pattern this rule recommends.
-      const list = m.slice(m.lastIndexOf('[', hit.index!), m.indexOf(']', hit.index!) + 1);
-      if (list.startsWith('[') && (list.match(/\.builtIn\w+/g) ?? []).length > 1) continue;
+      const open = m.lastIndexOf('[', hit.index!);
+      const close = m.indexOf(']', hit.index!);
+      const list = open !== -1 && close !== -1 && !m.slice(open, hit.index).includes(']') && !m.slice(hit.index, close).includes('[') ? m.slice(open, close) : '';
+      if ((list.match(/\.builtIn\w+/g) ?? []).length > 1) continue;
       if (!FORCED_CAMERA.test(lineAround(m, hit.index!))) report('camera-hardware', hit.index!, 'The TrueDepth camera comes with Face ID; iPhone Duo has neither.');
     }
   },

@@ -3,9 +3,11 @@ import { blockAt, labelOffset, type Block } from '../swift';
 import { defineGroup, chainHas, PREPARE } from './engine';
 
 /** The sidebar modifier, kept to iOS when the project also builds for platforms that lack it. */
-function sidebar(eol: string, indent: string, otherPlatforms: boolean): string {
+function sidebar(eol: string, indent: string, otherPlatforms: boolean, lineEnds: boolean): string {
   const modifier = `${eol}${indent}.defaultTabBarPlacement(.sidebar)`;
-  return otherPlatforms ? `${eol}${indent}#if os(iOS)${modifier}${eol}${indent}#endif` : modifier;
+  if (!otherPlatforms) return modifier;
+  // `#endif` must stand alone, so a modifier that followed the brace moves to the next line.
+  return `${eol}${indent}#if os(iOS)${modifier}${eol}${indent}#endif${lineEnds ? '' : `${eol}${indent}`}`;
 }
 
 function insideExtensionOf(m: string, scope: Block | null, type: string): boolean {
@@ -95,7 +97,7 @@ export const misplaced = defineGroup({
       report('tab-sidebar', labelOffset(src, b), undefined, {
         confidence: 'review',
         description: 'Show tabs as a sidebar on the inner display. Needs the iOS 27.1 SDK; behind an availability check if you deploy to earlier iOS.',
-        edits: [{ start: b.close + 1, end: b.close + 1, text: sidebar(eolOf(file.content), lineIndent(file.content, b.open), facts.otherPlatforms) }],
+        edits: [{ start: b.close + 1, end: b.close + 1, text: sidebar(eolOf(file.content), lineIndent(file.content, b.open), facts.otherPlatforms, /^[ \t]*(?:\r?\n|$)/.test(file.content.slice(b.close + 1))) }],
       });
     }
 

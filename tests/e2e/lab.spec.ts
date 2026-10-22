@@ -2,7 +2,7 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, wr
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { strFromU8, unzipSync, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
 const errors: string[] = [];
 test.beforeEach(({ page }) => {
@@ -262,6 +262,18 @@ test('a zipped project audits like the folder, ignoring the zip\'s top folder an
   await expect(page.locator('.finding')).toHaveCount(31);
   await expect(page.getByTestId('findings')).toContainText('Encore/Encore/');
   await expect(page.getByTestId('findings')).not.toContainText('Encore-main');
+});
+
+test('a zip without a top folder keeps its folder names, so a watch app stays skipped', async ({ page }) => {
+  const files = {
+    'App/Root.swift': strToU8('let s = UIScreen.main.scale'),
+    'MyWatchApp/W.swift': strToU8('let s = UIScreen.main.scale'),
+    'README.md': strToU8('notes'),
+  };
+  await page.goto('./#audit');
+  await page.getByTestId('zip-input').setInputFiles({ name: 'build.zip', mimeType: 'application/zip', buffer: Buffer.from(zipSync(files)) });
+  await expect(page.locator('.finding')).toHaveCount(1);
+  await expect(page.getByTestId('findings')).toContainText('App/Root.swift');
 });
 
 test('dropping loose Swift files audits them', async ({ page }) => {

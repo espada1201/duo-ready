@@ -67,7 +67,7 @@ export const blackBars = defineGroup({
     for (const hit of m.matchAll(/\.frame\s*\(\s*maxWidth\s*:\s*(\d{3})(?:\.0)?\s*[,)]/g)) {
       const n = Number(hit[1]);
       // A capped image (`.resizable()...frame(maxWidth: 400)`) is a picture, not a column.
-      if (/\.resizable\s*\(\s*\)[^{}]*$/.test(m.slice(Math.max(0, hit.index! - 250), hit.index))) continue;
+      if (/\.resizable\s*\(\s*\)[^{}\n]*(?:\n[ \t]*\.[^{}\n]*)*\n?[ \t]*$/.test(m.slice(Math.max(0, hit.index! - 250), hit.index))) continue;
       if (n >= 320 && n <= 720) report('centered-column', hit.index!, `A ${n} pt column fills about ${Math.round((n / INNER.w) * 100)}% of the open inner display.`);
     }
   },

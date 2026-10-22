@@ -9,14 +9,29 @@ const MAC_JUNK = /(^|\/)(__MACOSX\/|\._)/;
 /** A zipped project. Finder and GitHub put everything in one top folder, so paths start inside it. */
 export async function filesFromZip(zip: File, prefix = ''): Promise<SourceFile[]> {
   const data = new Uint8Array(await zip.arrayBuffer());
+  // Some Windows zippers write backslashes.
+  const slashed = (name: string) => name.replace(/\\/g, '/');
+  const tops = new Set<string>();
   const entries = await new Promise<Unzipped>((res, rej) =>
-    unzip(data, { filter: (f) => (isRelevant(f.name) || isRelevant(f.name.slice(f.name.indexOf('/') + 1))) && !MAC_JUNK.test(f.name) && f.originalSize <= MAX_BYTES }, (err, out) => (err ? rej(err) : res(out))),
+    unzip(
+      data,
+      {
+        filter: (f) => {
+          const name = slashed(f.name);
+          if (MAC_JUNK.test(name)) return false;
+          // Every entry counts toward the top folder, not just the ones read.
+          tops.add(name.includes('/') ? name.slice(0, name.indexOf('/')) : '');
+          return (isRelevant(name) || isRelevant(name.slice(name.indexOf('/') + 1))) && f.originalSize <= MAX_BYTES;
+        },
+      },
+      (err, out) => (err ? rej(err) : res(out)),
+    ),
   );
-  const names = Object.keys(entries).sort();
-  const top = names[0]?.split('/')[0];
-  const cut = names.length && names.every((n) => n.startsWith(`${top}/`)) ? top.length + 1 : 0;
-  return names
-    .map((n) => ({ path: (prefix ? `${prefix}/` : '') + n.slice(cut), content: strFromU8(entries[n]) }))
+  const [top] = tops;
+  const cut = tops.size === 1 && top ? top.length + 1 : 0;
+  return Object.keys(entries)
+    .sort()
+    .map((n) => ({ path: (prefix ? `${prefix}/` : '') + slashed(n).slice(cut), content: strFromU8(entries[n]) }))
     .filter((f) => isRelevant(f.path));
 }
 
@@ -24,11 +39,14 @@ const isZip = (name: string) => name.toLowerCase().endsWith('.zip');
 
 // Paths start inside the folder the person picked, as the CLI's do, so a project kept in a
 // folder named `build` or `.archive` isn't mistaken for build output.
-async function readEntries(entry: FileSystemEntry, prefix: string, out: SourceFile[], picked = false): Promise<void> {
+// Only a zip dropped itself is read: one inside a project is an old archive, not the project.
+async function readEntries(entry: FileSystemEntry, prefix: string, out: SourceFile[], picked = false, dropped = false): Promise<void> {
   const path = picked ? '' : prefix ? `${prefix}/${entry.name}` : entry.name;
   if (entry.isFile && isZip(path)) {
+    if (!dropped) return;
     const file = await new Promise<File>((res, rej) => (entry as FileSystemFileEntry).file(res, rej));
-    out.push(...(await filesFromZip(file, path.slice(0, -4))));
+    // Named for the whole zip, so `build.zip` isn't read as a build folder.
+    out.push(...(await filesFromZip(file, path)));
   } else if (entry.isFile) {
     if (!isRelevant(path)) return;
     const file = await new Promise<File>((res, rej) => (entry as FileSystemFileEntry).file(res, rej));
@@ -51,7 +69,7 @@ export async function filesFromDrop(data: DataTransfer): Promise<SourceFile[]> {
   if (!entries.length) return filesFromInput(data.files);
   // One dropped folder is the project root; several keep their names so their paths can't collide.
   if (entries.length === 1 && entries[0].isFile && isZip(entries[0].name)) return filesFromInput(data.files);
-  await Promise.all(entries.map((e) => readEntries(e, '', out, e.isDirectory && entries.length === 1)));
+  await Promise.all(entries.map((e) => readEntries(e, '', out, e.isDirectory && entries.length === 1, true)));
   // Reads finish in any order; sort so findings come out the same on every run.
   return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
