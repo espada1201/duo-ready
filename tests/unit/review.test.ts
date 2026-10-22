@@ -941,3 +941,17 @@ describe('small UIKit images', () => {
     expect(ids([{ path: 'A.swift', content: 'heroView.contentMode = .scaleToFill' }])).toEqual(['stretched-image']);
   });
 });
+
+describe('sixth held-out review', () => {
+  it('skips playgrounds', () => {
+    expect(ids([{ path: 'Docs/Try.playground/Contents.swift', content: 'let s = UIScreen.main.bounds' }])).toEqual([]);
+  });
+  it('says a key-window lookup works until the app adopts scenes', () => {
+    const app = { path: 'AppDelegate.swift', content: 'class AppDelegate: UIResponder, UIApplicationDelegate {\n  var window: UIWindow?\n}' };
+    const found = audit([app, { path: 'A.swift', content: 'let w = UIApplication.shared.keyWindow' }]).findings.find((f) => f.ruleId === 'key-window');
+    expect(found?.message).toMatch(/once the app adopts scenes/);
+  });
+  it('leaves an orientation that only rotates a camera preview', () => {
+    expect(ids([{ path: 'A.swift', content: 'let o = scene.interfaceOrientation\nconnection.videoOrientation = AVCaptureVideoOrientation(o)' }])).toEqual([]);
+  });
+});

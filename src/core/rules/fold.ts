@@ -1,7 +1,7 @@
 import { blockAt, declaredTypes, headerOf, labelOffset, type Block, type SwiftSource } from '../swift';
 import type { Fix } from '../types';
 import { lineAround } from '../text';
-import { chainRoot, defineGroup, chainHas, closeOf, declaredAt, matchBefore, PREPARE, sizeClassPattern } from './engine';
+import { chainRoot, defineGroup, type ProjectFacts, chainHas, closeOf, declaredAt, matchBefore, PREPARE, sizeClassPattern } from './engine';
 
 const SCENES = 'Apple, WWDC25 “Make your UIKit app more flexible” (UIScene required after iOS 26)';
 
@@ -121,7 +121,10 @@ export function resolveViews(own: Map<string, { state: boolean; calls: string[] 
   return views;
 }
 
-const CAMERA_FILE = /\b(videoOrientation|videoRotationAngle)\b/;
+const CAMERA_FILE = /\b(videoOrientation|videoRotationAngle|AVCaptureVideoOrientation)\b/;
+/** Before the scene lifecycle the app has one window, so a key-window lookup finds it today; it breaks once the app adopts scenes, which Apple requires. */
+const oneWindow = (facts: ProjectFacts) => facts.appDelegate !== null && !(facts.swiftUIApp || (facts.sceneManifest && facts.sceneDelegate));
+const ONE_WINDOW = 'With one window this finds it today; once the app adopts scenes (required), the key window may be on the other display.';
 const NOT_LAYOUT = /AVCapture|XCUI|videoOrientation|videoRotation|rawValue|imageOrientation|CGImagePropertyOrientation|\w*OrientationAtPresentation|orientationAtPresentation|preferred\w*Orientation\w*|requestGeometryUpdate/;
 /** The flagged line and the one before it, where `var preferredLandscapeOrientation: UIInterfaceOrientation {` names what a value is for. */
 const withLineBefore = (m: string, at: number): string => {
@@ -264,7 +267,7 @@ export const fold = defineGroup({
       // With one scene, `connectedScenes.first` is that scene.
       if (facts.singleScene && !facts.multipleScenes && hit[1].startsWith('connectedScenes')) continue;
       if ((!facts.multipleScenes && /activationState\s*==\s*\.foregroundActive/.test(m.slice(hit.index!, hit.index! + 200))) || /UITest|uiTest/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
-      report('key-window', hit.index!);
+      report('key-window', hit.index!, oneWindow(facts) ? ONE_WINDOW : undefined);
     }
     // `connectedScenes.flatMap { ... }.first { $0.isKeyWindow }`, often split over lines.
     for (const hit of m.matchAll(/\bUIApplication\s*\.\s*shared\s*\.\s*connectedScenes\b(?!\s*\.\s*first\b)/g)) {
@@ -272,7 +275,7 @@ export const fold = defineGroup({
       // Applying something to every scene's windows (`.forEach`, `for scene in connectedScenes`, or a loop over the scenes just collected) assumes nothing about which is in front.
       const bound = /\b(?:let|var)\s+(\w+)\s*=\s*$/.exec(m.slice(Math.max(0, hit.index! - 60), hit.index))?.[1];
       if (/\.forEach\b/.test(statement) || /\bfor\s+\w+\s+in\s+$/.test(m.slice(Math.max(0, hit.index! - 40), hit.index)) || (bound && new RegExp(`\\bfor\\s+\\w+\\s+in\\s+${bound}\\b`).test(statement))) continue;
-      if (/\.windows\b|isKeyWindow/.test(statement) && (facts.multipleScenes || !/activationState\s*==\s*\.foregroundActive/.test(statement))) report('key-window', hit.index!);
+      if (/\.windows\b|isKeyWindow/.test(statement) && (facts.multipleScenes || !/activationState\s*==\s*\.foregroundActive/.test(statement))) report('key-window', hit.index!, oneWindow(facts) ? ONE_WINDOW : undefined);
     }
 
     for (const b of blocks) {
@@ -301,9 +304,9 @@ export const fold = defineGroup({
     }
   },
 
-  objc({ masked: m, report }) {
+  objc({ masked: m, facts, report }) {
     for (const hit of m.matchAll(/\[\s*UIScreen\s+mainScreen\s*\]|\bUIScreen\s*\.\s*mainScreen\b/g)) report('uiscreen-main', hit.index!, '[UIScreen mainScreen] is ambiguous on a two-display phone.');
-    for (const hit of m.matchAll(/\bsharedApplication\s*\]?\s*(?:\.\s*|\s+)(?:keyWindow|windows|delegate\s*\]?\s*(?:\.\s*|\s+)window)\b/g)) report('key-window', hit.index!);
+    for (const hit of m.matchAll(/\bsharedApplication\s*\]?\s*(?:\.\s*|\s+)(?:keyWindow|windows|delegate\s*\]?\s*(?:\.\s*|\s+)window)\b/g)) report('key-window', hit.index!, oneWindow(facts) ? ONE_WINDOW : undefined);
     const camera = CAMERA_FILE.test(m);
     for (const hit of m.matchAll(/\bstatusBarOrientation\b|\[\s*\[\s*UIDevice\s+currentDevice\s*\]\s+orientation\s*\]|\bUIDevice\s*\.\s*currentDevice\s*\.\s*orientation\b|\bUI(?:Interface|Device)OrientationIs(?:Landscape|Portrait)\b|\binterfaceOrientation\b/g)) {
       if (!camera && !NOT_LAYOUT.test(lineAround(m, hit.index!))) report('orientation-layout', hit.index!);
