@@ -23,6 +23,13 @@ describe('duo-ready CLI', () => {
     expect(capture(['sample', 'tests'])).toMatchObject({ code: 2, err: expect.stringContaining('One project at a time') });
   });
 
+  it('says when an Info.plist is binary instead of claiming there is none', () => {
+    dir = mkdtempSync(join(tmpdir(), 'duo-'));
+    writeFileSync(join(dir, 'Info.plist'), Buffer.from('bplist00\xd1\x01\x02', 'latin1'));
+    writeFileSync(join(dir, 'A.swift'), 'let a = 1');
+    expect(capture([dir, '--no-color']).out).toContain('Info.plist is a binary plist');
+  });
+
   it('audits an .xcodeproj folder or its project.pbxproj on its own', () => {
     dir = mkdtempSync(join(tmpdir(), 'duo-'));
     const proj = join(dir, 'App.xcodeproj');

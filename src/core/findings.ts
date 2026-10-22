@@ -1,5 +1,6 @@
 // Shared ways of summarising findings, used by the CLI and the lab alike.
 
+import { joinEnglish } from './text';
 import type { AuditResult, Finding, Severity } from './types';
 
 export const SEVERITY_ORDER: Record<Severity, number> = { error: 0, warning: 1, info: 2 };
@@ -14,6 +15,10 @@ export function countBySeverity(findings: Finding[]): Record<Severity, number> {
 }
 
 export const PARTIAL_NOTE = 'Partial audit: no Info.plist or Xcode project, so orientation, full-screen and SDK checks did not run. The grade is capped at Close.';
+
+/** What to tell the reader about files that were found but couldn't be read. */
+export const unreadableNote = (paths: string[]) =>
+  `${joinEnglish(paths)} ${paths.length === 1 ? 'is a binary plist' : 'are binary plists'}, which duo-ready can't read. Convert with \`plutil -convert xml1 <file>\` to include ${paths.length === 1 ? 'it' : 'them'}.`;
 
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 

@@ -56,6 +56,7 @@ export function audit(input: SourceFile[]): AuditResult {
     grade: grade(value, findings, partial),
     tier: check ? { value: tierFromUpgradeCheck(check), source: `LastUpgradeCheck ${check}, Xcode ${xcodeVersion(check)}` } : null,
     partial,
+    unreadable: files.filter((f) => /(^|\/)Info\.plist$/.test(f.path) && f.content.startsWith('bplist')).map((f) => f.path),
   };
 }
 

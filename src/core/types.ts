@@ -44,4 +44,6 @@ export interface AuditResult {
   tier: { value: SdkTier; source: string } | null;
   /** No Info.plist or Xcode project was given, so project-level checks did not run and the grade is capped. */
   partial: boolean;
+  /** Binary Info.plists, which can't be read as text: convert them to XML to include them. */
+  unreadable: string[];
 }

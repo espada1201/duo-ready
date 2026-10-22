@@ -2,7 +2,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync, statSync, writeFileSy
 import { dirname, join, relative, resolve } from 'node:path';
 import { applyFixes, audit, isRelevant, isRelevantDir, MAX_BYTES } from '../core/audit';
 import { unifiedDiff } from '../core/diff';
-import { describeCounts, PARTIAL_NOTE, screensFirst, summaryLine } from '../core/findings';
+import { describeCounts, PARTIAL_NOTE, screensFirst, summaryLine, unreadableNote } from '../core/findings';
 import { RULE_BY_ID, RULES } from '../core/rules';
 import { tierLabel } from '../core/sdk';
 import { groupBy } from '../core/text';
@@ -133,6 +133,7 @@ function textReport(result: AuditResult, c: ReturnType<typeof paint>): string {
   lines.push(`${c.bold(`Duo readiness ${result.score}/100`)}  ${result.grade}`);
   lines.push(summaryLine(result));
   if (result.partial) lines.push(c.yellow(PARTIAL_NOTE));
+  if (result.unreadable.length) lines.push(c.yellow(unreadableNote(result.unreadable)));
   if (result.tier) lines.push(`Today, Duo users likely see ${tierLabel(result.tier.value)} (based on ${result.tier.source}).`);
   if (safe || review) lines.push(`${safe} safe fixes (--fix), ${review} more for review (--fix all).`);
   return lines.join('\n');
