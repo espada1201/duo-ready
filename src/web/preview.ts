@@ -13,6 +13,8 @@ export interface PreviewState {
   safeArea: boolean;
   camera: boolean;
   screenshot: string | null;
+  /** Why the last screenshot couldn't be shown. */
+  shotError: string | null;
   /** The pose before the last change, for the fold continuity check. */
   previous: Posture | null;
 }
@@ -275,9 +277,19 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
 
   const onShot = (e: Event) => {
     const file = (e.target as HTMLInputElement).files?.[0];
-    if (!file || !file.type.startsWith('image/')) return;
-    if (state.screenshot) URL.revokeObjectURL(state.screenshot);
-    set({ screenshot: URL.createObjectURL(file), build: 'legacy-26', posture: state.posture === 'closed' || state.posture === 'closed-landscape' ? 'open' : state.posture });
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    // Decode before showing: a HEIC photo, for one, is an image type most browsers can't draw.
+    const probe = new Image();
+    probe.onload = () => {
+      if (state.screenshot) URL.revokeObjectURL(state.screenshot);
+      set({ screenshot: url, shotError: null, build: 'legacy-26', posture: state.posture === 'closed' || state.posture === 'closed-landscape' ? 'open' : state.posture });
+    };
+    probe.onerror = () => {
+      URL.revokeObjectURL(url);
+      set({ shotError: `This browser can't show ${file.name}. Use a PNG or JPEG screenshot.` });
+    };
+    probe.src = url;
   };
 
   const controls = h(
@@ -323,6 +335,7 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
       state.screenshot && !shotShown
         ? h('span', { class: 'hint', 'data-testid': 'shot-hidden' }, 'Your screenshot shows on the inner display with the iOS 26 SDK build.')
         : null,
+      state.shotError ? h('p', { class: 'hint', role: 'alert', 'data-testid': 'shot-error' }, state.shotError) : null,
     ),
   );
 

@@ -116,6 +116,13 @@ const FEATURES = {
     await page.getByTestId('folder-input').setInputFiles(build);
     assert((await findings(page)) === 31, 'a chosen folder is audited, even one named build');
     await proof(page, dir, 'folder');
+
+    const zip = join(build, '..', 'Encore.zip');
+    spawnSync('zip', ['-qr', zip, 'build'], { cwd: join(build, '..') });
+    await page.goto(`${URL}#audit`);
+    await page.getByTestId('zip-input').setInputFiles(zip);
+    assert((await findings(page)) === 31, 'a zip made with the zip tool audits the same as the folder');
+    await proof(page, dir, 'zip');
   },
 
   async rules(page, dir) {

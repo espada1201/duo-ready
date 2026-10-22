@@ -14,7 +14,7 @@ iOS doesn't let anyone reshape someone else's app, so this kit is for the people
 
 ## What's inside
 
-- **Duo Lab (browser).** *Audit* takes your Xcode project folder (it never leaves your Mac), scores it, names the screens to fix first, filters findings by severity or pain point, explains each problem with Apple's guidance, and gives you a zip of fixed files. *Preview* shows a typical app in every Duo pose, Split View included, for each SDK build, and whether it keeps your place when you fold.
+- **Duo Lab (browser).** *Audit* takes your Xcode project folder or a .zip of it (it never leaves your Mac), scores it, names the screens to fix first, filters findings by severity or pain point, explains each problem with Apple's guidance, and gives you a zip of fixed files. *Preview* shows a typical app in every Duo pose, Split View included, for each SDK build, and whether it keeps your place when you fold.
 - **CLI.** The same engine for terminals and CI:
   ```sh
   npm run audit -- ../MyApp              # report

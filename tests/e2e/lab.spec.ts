@@ -1,8 +1,8 @@
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { strFromU8, unzipSync } from 'fflate';
+import { strFromU8, unzipSync, zipSync } from 'fflate';
 
 const errors: string[] = [];
 test.beforeEach(({ page }) => {
@@ -82,6 +82,17 @@ test('a screenshot of your own app appears in the compatibility window', async (
   await choose(page, 'Open');
   await page.getByRole('button', { name: 'Remove' }).click();
   await expect(page.locator('.shot')).toHaveCount(0);
+});
+
+test('a screenshot the browser cannot draw gets a reason instead of a broken image', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('shot-input').setInputFiles({ name: 'IMG_0001.HEIC', mimeType: 'image/heic', buffer: Buffer.from('not really an image') });
+  await expect(page.getByRole('alert')).toHaveText("This browser can't show IMG_0001.HEIC. Use a PNG or JPEG screenshot.");
+  await expect(page.locator('.shot')).toHaveCount(0);
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await page.getByTestId('shot-input').setInputFiles({ name: 'app.png', mimeType: 'image/png', buffer: png });
+  await expect(page.locator('.shot')).toHaveCount(1);
+  await expect(page.getByTestId('shot-error')).toHaveCount(0);
 });
 
 test('auditing the sample app lists findings and downloads working fixes', async ({ page }) => {
@@ -233,6 +244,24 @@ test('a newer audit wins over a slow one still running', async ({ page }) => {
   await page.waitForTimeout(3000);
   await expect(page.locator('.eyebrow')).toHaveText('Sample app: Encore');
   await expect(page.locator('.finding')).toHaveCount(31);
+});
+
+test('a zipped project audits like the folder, ignoring the zip\'s top folder and macOS junk', async ({ page }) => {
+  const files: Record<string, Uint8Array> = { '__MACOSX/Encore-main/._LibraryView.swift': new Uint8Array([0, 5, 22, 7]) };
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      if (statSync(full).isDirectory()) walk(full);
+      else files[`Encore-main/${relative('sample', full)}`] = new Uint8Array(readFileSync(full));
+    }
+  };
+  walk('sample');
+  await page.goto('./#audit');
+  await page.getByTestId('zip-input').setInputFiles({ name: 'Encore-main.zip', mimeType: 'application/zip', buffer: Buffer.from(zipSync(files)) });
+  await expect(page.getByTestId('grade')).toHaveText('Not ready');
+  await expect(page.locator('.finding')).toHaveCount(31);
+  await expect(page.getByTestId('findings')).toContainText('Encore/Encore/');
+  await expect(page.getByTestId('findings')).not.toContainText('Encore-main');
 });
 
 test('dropping loose Swift files audits them', async ({ page }) => {

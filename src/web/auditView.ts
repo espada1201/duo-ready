@@ -1,4 +1,4 @@
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzip, zipSync, type Unzipped } from 'fflate';
 import { applyFixes, isRelevant, isRelevantDir, MAX_BYTES } from '../core/audit';
 import { patchFor, type Hunk } from '../core/diff';
 import { describeCounts, gainLabel, GRADE_LEGEND, PARTIAL_NOTE, plural, screensFirst, severityLabel, summaryLine, unreadableNote } from '../core/findings';
@@ -94,11 +94,33 @@ function analyseOffThread(files: SourceFile[]): Promise<Analysis> {
   });
 }
 
+const MAC_JUNK = /(^|\/)(__MACOSX\/|\._)/;
+const MAYBE_RELEVANT = /\.(swift|plist|html?|pbxproj|json|yaml)$/;
+
+/** A zipped project. Finder and GitHub put everything in one top folder, so paths start inside it. */
+async function filesFromZip(zip: File, prefix = ''): Promise<SourceFile[]> {
+  const data = new Uint8Array(await zip.arrayBuffer());
+  const entries = await new Promise<Unzipped>((res, rej) =>
+    unzip(data, { filter: (f) => MAYBE_RELEVANT.test(f.name) && !MAC_JUNK.test(f.name) && f.originalSize <= MAX_BYTES }, (err, out) => (err ? rej(err) : res(out))),
+  );
+  const names = Object.keys(entries).sort();
+  const top = names[0]?.split('/')[0];
+  const cut = names.length && names.every((n) => n.startsWith(`${top}/`)) ? top.length + 1 : 0;
+  return names
+    .map((n) => ({ path: (prefix ? `${prefix}/` : '') + n.slice(cut), content: strFromU8(entries[n]) }))
+    .filter((f) => isRelevant(f.path));
+}
+
+const isZip = (name: string) => name.toLowerCase().endsWith('.zip');
+
 // Paths start inside the folder the person picked, as the CLI's do, so a project kept in a
 // folder named `build` or `.archive` isn't mistaken for build output.
 async function readEntries(entry: FileSystemEntry, prefix: string, out: SourceFile[], picked = false): Promise<void> {
   const path = picked ? '' : prefix ? `${prefix}/${entry.name}` : entry.name;
-  if (entry.isFile) {
+  if (entry.isFile && isZip(path)) {
+    const file = await new Promise<File>((res, rej) => (entry as FileSystemFileEntry).file(res, rej));
+    out.push(...(await filesFromZip(file, path.slice(0, -4))));
+  } else if (entry.isFile) {
     if (!isRelevant(path)) return;
     const file = await new Promise<File>((res, rej) => (entry as FileSystemFileEntry).file(res, rej));
     if (file.size <= MAX_BYTES) out.push({ path, content: await file.text() });
@@ -119,12 +141,14 @@ async function filesFromDrop(data: DataTransfer): Promise<SourceFile[]> {
   // Without the entries API (or for files a page hands over itself) only loose files can be read.
   if (!entries.length) return filesFromInput(data.files);
   // One dropped folder is the project root; several keep their names so their paths can't collide.
+  if (entries.length === 1 && entries[0].isFile && isZip(entries[0].name)) return filesFromInput(data.files);
   await Promise.all(entries.map((e) => readEntries(e, '', out, e.isDirectory && entries.length === 1)));
   // Reads finish in any order; sort so findings come out the same on every run.
   return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
 async function filesFromInput(list: FileList): Promise<SourceFile[]> {
+  if (list.length === 1 && isZip(list[0].name)) return filesFromZip(list[0]);
   const picked = [...list]
     .map((f) => ({ f, path: f.webkitRelativePath ? f.webkitRelativePath.slice(f.webkitRelativePath.indexOf('/') + 1) : f.name }))
     .filter(({ f, path }) => isRelevant(path) && f.size <= MAX_BYTES);
@@ -203,7 +227,7 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
       },
     },
     icon('folder', 28),
-    h('p', { class: 'drop-title' }, 'Drop your Xcode project folder here'),
+    h('p', { class: 'drop-title' }, 'Drop your Xcode project folder, or a .zip of it, here'),
     h('p', { class: 'hint' }, 'Everything runs in this tab. Your code never leaves your Mac.'),
     h(
       'div',
@@ -222,6 +246,21 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
           onchange: (e: Event) => {
             const list = (e.target as HTMLInputElement).files;
             if (list) void load(() => filesFromInput(list), 'Chosen folder');
+          },
+        }),
+      ),
+      h(
+        'label',
+        { class: 'button' },
+        h('span', {}, 'Choose .zip'),
+        h('input', {
+          type: 'file',
+          accept: '.zip,application/zip',
+          class: 'visually-hidden',
+          'data-testid': 'zip-input',
+          onchange: (e: Event) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (file) void load(() => filesFromZip(file), file.name);
           },
         }),
       ),

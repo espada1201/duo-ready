@@ -6,6 +6,7 @@ Choosing a project folder reads its Swift, Info.plist, Xcode project and HTML in
 
 - `folder-pick` audits a folder chosen with the file picker.
 - `folder-empty` explains a folder with nothing to audit.
+- `zip-pick` audits a .zip of the project; its single top folder and macOS `__MACOSX` junk are ignored.
 
 ## How to get to it (user POV)
 
@@ -16,6 +17,7 @@ Choosing a project folder reads its Swift, Info.plist, Xcode project and HTML in
 Preconditions: a temporary copy of `sample/Encore` in a folder named `build`.
 
 - **Pick.** Set `folder-input` to that folder. 31 `.finding` items render.
+- **Zip.** Zip that folder with `zip -qr`, set `zip-input` to it. 31 `.finding` items render.
 
 ## Gotchas
 
