@@ -208,6 +208,11 @@ describe('third review', () => {
     expect(ids([{ path: 'Info.plist', content: plist }])).toEqual(['requires-full-screen']);
   });
 
+  it('reads modifiers inside #if blocks in a chain', () => {
+    expect(fixes('TabView {\n  A()\n}\n#if os(iOS)\n.tabViewStyle(.page)\n#endif')).toEqual([]);
+    expect(ids(swift('Image("a")\n  .resizable()\n#if os(iOS)\nlet x = 1\n#endif'))).toEqual(['stretched-image']);
+  });
+
   it('stays fast on unbalanced parentheses', () => {
     const start = performance.now();
     audit(swift(`TabView {}\n${'.a(('.repeat(40000)}`));

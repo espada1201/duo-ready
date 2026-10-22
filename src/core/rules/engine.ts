@@ -114,7 +114,8 @@ export interface ModifierCall {
 
 /** The chain of `.modifier(...) { ... }` calls starting at `from`, trailing closures included, and where it ends. */
 export function modifierChain(masked: string, from: number): { end: number; calls: ModifierCall[] } {
-  const name = /\s*\.(\w+)\s*/y;
+  // `#if os(iOS)` … `#endif` may wrap modifiers inside a chain.
+  const name = /(?:\s*#(?:if|elseif|else|endif)\b[^\n]*)*\s*\.(\w+)\s*/y;
   const closure = /\s*(?:\w+\s*:\s*)?(?=\{)/y;
   const calls: ModifierCall[] = [];
   let at = from;
