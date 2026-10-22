@@ -66,9 +66,11 @@ async function readEntries(entry: FileSystemEntry, prefix: string, out: SourceFi
   }
 }
 
-async function filesFromDrop(items: DataTransferItemList): Promise<SourceFile[]> {
+async function filesFromDrop(data: DataTransfer): Promise<SourceFile[]> {
   const out: SourceFile[] = [];
-  const entries = [...items].map((i) => i.webkitGetAsEntry?.()).filter(Boolean) as FileSystemEntry[];
+  const entries = [...data.items].map((i) => i.webkitGetAsEntry?.()).filter(Boolean) as FileSystemEntry[];
+  // Without the entries API (or for files a page hands over itself) only loose files can be read.
+  if (!entries.length) return filesFromInput(data.files);
   await Promise.all(entries.map((e) => readEntries(e, '', out, e.isDirectory)));
   // Reads finish in any order; sort so findings come out the same on every run.
   return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
@@ -133,8 +135,8 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
       ondragleave: (e: Event) => (e.currentTarget as HTMLElement).classList.remove('over'),
       ondrop: (e: Event) => {
         e.preventDefault();
-        const items = (e as DragEvent).dataTransfer?.items;
-        if (items) void load(() => filesFromDrop(items), 'Dropped folder');
+        const data = (e as DragEvent).dataTransfer;
+        if (data) void load(() => filesFromDrop(data), 'Dropped files');
       },
     },
     icon('folder', 28),

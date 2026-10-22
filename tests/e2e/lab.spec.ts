@@ -132,6 +132,19 @@ test('auditing a chosen folder, pasted code, and a folder with nothing to audit'
   await expect(page.getByRole('alert')).toContainText('No Swift files');
 });
 
+test('dropping loose Swift files audits them', async ({ page }) => {
+  await page.goto('./#audit');
+  const drop = await page.evaluateHandle(() => {
+    const data = new DataTransfer();
+    data.items.add(new File(['let s = UIScreen.main.scale'], 'Scale.swift'));
+    data.items.add(new File(['binary'], 'logo.png'));
+    return data;
+  });
+  await page.getByTestId('dropzone').dispatchEvent('drop', { dataTransfer: drop });
+  await expect(page.locator('.finding')).toHaveCount(1);
+  await expect(page.locator('.finding')).toContainText('UIScreen.main');
+});
+
 test('rule links deep-link and focus the rule', async ({ page }) => {
   await page.goto('./#rules/hand-built-bar');
   await expect(page.locator('#rule-hand-built-bar')).toBeFocused();
