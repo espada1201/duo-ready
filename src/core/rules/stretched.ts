@@ -7,15 +7,15 @@ const viewportMessage = (width: string) => `The web viewport is fixed at ${width
 /** Callbacks that run when the window changes size. */
 const ON_RESIZE = /\bfunc\s+(viewWillTransition|traitCollectionDidChange|viewWillLayoutSubviews|viewDidLayoutSubviews)\b|\.onChange\s*\(\s*of\s*:\s*\w*[sS]izeClass\b/g;
 
-const PDF = /\bUIPrint(?:PageRenderer|Formatter)\b|\bUIMarkupTextPrintFormatter\b|\bUIGraphicsPDFRenderer\b|\bUIGraphicsBeginPDFContext|\bUIGraphicsImageRenderer\b|\bUIGraphicsBeginImageContext/;
+const OFFSCREEN_RENDER = /\bUIPrint(?:PageRenderer|Formatter)\b|\bUIMarkupTextPrintFormatter\b|\bUIGraphicsPDFRenderer\b|\bUIGraphicsBeginPDFContext|\bUIGraphicsImageRenderer\b|\bUIGraphicsBeginImageContext/;
 
 /** Inside draw(_:), a function or closure that renders a PDF or an image, or a type made for PDF or print output. */
 function inDrawing(m: string, scope: Block | null): boolean {
   for (let b = scope; b?.parent; b = b.parent) {
     const head = m.slice(Math.max(0, b.open - 120), b.open);
     if (/\bfunc\s+draw\s*\([^{]*$/.test(head)) return true;
-    const type = /\b(?:class|struct|enum|actor|extension)\s+(\w+)[^{}]*$/.exec(head);
-    if (type ? /PDF|Pdf|UIPrint/.test(type[0]) : PDF.test(m.slice(b.open, b.close)) || /\bUIGraphicsImageRenderer\b[^{}]*$/.test(head)) return true;
+    const type = /\b(?:class|struct|enum|actor|extension)\s+(?!func\b|var\b|let\b)(\w+)[^{}]*$/.exec(head);
+    if (type ? /PDF|Pdf|UIPrint/.test(type[0]) : OFFSCREEN_RENDER.test(m.slice(b.open, b.close)) || /\bUIGraphicsImageRenderer\b[^{}]*$/.test(head)) return true;
   }
   return false;
 }

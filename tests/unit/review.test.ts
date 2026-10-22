@@ -888,3 +888,30 @@ describe('views built in the same file', () => {
     expect(ids([{ path: 'A.swift', content: stateful }])).toContain('state-reset');
   });
 });
+
+describe('code review regressions', () => {
+  const swiftIds = (content: string, path = 'A.swift') => ids([{ path, content }]);
+  it('reads a ternary, not optional chaining, as a fallback', () => {
+    expect(swiftIds('let s = view?.frame(width: 375, height: 667)')).toContain('fixed-device-size');
+  });
+  it('treats [.left] as a left-edge swipe', () => {
+    expect(swiftIds('let g = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(back))\ng.edges = [.left]')).toEqual([]);
+  });
+  it('only calls a player muted when it is', () => {
+    expect(swiftIds('let layer = AVPlayerLayer(player: player)\nplayer.volume = 0.5')).toContain('hinge-media');
+  });
+  it('skips a one-line capped picture', () => {
+    expect(swiftIds('var body: some View {\n  Hero().scaledToFit().frame(maxWidth: 400)\n}')).toEqual([]);
+  });
+  it('keeps the #else after an iOS #elseif off Duo', () => {
+    expect(swiftIds('#if os(macOS)\nlet a = 1\n#elseif os(iOS)\nlet b = 2\n#else\nlet s = UIScreen.main.bounds\n#endif')).toEqual([]);
+    expect(swiftIds('#if os(macOS)\nlet a = 1\n#elseif os(iOS)\nlet s = UIScreen.main.bounds\n#endif')).toContain('uiscreen-main');
+  });
+});
+
+describe('scene loops', () => {
+  it('ignores a style applied over the scenes just collected', () => {
+    const code = 'let windowScenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }\nfor windowScene in windowScenes {\n  for window in windowScene.windows { window.overrideUserInterfaceStyle = style }\n}';
+    expect(ids([{ path: 'A.swift', content: code }])).toEqual([]);
+  });
+});

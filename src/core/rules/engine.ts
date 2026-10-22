@@ -39,7 +39,7 @@ export interface ProjectFacts {
   idiomWrappers: string[];
   /** View modifiers like `square(size:)` whose whole body is `frame(width: size, height: size)`. */
   squareModifiers: string[];
-  /** Views the project always shows with an aspect ratio: `ImageView(url: u).scaledToFit()`. */
+  /** Views some caller in the project keeps to an aspect ratio: `ImageView(url: u).scaledToFit()`. */
   aspectViews: Set<string>;
   /** The project's SwiftUI views, true where one keeps state a rebuild throws away (@State, a ScrollView, a TextField…). */
   views: Map<string, boolean>;
@@ -222,10 +222,10 @@ export function chainRoot(src: SwiftSource, at: number): { name: string | null; 
   return null;
 }
 
-/** Name of the class, struct or extension whose body holds `scope`. */
+/** Name of the type or extension whose body holds `scope` (not `class func`, which is a member). */
 export function enclosingType(m: string, scope: Block | null): string | null {
   for (let b = scope; b?.parent; b = b.parent) {
-    const type = /\b(?:class|struct|extension)\s+(\w+)[^{}]*$/.exec(m.slice(Math.max(0, b.open - 200), b.open));
+    const type = /\b(?:class|struct|enum|actor|extension)\s+(?!func\b|var\b|let\b)(\w+)[^{}]*$/.exec(m.slice(Math.max(0, b.open - 200), b.open));
     if (type) return type[1];
   }
   return null;

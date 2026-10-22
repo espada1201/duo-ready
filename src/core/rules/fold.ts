@@ -87,13 +87,24 @@ export function keepsState(code: string, views: Map<string, boolean>, file = '',
   return callsIn(code).some((v) => STATEFUL.test(v) || (!STATELESS.test(v) && (views.get(v) ?? VIEW_NAME.test(v))));
 }
 
-/** The body of `var name: some View { … }` or `func name(…) -> some View { … }` in `masked`. */
+const memberCache = new Map<string, Map<string, string>>();
+
+/** The body of `var name: some View { … }` or `func name(…) -> some View { … }` in `masked`, from a per-file index. */
 function memberBody(masked: string, name: string): string | null {
-  const head = new RegExp(`\\b(?:var\\s+${name}\\s*:\\s*some\\s+View|func\\s+${name}\\s*\\([^)]*\\)\\s*->\\s*some\\s+View)\\s*\\{`).exec(masked);
-  if (!head) return null;
-  const open = head.index + head[0].length - 1;
-  const close = closeOf(masked, open);
-  return close < 0 ? null : masked.slice(open + 1, close - 1);
+  let members = memberCache.get(masked);
+  if (!members) {
+    members = new Map();
+    for (const head of masked.matchAll(/\b(?:var\s+(\w+)\s*:\s*some\s+View|func\s+(\w+)\s*\([^)]*\)\s*->\s*some\s+View)\s*\{/g)) {
+      const open = head.index! + head[0].length - 1;
+      const close = closeOf(masked, open);
+      const key = head[1] ?? head[2];
+      if (close > 0 && !members.has(key)) members.set(key, masked.slice(open + 1, close - 1));
+    }
+    // One file at a time is all a rule pass needs.
+    memberCache.clear();
+    memberCache.set(masked, members);
+  }
+  return members.get(name) ?? null;
 }
 
 /** Marks each project view stateful when it declares state, uses a stateful built-in, or shows a view that is. */
@@ -249,16 +260,16 @@ export const fold = defineGroup({
 
     for (const hit of m.matchAll(/\bUIApplication\s*\.\s*shared\s*\.\s*(windows|keyWindow|connectedScenes\s*\.\s*first(?!\s*\??\s*\.\s*delegate)|delegate\s*\??\s*\.\s*window)\b/g)) {
       // In a single-scene app `connectedScenes.first(where: { $0.activationState == .foregroundActive })` picks
-      // the scene in use; with multiple scenes, two can be in the foreground side by side.
-      // a UI-test speed-up never runs for users.
+      // the scene in use; with multiple scenes, two can be in the foreground side by side. A UI-test hook never runs for users.
       if ((!facts.multipleScenes && /activationState\s*==\s*\.foregroundActive/.test(m.slice(hit.index!, hit.index! + 200))) || /UITest|uiTest/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
       report('key-window', hit.index!);
     }
     // `connectedScenes.flatMap { ... }.first { $0.isKeyWindow }`, often split over lines.
     for (const hit of m.matchAll(/\bUIApplication\s*\.\s*shared\s*\.\s*connectedScenes\b(?!\s*\.\s*first\b)/g)) {
       const statement = /^[^;]*?(?=\n[ \t]*\n|;|$)/.exec(m.slice(hit.index!, hit.index! + 400))![0];
-      // Applying something to every scene's windows (`.forEach`, `for window in`) assumes nothing about which is in front.
-      if (/\.forEach\b|\bfor\s+\w+\s+in\b/.test(statement)) continue;
+      // Applying something to every scene's windows (`.forEach`, `for scene in connectedScenes`, or a loop over the scenes just collected) assumes nothing about which is in front.
+      const bound = /\b(?:let|var)\s+(\w+)\s*=\s*$/.exec(m.slice(Math.max(0, hit.index! - 60), hit.index))?.[1];
+      if (/\.forEach\b/.test(statement) || /\bfor\s+\w+\s+in\s+$/.test(m.slice(Math.max(0, hit.index! - 40), hit.index)) || (bound && new RegExp(`\\bfor\\s+\\w+\\s+in\\s+${bound}\\b`).test(statement))) continue;
       if (/\.windows\b|isKeyWindow/.test(statement) && (facts.multipleScenes || !/activationState\s*==\s*\.foregroundActive/.test(statement))) report('key-window', hit.index!);
     }
 

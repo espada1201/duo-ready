@@ -211,9 +211,8 @@ function previewHeads(src: SwiftSource): [number, number][] {
 const DUO_OS = 27.1;
 const below = (version: string) => parseFloat(version) <= DUO_OS;
 
-const debug = new WeakMap<SwiftSource, [number, number][]>();
+const offDuoCache = new WeakMap<SwiftSource, [number, number][]>();
 
-/** `#if DEBUG` up to its `#else` or `#endif`: code App Store builds leave out. */
 /** A compile condition Duo builds never meet: `DEBUG`, another platform (`os(macOS) || os(tvOS)`, `!os(iOS)`) or Mac Catalyst. */
 function offDuo(condition: string): boolean {
   const c = condition.replace(/\/\/.*$/, '').trim();
@@ -222,33 +221,35 @@ function offDuo(condition: string): boolean {
   return /^os\s*\(\s*\w+\s*\)(?:\s*\|\|\s*os\s*\(\s*\w+\s*\))*$/.test(c) && !/\bos\s*\(\s*iOS\s*\)/.test(c);
 }
 
-function debugRegions(src: SwiftSource): [number, number][] {
-  let out = debug.get(src);
+/** `#if` branches Duo builds leave out (`#if DEBUG`, `#elseif os(tvOS)`, `#else` after `#if os(iOS)`), up to the next branch or `#endif`. */
+function offDuoRegions(src: SwiftSource): [number, number][] {
+  let out = offDuoCache.get(src);
   if (out) return out;
   out = [];
   const re = /^[ \t]*#(if|elseif|else|endif)\b(.*)$/gm;
-  const stack: { debug: boolean; from: number; iosOnly: boolean }[] = [];
+  const IOS_ONLY = /^\s*os\s*\(\s*iOS\s*\)\s*$/;
+  const stack: { off: boolean; from: number; iosSeen: boolean }[] = [];
   for (let hit = re.exec(src.masked); hit; hit = re.exec(src.masked)) {
     const top = stack[stack.length - 1];
-    if (hit[1] === 'if') stack.push({ debug: offDuo(hit[2]), from: hit.index, iosOnly: /^\s*os\s*\(\s*iOS\s*\)\s*$/.test(hit[2]) });
+    if (hit[1] === 'if') stack.push({ off: offDuo(hit[2]), from: hit.index, iosSeen: IOS_ONLY.test(hit[2]) });
     else if (top) {
-      if (top.debug) out.push([top.from, hit.index]);
+      if (top.off) out.push([top.from, hit.index]);
       if (hit[1] === 'endif') stack.pop();
       else {
-        // `#else` after `#if os(iOS)` is every other platform.
-        top.debug = hit[1] === 'elseif' ? offDuo(hit[2]) : top.iosOnly;
+        // Once an `os(iOS)` branch has been taken, a later `#else` is every other platform.
+        top.off = hit[1] === 'elseif' ? offDuo(hit[2]) : top.iosSeen;
         top.from = hit.index;
-        top.iosOnly = false;
+        if (hit[1] === 'elseif' && IOS_ONLY.test(hit[2])) top.iosSeen = true;
       }
     }
   }
-  debug.set(src, out);
+  offDuoCache.set(src, out);
   return out;
 }
 
-/** Code under `#if DEBUG`, or in a branch only an iOS older than Duo's runs (`if #available(iOS 16, *) {} else {…}`, `if #unavailable(iOS 17)`). */
+/** Code under `#if DEBUG` or another platform's `#if` branch, or in a branch only an iOS older than Duo's runs (`if #available(iOS 16, *) {} else {…}`, `if #unavailable(iOS 17)`). */
 function neverShips(src: SwiftSource, offset: number): boolean {
-  if (debugRegions(src).some(([from, to]) => offset > from && offset < to)) return true;
+  if (offDuoRegions(src).some(([from, to]) => offset > from && offset < to)) return true;
   for (let b: Block | null = blockAt(src.root, offset); b?.parent; b = b.parent) {
     const head = headerOf(src, b);
     const unavailable = /^(?:\}?\s*else\s+)?if\s+#unavailable\s*\(\s*iOS\s+([\d.]+)[^)]*\)\s*$/.exec(head);

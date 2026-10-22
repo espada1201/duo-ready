@@ -78,7 +78,8 @@ export const blackBars = defineGroup({
       // `super.init(frame: CGRect(x: 0, y: 0, width: 375, height: 250))` is a starting size; layout replaces it.
       if (/\bsuper\s*\.\s*init\s*\(\s*frame\s*:\s*CGRect\s*\([^()]*$/.test(m.slice(Math.max(0, hit.index! - 80), hit.index))) continue;
       // `let width = bounds.width > 0 ? bounds.width : 320` only falls back before the first layout pass.
-      if (/\?[^:\n]*$/.test(m.slice(m.lastIndexOf('\n', hit.index!) + 1, hit.index))) continue;
+      // A ternary's `?` has spaces around it; optional chaining (`view?.frame`) doesn't.
+      if (/\s\?\s[^:\n]*$/.test(m.slice(Math.max(0, hit.index! - 200), hit.index).split('\n').pop()!)) continue;
       const line = m.lastIndexOf('\n', hit.index!);
       if (((isWidth && PHONE_WIDTHS.has(n)) || (!isWidth && PHONE_HEIGHTS.has(n))) && !lines.has(line)) {
         lines.add(line);
@@ -88,7 +89,7 @@ export const blackBars = defineGroup({
     for (const hit of m.matchAll(/\.frame\s*\(\s*maxWidth\s*:\s*(\d{3})(?:\.0)?\s*[,)]/g)) {
       const n = Number(hit[1]);
       // A capped image (`.resizable()...frame(maxWidth: 400)`, or one kept to its aspect ratio) is a picture, not a column.
-      const chainBefore = /(?:^|\n)[ \t]*[^\s.][^\n]*((?:\n[ \t]*\.[^\n]*)*)\n?[ \t]*$/.exec(m.slice(Math.max(0, hit.index! - 400), hit.index))?.[1] ?? '';
+      const chainBefore = /(?:^|\n)([ \t]*[^\s.][^\n]*(?:\n[ \t]*\.[^\n]*)*)\n?[ \t]*$/.exec(m.slice(Math.max(0, hit.index! - 400), hit.index))?.[1] ?? '';
       if (/\.resizable\s*\(\s*\)[^{}\n]*(?:\n[ \t]*\.[^{}\n]*)*\n?[ \t]*$/.test(m.slice(Math.max(0, hit.index! - 250), hit.index)) || /\.(?:aspectRatio|scaledToFit|scaledToFill)\s*\(/.test(chainBefore)) continue;
       // A box capped both ways (`maxWidth: 350, maxHeight: 350`) is a card, not a column.
       if (/^[^)]*\bmaxHeight\s*:\s*\d/.test(m.slice(hit.index!, hit.index! + 120))) continue;

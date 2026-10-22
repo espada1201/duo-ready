@@ -138,7 +138,7 @@ function leftEdgeOnly(m: string, at: number): boolean {
   const after = m.slice(name, name + 300);
   // Read only this recognizer's setup, not the next one's.
   const next = after.search(/UIScreenEdgePanGestureRecognizer/);
-  return /\bedges\s*=\s*(?:\.left|\[\s*\.left\s*\]|UIRectEdgeLeft)\b(?!\s*[|,])/.test(next < 0 ? after : after.slice(0, next));
+  return /\bedges\s*=\s*(?:\.left\b|\[\s*\.left\s*\]|UIRectEdgeLeft\b)(?!\s*[|,])/.test(next < 0 ? after : after.slice(0, next));
 }
 
 const ACCESSORY_TYPE = /Accessory|Keyboard|Input|Picker|Composer|Formatting/;

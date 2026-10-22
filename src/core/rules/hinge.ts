@@ -70,10 +70,10 @@ export const hinge = defineGroup({
       const avkit = !facts.ownVideoPlayer || /\bimport\s+(?:AVKit|_AVKit_SwiftUI)\b/.test(m);
       // A code scanner's viewfinder still reads a code the hinge crosses.
       const scanner = /\bmetadataObjectTypes\b|\b(?:QR|qr|Barcode|barcode)\w*/.test(m);
-      // A muted player layer is a decorative loop (a background or a thumbnail), not something people watch.
-      const muted = /\.isMuted\s*=\s*true\b|\.volume\s*=\s*0\b/.test(m);
+      // A player layer whose player is muted where it's set up is a decorative loop (a background or a thumbnail).
+      const muted = (at: number) => /\.isMuted\s*=\s*true\b|\.volume\s*=\s*0(?![.\d])/.test(m.slice(Math.max(0, at - 400), at + 400));
       for (const hit of m.matchAll(/\b(VideoPlayer|AVPlayerLayer|AVCaptureVideoPreviewLayer)\s*\(/g)) {
-        if (hit[1] === 'VideoPlayer' ? !avkit || inline(m, hit.index! + hit[0].length - 1) : hit[1] === 'AVPlayerLayer' ? muted : scanner) continue;
+        if (hit[1] === 'VideoPlayer' ? !avkit || inline(m, hit.index! + hit[0].length - 1) : hit[1] === 'AVPlayerLayer' ? muted(hit.index!) : scanner) continue;
         report('hinge-media', hit.index!);
       }
     }
@@ -113,9 +113,9 @@ export const hinge = defineGroup({
   objc({ masked: m, report }) {
     if (!/\breservedRegions\b/.test(m)) {
       // `[AVPlayerLayer class]` is a type check, except where `+layerClass` makes the view a video surface.
-      const muted = /\.muted\s*=\s*YES\b|\bsetMuted\s*:\s*YES\b/.test(m);
+      const muted = (at: number) => /\.muted\s*=\s*YES\b|\bsetMuted\s*:\s*YES\b/.test(m.slice(Math.max(0, at - 400), at + 400));
       for (const hit of m.matchAll(/\[\s*(AVPlayerLayer|AVCaptureVideoPreviewLayer)\s+(\w+)/g)) {
-        if (muted && hit[1] === 'AVPlayerLayer') continue;
+        if (hit[1] === 'AVPlayerLayer' && muted(hit.index!)) continue;
         if (hit[2] !== 'class' || /\(\s*Class\s*\)\s*layerClass\s*\{[^{}]*$/.test(m.slice(Math.max(0, hit.index! - 120), hit.index))) report('hinge-media', hit.index!);
       }
     }
