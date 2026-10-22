@@ -10,7 +10,7 @@ iOS doesn't let anyone reshape someone else's app, so this kit is for the people
 2. In Terminal, run `brew install node`.
 3. Run `git clone https://github.com/espada1201/duo-ready.git && cd duo-ready`.
 4. Run `npm install && npm start`.
-5. Your browser opens the Duo Lab at http://localhost:4178.
+5. Your browser opens the Duo Lab at http://localhost:4178 (or the next free port Terminal shows).
 
 ## What's inside
 
@@ -45,7 +45,7 @@ Fixes come in two kinds. *Safe fixes* are Apple's own before/after rewrites, off
 - The scanner is pattern- and structure-based, not a Swift compiler. It skips comments and strings, but unusual code can slip past or trip it. Objective-C files get the core checks (screen, idiom, orientation, keyboard, fonts, bars, gestures, cameras); fixes and SwiftUI checks are Swift only.
 - Duo panel sizes come from Apple's specs; hinge, camera and status bar geometry are approximations. Check in the Xcode 27.1 simulator.
 - The SDK tier is estimated from the project's `LastUpgradeCheck`.
-- Tests, mocks, Xcode previews, widgets, watch and extension targets, build scripts and vendored folders (Pods, Carthage, build) are skipped: Duo users never see them. Deployment targets are read from the Xcode project, `.xcconfig` files and XcodeGen specs.
+- Tests, mocks, Xcode previews, widgets, watch and extension targets, build scripts and vendored folders (Pods, Carthage, Third Party, build) are skipped: Duo users never see them. Deployment targets are read from the Xcode project, `.xcconfig` files and XcodeGen specs.
 - Pasted code or a lone Swift file gets a partial audit: project-level checks can't run, so the grade stops at Close.
 
 ## Develop
