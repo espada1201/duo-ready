@@ -677,3 +677,23 @@ describe('fourth precision review', () => {
     for (const path of ['SampleBrowser/App.swift', 'JSQMessagesDemo/App.swift', 'SwiftExample/App.swift']) expect(swiftIds('let s = UIScreen.main.bounds', path)).toEqual([]);
   });
 });
+
+describe('full-screen media only', () => {
+  const swiftIds = (content: string, path = 'A.swift') => ids([{ path, content }]);
+  it.each([
+    ['an inline video with an aspect ratio', 'import AVKit\nVideoPlayer(player: p)\n  .aspectRatio(16 / 9, contentMode: .fit)'],
+    ['an inline video with a fixed height and an overlay', 'import AVKit\nVideoPlayer(player: p) {\n  Text("Live")\n}\n.frame(height: 220)'],
+    ['a muted background loop', 'let layer = AVPlayerLayer(player: player)\nplayer.isMuted = true'],
+  ])('ignores %s', (_, code) => {
+    expect(swiftIds(code)).not.toContain('hinge-media');
+  });
+  it('still flags a video that fills the screen', () => {
+    expect(swiftIds('import AVKit\nVideoPlayer(player: p)\n  .aspectRatio(contentMode: .fill)\n  .ignoresSafeArea()')).toContain('hinge-media');
+    expect(swiftIds('import AVKit\nVideoPlayer(player: p)')).toContain('hinge-media');
+    expect(swiftIds('let layer = AVPlayerLayer(player: player)')).toContain('hinge-media');
+  });
+  it('ignores a muted Objective-C loop', () => {
+    expect(ids([{ path: 'A.m', content: 'AVPlayerLayer *l = [AVPlayerLayer playerLayerWithPlayer:p];\np.muted = YES;' }])).not.toContain('hinge-media');
+    expect(ids([{ path: 'A.m', content: 'AVPlayerLayer *l = [AVPlayerLayer playerLayerWithPlayer:p];' }])).toContain('hinge-media');
+  });
+});

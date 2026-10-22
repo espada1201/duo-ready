@@ -104,7 +104,7 @@ let pairsFor = '';
 let pairs = new Int32Array(0);
 
 /** Offset just past the bracket that closes the one at `open`, or -1. Strings are already masked. */
-function closeOf(masked: string, open: number): number {
+export function closeOf(masked: string, open: number): number {
   // One pass per file pairs every ( and {, so walking many chains stays linear even in broken code.
   if (masked !== pairsFor) {
     pairs = new Int32Array(masked.length).fill(-1);

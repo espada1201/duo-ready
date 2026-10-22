@@ -1,5 +1,5 @@
 import { ancestors, labelOffset, type Block } from '../swift';
-import { defineGroup, matchBefore, POSE, PREPARE, sizeClassPattern } from './engine';
+import { chainHas, closeOf, defineGroup, matchBefore, POSE, PREPARE, sizeClassPattern } from './engine';
 
 const SCROLLERS = new Set(['List', 'ScrollView', 'LazyVStack', 'LazyHStack', 'Form']);
 /** Closures whose content is presented elsewhere, so it is not laid out inside the enclosing scroller. */
@@ -67,8 +67,11 @@ export const hinge = defineGroup({
       const avkit = !facts.ownVideoPlayer || /\bimport\s+(?:AVKit|_AVKit_SwiftUI)\b/.test(m);
       // A code scanner's viewfinder still reads a code the hinge crosses.
       const scanner = /\bmetadataObjectTypes\b|\b(?:QR|qr|Barcode|barcode)\w*/.test(m);
+      // A muted player layer is a decorative loop (a background or a thumbnail), not something people watch.
+      const muted = /\.isMuted\s*=\s*true\b|\.volume\s*=\s*0\b/.test(m);
       for (const hit of m.matchAll(/\b(VideoPlayer|AVPlayerLayer|AVCaptureVideoPreviewLayer)\s*\(/g)) {
-        if ((hit[1] !== 'VideoPlayer' || avkit) && !(scanner && hit[1] === 'AVCaptureVideoPreviewLayer')) report('hinge-media', hit.index!);
+        if (hit[1] === 'VideoPlayer' ? !avkit || inline(m, hit.index! + hit[0].length - 1) : hit[1] === 'AVPlayerLayer' ? muted : scanner) continue;
+        report('hinge-media', hit.index!);
       }
     }
 
@@ -107,8 +110,10 @@ export const hinge = defineGroup({
   objc({ masked: m, report }) {
     if (!/\breservedRegions\b/.test(m)) {
       // `[AVPlayerLayer class]` is a type check, except where `+layerClass` makes the view a video surface.
-      for (const hit of m.matchAll(/\[\s*(?:AVPlayerLayer|AVCaptureVideoPreviewLayer)\s+(\w+)/g)) {
-        if (hit[1] !== 'class' || /\(\s*Class\s*\)\s*layerClass\s*\{[^{}]*$/.test(m.slice(Math.max(0, hit.index! - 120), hit.index))) report('hinge-media', hit.index!);
+      const muted = /\.muted\s*=\s*YES\b|\bsetMuted\s*:\s*YES\b/.test(m);
+      for (const hit of m.matchAll(/\[\s*(AVPlayerLayer|AVCaptureVideoPreviewLayer)\s+(\w+)/g)) {
+        if (muted && hit[1] === 'AVPlayerLayer') continue;
+        if (hit[2] !== 'class' || /\(\s*Class\s*\)\s*layerClass\s*\{[^{}]*$/.test(m.slice(Math.max(0, hit.index! - 120), hit.index))) report('hinge-media', hit.index!);
       }
     }
     if (!/\bkeyboardLayoutGuide\b/.test(m)) {
@@ -132,3 +137,13 @@ export const hinge = defineGroup({
     }
   },
 });
+
+/** Whether the VideoPlayer opened at `open` is sized inline (an aspect ratio or a fixed height) rather than filling the screen. */
+function inline(m: string, open: number): boolean {
+  let end = closeOf(m, open);
+  if (end < 0) return false;
+  const brace = /^\s*\{/.exec(m.slice(end, end + 40));
+  if (brace) end = closeOf(m, end + brace[0].length - 1);
+  if (end < 0 || chainHas(m, end, /^(?:ignoresSafeArea|edgesIgnoringSafeArea)$/)) return false;
+  return chainHas(m, end, /^aspectRatio$/) || chainHas(m, end, /^frame$/, /\b(?:height|maxHeight)\s*:\s*\d/);
+}
