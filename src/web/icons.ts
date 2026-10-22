@@ -1,3 +1,5 @@
+import { svg } from './dom';
+
 // Small stroke icons, drawn on a 24 grid.
 const PATHS: Record<string, string> = {
   play: 'M8 5.5v13l10-6.5z',
@@ -15,16 +17,9 @@ const PATHS: Record<string, string> = {
   arrow: 'M5 12h14M13 6l6 6-6 6',
 };
 
+const SOLID = new Set(['play', 'prev', 'next']);
+
 export function icon(name: string, size = 18): SVGSVGElement {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('width', String(size));
-  svg.setAttribute('height', String(size));
-  svg.setAttribute('aria-hidden', 'true');
-  svg.classList.add('icon');
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', PATHS[name] ?? '');
-  svg.appendChild(path);
-  if (name === 'play' || name === 'prev' || name === 'next') svg.classList.add('icon-solid');
-  return svg;
+  const cls = SOLID.has(name) ? 'icon icon-solid' : 'icon';
+  return svg('svg', { viewBox: '0 0 24 24', width: size, height: size, 'aria-hidden': 'true', class: cls }, svg('path', { d: PATHS[name] ?? '' }));
 }

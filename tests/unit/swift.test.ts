@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { hunks } from '../../src/core/diff';
 import { maskSwift, parseSwift, position, walk } from '../../src/core/swift';
 
 describe('maskSwift', () => {
@@ -53,5 +54,14 @@ describe('parseSwift', () => {
     expect(position(src, 0)).toEqual({ line: 1, column: 1 });
     expect(position(src, 3)).toEqual({ line: 2, column: 2 });
     expect(position(src, 7)).toEqual({ line: 3, column: 3 });
+  });
+});
+
+describe('diff', () => {
+  it('keeps indentation and reports each changed hunk with its line', () => {
+    expect(hunks('a\n    b\nc\nd', 'a\n    B\nc\nd\n    e')).toEqual([
+      { line: 2, removed: ['    b'], added: ['    B'] },
+      { line: 5, removed: [], added: ['    e'] },
+    ]);
   });
 });

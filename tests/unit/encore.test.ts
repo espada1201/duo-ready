@@ -54,6 +54,11 @@ describe('fold continuity', () => {
     expect(continuity('closed', 'open', 'legacy-26')).toMatchObject({ resized: false, lost: [] });
   });
 
+  it('names what the sample really loses: the album list scroll position', () => {
+    expect(continuity('closed', 'open', 'legacy-27.1').lost).toEqual(['your scroll position in the album list']);
+    expect(continuity('open', 'split', 'legacy-27.1').resized).toBe(true);
+  });
+
   it('folding to book keeps the size class, so nothing is rebuilt', () => {
     expect(continuity('open', 'book', 'legacy-27.1').resized).toBe(false);
   });

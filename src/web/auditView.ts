@@ -1,9 +1,12 @@
 import { strToU8, zipSync } from 'fflate';
-import { applyFixes, audit, isRelevant } from '../core/audit';
-import { PAIN_POINTS } from '../core/painPoints';
-import { RULE_BY_ID, tierLabel } from '../core/rules';
-import type { AuditResult, Finding, SourceFile } from '../core/types';
-import { h } from './dom';
+import { applyFixes, audit, isRelevant, isRelevantDir, MAX_BYTES } from '../core/audit';
+import { hunks, type Hunk } from '../core/diff';
+import { describeCounts, plural, screensFirst, severityLabel, summaryLine } from '../core/findings';
+import { PAIN_POINTS, RULE_BY_ID } from '../core/rules';
+import { tierLabel } from '../core/sdk';
+import { groupBy } from '../core/text';
+import type { AuditResult, Finding, SdkTier, SourceFile } from '../core/types';
+import { h, svg } from './dom';
 import { icon } from './icons';
 
 export interface AuditState {
@@ -13,11 +16,13 @@ export interface AuditState {
   result: AuditResult | null;
   /** Indexes into result.findings whose fixes are selected. */
   selected: Set<number>;
+  /** The diff each fix makes, by finding index, computed once per audit. */
+  previews: Map<number, Hunk[]>;
   error: string | null;
   paste: boolean;
 }
 
-export const initialAudit = (): AuditState => ({ status: 'empty', source: '', files: [], result: null, selected: new Set(), error: null, paste: false });
+export const initialAudit = (): AuditState => ({ status: 'empty', source: '', files: [], result: null, selected: new Set(), previews: new Map(), error: null, paste: false });
 
 const SAMPLE = import.meta.glob('../../sample/**/*', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
@@ -32,11 +37,16 @@ function runAudit(files: SourceFile[], source: string): AuditState {
   }
   const result = audit(relevant);
   const selected = new Set<number>();
-  result.findings.forEach((f, i) => f.fix?.confidence === 'safe' && selected.add(i));
-  return { status: 'done', source, files: relevant, result, selected, error: null, paste: false };
+  const previews = new Map<number, Hunk[]>();
+  const byPath = new Map(relevant.map((f) => [f.path, f]));
+  result.findings.forEach((f, i) => {
+    if (!f.fix) return;
+    if (f.fix.confidence === 'safe') selected.add(i);
+    const file = byPath.get(f.path)!;
+    previews.set(i, hunks(file.content, applyFixes([file], [f], 'all').files[0].content));
+  });
+  return { status: 'done', source, files: relevant, result, selected, previews, error: null, paste: false };
 }
-
-const MAX_BYTES = 2_000_000;
 
 async function readEntries(entry: FileSystemEntry, prefix: string, out: SourceFile[]): Promise<void> {
   const path = prefix ? `${prefix}/${entry.name}` : entry.name;
@@ -45,7 +55,7 @@ async function readEntries(entry: FileSystemEntry, prefix: string, out: SourceFi
     const file = await new Promise<File>((res, rej) => (entry as FileSystemFileEntry).file(res, rej));
     if (file.size <= MAX_BYTES) out.push({ path, content: await file.text() });
   } else if (entry.isDirectory) {
-    if (!isRelevant(`${path}/x.swift`)) return;
+    if (!isRelevantDir(path)) return;
     const reader = (entry as FileSystemDirectoryEntry).createReader();
     for (;;) {
       const batch = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej));
@@ -71,43 +81,11 @@ async function filesFromInput(list: FileList): Promise<SourceFile[]> {
   return out;
 }
 
-/** The changed lines a single fix produces, for the inline diff. */
-function fixPreview(file: SourceFile, finding: Finding): { before: string[]; after: string[] } {
-  const { files } = applyFixes([file], [finding], 'all');
-  const a = file.content.split('\n');
-  const b = files[0].content.split('\n');
-  let start = 0;
-  while (start < a.length && a[start] === b[start]) start++;
-  let endA = a.length - 1;
-  let endB = b.length - 1;
-  while (endA >= start && endB >= start && a[endA] === b[endB]) {
-    endA--;
-    endB--;
-  }
-  return { before: a.slice(start, endA + 1), after: b.slice(start, endB + 1) };
-}
-
 function scoreRing(score: number): SVGSVGElement {
-  const ns = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', '0 0 120 120');
-  svg.setAttribute('class', 'ring');
-  svg.setAttribute('aria-hidden', 'true');
   const r = 52;
   const c = 2 * Math.PI * r;
-  for (const [cls, dash] of [
-    ['ring-track', `${c} ${c}`],
-    ['ring-value', `${(score / 100) * c} ${c}`],
-  ]) {
-    const circle = document.createElementNS(ns, 'circle');
-    circle.setAttribute('cx', '60');
-    circle.setAttribute('cy', '60');
-    circle.setAttribute('r', String(r));
-    circle.setAttribute('class', cls);
-    circle.setAttribute('stroke-dasharray', dash);
-    svg.appendChild(circle);
-  }
-  return svg;
+  const circle = (cls: string, dash: string) => svg('circle', { cx: 60, cy: 60, r, class: cls, 'stroke-dasharray': dash });
+  return svg('svg', { viewBox: '0 0 120 120', class: 'ring', 'aria-hidden': 'true' }, circle('ring-track', `${c} ${c}`), circle('ring-value', `${(score / 100) * c} ${c}`));
 }
 
 function download(name: string, data: Uint8Array, type: string) {
@@ -119,9 +97,13 @@ function download(name: string, data: Uint8Array, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** The selected fixes as they would be applied: overlapping fixes are skipped, so this can be fewer than selected. */
+function chosenFixes(state: AuditState) {
+  return applyFixes(state.files, state.result!.findings.filter((_, i) => state.selected.has(i)), 'all');
+}
+
 function fixedZip(state: AuditState): Uint8Array {
-  const chosen = state.result!.findings.filter((_, i) => state.selected.has(i));
-  const { files } = applyFixes(state.files, chosen, 'all');
+  const { files } = chosenFixes(state);
   const entries: Record<string, Uint8Array> = {};
   files.forEach((f, i) => {
     if (f.content !== state.files[i].content) entries[f.path] = strToU8(f.content);
@@ -129,7 +111,7 @@ function fixedZip(state: AuditState): Uint8Array {
   return zipSync(entries);
 }
 
-export function renderAudit(state: AuditState, set: (s: AuditState) => void, openPreview: (tier: string | null) => void): HTMLElement {
+export function renderAudit(state: AuditState, set: (s: AuditState) => void, openPreview: (tier: SdkTier | null) => void): HTMLElement {
   const load = async (get: () => Promise<SourceFile[]>, source: string) => {
     set({ ...state, status: 'loading', error: null });
     try {
@@ -215,11 +197,14 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
   return h('div', { class: 'audit' }, intro, h('div', { class: 'audit-input' }, drop, paste), body);
 }
 
-function results(state: AuditState, openPreview: (tier: string | null) => void): HTMLElement {
+function results(state: AuditState, openPreview: (tier: SdkTier | null) => void): HTMLElement {
   const r = state.result!;
-  const count = (s: Finding['severity']) => r.findings.filter((f) => f.severity === s).length;
-  const fixable = r.findings.map((f, i) => [f, i] as const).filter(([f]) => f.fix);
-  const label = () => `Download ${state.selected.size} fix${state.selected.size === 1 ? '' : 'es'}`;
+  const fixable = r.findings.filter((f) => f.fix).length;
+  const label = () => {
+    const n = chosenFixes(state).applied.length;
+    const skipped = state.selected.size - n;
+    return `Download ${n} ${n === 1 ? 'fix' : 'fixes'}${skipped ? ` (${skipped} overlap${skipped === 1 ? 's' : ''} another)` : ''}`;
+  };
   const downloadLabel = h('span', {}, label());
   const downloadButton = h(
     'button',
@@ -250,7 +235,10 @@ function results(state: AuditState, openPreview: (tier: string | null) => void):
       { class: 'summary-text' },
       h('p', { class: 'eyebrow' }, state.source),
       h('h3', { 'data-testid': 'grade' }, r.grade),
-      h('p', {}, `${r.files} files (${r.swiftFiles} Swift) · ${count('error')} errors · ${count('warning')} warnings · ${count('info')} notes`),
+      h('p', {}, summaryLine(r)),
+      r.partial
+        ? h('p', { class: 'partial', 'data-testid': 'partial' }, 'Partial audit: no Info.plist or Xcode project, so orientation, full-screen and SDK checks did not run. The grade is capped at Close.')
+        : null,
       r.tier ? h('p', {}, `Today Duo users likely see ${tierLabel(r.tier.value)}. `, h('span', { class: 'hint' }, `Based on ${r.tier.source}.`)) : null,
       h(
         'div',
@@ -263,15 +251,19 @@ function results(state: AuditState, openPreview: (tier: string | null) => void):
         { class: 'pain-chips', 'aria-label': 'Findings by reviewer pain point' },
         PAIN_POINTS.map((p) => {
           const n = r.findings.filter((f) => p.rules.includes(f.ruleId)).length;
-          return h('li', { class: n ? 'has' : 'none' }, h('a', { href: `#rules/${p.rules[0]}` }, p.title), h('strong', {}, n ? String(n) : '✓'));
+          const unchecked = !n && r.partial && p.rules.some((id) => RULE_BY_ID.get(id)!.project);
+          const mark = n ? String(n) : unchecked ? 'not checked' : '✓';
+          return h('li', { class: n ? 'has' : unchecked ? 'unchecked' : 'none' }, h('a', { href: `#rules/pain-${p.id}` }, p.title), h('strong', {}, mark));
         }),
       ),
-      fixable.length ? h('p', { class: 'hint' }, `${fixable.length} findings have fixes. Safe ones are pre-selected; review the rest before you tick them.`) : null,
+      fixable ? h('p', { class: 'hint' }, `${plural(fixable, 'finding')} ${fixable === 1 ? 'has a fix' : 'have fixes'}. Safe ones are pre-selected; review the rest before you tick them.`) : null,
     ),
   );
 
-  const byFile = new Map<string, [Finding, number][]>();
-  r.findings.forEach((f, i) => byFile.set(f.path, [...(byFile.get(f.path) ?? []), [f, i]]));
+  const byFile = groupBy(
+    r.findings.map((f, i) => [f, i] as [Finding, number]),
+    ([f]) => f.path,
+  );
 
   const list = r.findings.length
     ? [...byFile].map(([path, items]) =>
@@ -288,22 +280,35 @@ function results(state: AuditState, openPreview: (tier: string | null) => void):
       )
     : [h('p', { class: 'all-clear' }, icon('check', 16), ' No problems found. Build with Xcode 27.1 and check every pose in the simulator.')];
 
-  return h('div', { class: 'results' }, summary, h('div', { class: 'file-list', 'data-testid': 'findings' }, list));
+  const screens = screensFirst(r.findings).slice(0, 3);
+  const first = screens.length
+    ? h(
+        'section',
+        { class: 'screens-first', 'aria-label': 'Fix these screens first', 'data-testid': 'screens' },
+        h('h3', {}, 'Fix these screens first'),
+        h(
+          'ol',
+          {},
+          screens.map((s) => h('li', {}, h('strong', {}, s.screen), ' ', h('span', { class: 'hint' }, `${describeCounts(s.findings)} · ${s.path}`))),
+        ),
+      )
+    : null;
+
+  return h('div', { class: 'results' }, summary, first, h('div', { class: 'file-list', 'data-testid': 'findings' }, list));
 }
 
 function finding(state: AuditState, f: Finding, i: number, toggleFix: (i: number, on: boolean) => void): HTMLElement {
   const rule = RULE_BY_ID.get(f.ruleId)!;
-  const file = state.files.find((x) => x.path === f.path)!;
-  const preview = f.fix ? fixPreview(file, f) : null;
+  const preview = state.previews.get(i);
   return h(
     'li',
     { class: `finding sev-${f.severity}`, 'data-rule': f.ruleId },
     h(
       'div',
       { class: 'finding-head' },
-      h('span', { class: `chip chip-${f.severity}` }, f.severity === 'info' ? 'note' : f.severity),
+      h('span', { class: `chip chip-${f.severity}` }, severityLabel(f.severity)),
       h('strong', {}, rule.title),
-      h('span', { class: 'loc' }, `line ${f.line}`),
+      h('span', { class: 'loc' }, f.screen ? `${f.screen}, line ${f.line}` : `line ${f.line}`),
     ),
     h('pre', { class: 'excerpt' }, h('code', {}, f.excerpt)),
     h('p', {}, f.message),
@@ -321,8 +326,10 @@ function finding(state: AuditState, f: Finding, i: number, toggleFix: (i: number
           h(
             'pre',
             { class: 'diff' },
-            preview.before.map((l) => h('span', { class: 'del' }, `- ${l.trim()}\n`)),
-            preview.after.map((l) => h('span', { class: 'add' }, `+ ${l.trim()}\n`)),
+            preview.flatMap((hunk) => [
+              ...hunk.removed.map((l) => h('span', { class: 'del' }, `- ${l}\n`)),
+              ...hunk.added.map((l) => h('span', { class: 'add' }, `+ ${l}\n`)),
+            ]),
           ),
         )
       : null,

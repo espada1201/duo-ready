@@ -25,8 +25,10 @@ test('preview walks from letterboxed legacy app to a fixed app that clears the h
   await expect(page.getByTestId('problems')).toContainText('The status bar cuts through the custom navigation bar');
   await expect(page.locator('.overlay-collision').first()).toBeVisible();
 
-  await choose(page, '27.1 + duo-ready');
+  await choose(page, '27.1 + recommended changes');
   await expect(page.getByTestId('problems')).toContainText('No collisions');
+  await expect(page.getByTestId('changes')).toContainText('duo-ready appliesNavigationView becomes NavigationStack');
+  await expect(page.getByTestId('changes')).toContainText('You changePlayer and Up next sit in an ArrangementView');
   await expect(page.locator('.overlay-collision')).toHaveCount(0);
   await expect(page.locator('.enc-list')).toBeVisible();
   await expect(page.locator('.enc-rail')).toBeVisible();
@@ -43,10 +45,19 @@ test('fold test shows unchanged code losing its place and the fixed build keepin
   await choose(page, 'Closed');
   await choose(page, 'Open');
   await expect(page.getByTestId('continuity')).toContainText('Fold test: closed → open');
-  await expect(page.getByTestId('continuity')).toContainText('Lost: the album you had open');
-  await choose(page, '27.1 + duo-ready');
+  await expect(page.getByTestId('continuity')).toContainText('Lost: your scroll position in the album list');
+  await choose(page, '27.1 + recommended changes');
   await choose(page, 'Closed');
   await expect(page.getByTestId('continuity')).toContainText('the layout changed, the views didn’t');
+});
+
+test('Split View gives the app half the inner display at compact width', async ({ page }) => {
+  await page.goto('./');
+  await choose(page, 'iOS 27.1 SDK');
+  await choose(page, 'Split View');
+  await expect(page.getByTestId('window')).toHaveText('445 × 626 pt, 100% of its half of the display');
+  await expect(page.locator('.other-app')).toBeVisible();
+  await expect(page.getByTestId('continuity')).toContainText('Lost: your scroll position in the album list');
 });
 
 test('pose control works from the keyboard and keeps focus', async ({ page }) => {
@@ -71,7 +82,9 @@ test('auditing the sample app lists findings and downloads working fixes', async
   await page.goto('./#audit');
   await page.getByRole('button', { name: 'Try the sample app' }).click();
   await expect(page.getByTestId('grade')).toHaveText('Not ready');
-  await expect(page.locator('.finding')).toHaveCount(28);
+  await expect(page.locator('.finding')).toHaveCount(31);
+  await expect(page.getByTestId('screens')).toContainText('PlayerViewController');
+  await expect(page.getByTestId('partial')).toHaveCount(0);
   await expect(page.getByTestId('download')).toHaveText('Download 2 fixes');
   await expect(page.getByRole('list', { name: 'Findings by reviewer pain point' })).toContainText('Assumes iPhone hardware3');
 
@@ -97,13 +110,15 @@ test('auditing the sample app lists findings and downloads working fixes', async
 test('auditing a chosen folder, pasted code, and a folder with nothing to audit', async ({ page }) => {
   await page.goto('./#audit');
   await page.getByTestId('folder-input').setInputFiles('sample');
-  await expect(page.locator('.finding')).toHaveCount(28);
+  await expect(page.locator('.finding')).toHaveCount(31);
 
   await page.getByRole('button', { name: 'Paste Swift' }).click();
   await page.getByLabel('Swift source').fill('final class A: UIViewController {\n  func f() { let s = UIScreen.main.scale }\n}');
   await page.getByRole('button', { name: 'Audit', exact: true }).click();
   await expect(page.locator('.finding')).toHaveCount(1);
-  await expect(page.locator('.diff')).toContainText('traitCollection.displayScale');
+  await expect(page.locator('.diff')).toContainText('  func f() { let s = traitCollection.displayScale }');
+  await expect(page.getByTestId('partial')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Findings by reviewer pain point' })).toContainText('Black barsnot checked');
 
   await page.getByTestId('folder-input').setInputFiles('tests/e2e');
   await expect(page.getByRole('alert')).toContainText('No Swift files');
@@ -116,5 +131,13 @@ test('rule links deep-link and focus the rule', async ({ page }) => {
   await page.keyboard.press('Enter');
   await expect(page.locator('main')).toBeFocused();
   await expect(page).toHaveURL(/#rules\/hand-built-bar$/);
-  await expect(page.locator('.rule')).toHaveCount(25);
+  await expect(page.locator('.rule')).toHaveCount(28);
+});
+
+test('pain point chips open their section on the rules page', async ({ page }) => {
+  await page.goto('./#audit');
+  await page.getByRole('button', { name: 'Try the sample app' }).click();
+  await page.getByRole('link', { name: 'Breaks when you fold or unfold' }).click();
+  await expect(page).toHaveURL(/#rules\/pain-fold$/);
+  await expect(page.locator('#pain-fold')).toBeFocused();
 });

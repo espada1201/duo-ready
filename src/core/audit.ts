@@ -1,56 +1,62 @@
-import { checkFiles, RULE_BY_ID, tierFromUpgradeCheck, xcodeVersion } from './rules';
+import { PENALTY, SEVERITY_ORDER } from './findings';
+import { checkFiles, RULE_BY_ID } from './rules';
+import { tierFromUpgradeCheck, xcodeVersion } from './sdk';
 import type { AuditResult, Finding, SourceFile } from './types';
 
 const SKIP_DIR = /(^|\/)(Pods|Carthage|DerivedData|node_modules|build|SourcePackages|\.[^/]+)\//;
-const RELEVANT = /(\.swift|\.plist|\/project\.pbxproj|(^|\/)package\.json|(^|\/)pubspec\.yaml)$/;
+const RELEVANT = /(\.swift|\.plist|\.html?|\/project\.pbxproj|(^|\/)package\.json|(^|\/)pubspec\.yaml)$/;
+
+/** Files larger than this are skipped: generated code, not something to audit. */
+export const MAX_BYTES = 2_000_000;
 
 export function isRelevant(path: string): boolean {
   return RELEVANT.test(path) && !SKIP_DIR.test(path);
 }
 
-const PENALTY = { error: 8, warning: 3, info: 1 } as const;
-/** Each rule costs once however often it fires: the score measures kinds of problem, not volume. */
-const MAX_HITS_PER_RULE = 1;
+/** Whether a folder can hold relevant files: vendored and hidden folders can't. */
+export function isRelevantDir(path: string): boolean {
+  return !SKIP_DIR.test(`${path}/`);
+}
 
+/** Each rule costs once however often it fires: the score measures kinds of problem, not volume. */
 function score(findings: Finding[]): number {
-  const hits = new Map<string, number>();
-  for (const f of findings) hits.set(f.ruleId, (hits.get(f.ruleId) ?? 0) + 1);
+  const ids = new Set(findings.map((f) => f.ruleId));
   let total = 0;
-  for (const [id, n] of hits) total += PENALTY[RULE_BY_ID.get(id)!.severity] * Math.min(n, MAX_HITS_PER_RULE);
+  for (const id of ids) total += PENALTY[RULE_BY_ID.get(id)!.severity];
   return Math.max(0, 100 - total);
 }
 
-function grade(value: number, findings: Finding[]): AuditResult['grade'] {
+function grade(value: number, findings: Finding[], partial: boolean): AuditResult['grade'] {
   const errors = findings.some((f) => f.severity === 'error');
-  if (value >= 90 && !errors) return 'Duo-ready';
+  // Without the project files, orientation, full-screen and SDK checks never ran.
+  if (value >= 90 && !errors && !partial) return 'Duo-ready';
   if (value >= 70) return 'Close';
   if (value >= 40) return 'Needs work';
   return 'Not ready';
 }
 
-const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 } as const;
-
 export function audit(input: SourceFile[]): AuditResult {
   const files = input.filter((f) => isRelevant(f.path));
-  const findings = checkFiles(files).sort(
-    (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.path.localeCompare(b.path) || a.line - b.line || a.column - b.column,
+  const { findings, facts } = checkFiles(files);
+  findings.sort(
+    (a, b) =>
+      SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
+      a.path.localeCompare(b.path) ||
+      a.line - b.line ||
+      a.column - b.column ||
+      a.ruleId.localeCompare(b.ruleId),
   );
   const value = score(findings);
-  let tier: AuditResult['tier'] = null;
-  for (const f of files) {
-    const check = f.path.endsWith('project.pbxproj') && /LastUpgradeCheck\s*=\s*(\d{4});/.exec(f.content);
-    if (check) {
-      tier = { value: tierFromUpgradeCheck(check[1]), source: `LastUpgradeCheck ${check[1]}, Xcode ${xcodeVersion(check[1])}` };
-      break;
-    }
-  }
+  const partial = !facts.hasProjectFiles;
+  const check = facts.upgradeCheck;
   return {
     files: files.length,
     swiftFiles: files.filter((f) => f.path.endsWith('.swift')).length,
     findings,
     score: value,
-    grade: grade(value, findings),
-    tier,
+    grade: grade(value, findings, partial),
+    tier: check ? { value: tierFromUpgradeCheck(check), source: `LastUpgradeCheck ${check}, Xcode ${xcodeVersion(check)}` } : null,
+    partial,
   };
 }
 

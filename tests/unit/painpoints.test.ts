@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyFixes, audit } from '../../src/core/audit';
-import { PAIN_POINTS } from '../../src/core/painPoints';
-import { RULES } from '../../src/core/rules';
+import { PAIN_POINTS, RULES } from '../../src/core/rules';
 import type { SourceFile } from '../../src/core/types';
 
 const swift = (content: string): SourceFile[] => [{ path: 'A.swift', content }];
@@ -12,6 +11,19 @@ describe('pain point map', () => {
     const filed = PAIN_POINTS.flatMap((p) => p.rules);
     expect([...filed].sort()).toEqual(RULES.map((r) => r.id).sort());
     for (const p of PAIN_POINTS) expect(p.cause.length).toBeGreaterThan(20);
+  });
+});
+
+describe('partial audits', () => {
+  it('caps the grade when no Info.plist or Xcode project was given', () => {
+    const pasted = audit(swift('let x = 1'));
+    expect(pasted).toMatchObject({ score: 100, partial: true, grade: 'Close' });
+    const project = audit([...swift('let x = 1'), { path: 'A.xcodeproj/project.pbxproj', content: 'LastUpgradeCheck = 2710;' }]);
+    expect(project).toMatchObject({ partial: false, grade: 'Duo-ready' });
+  });
+
+  it('marks project-level rules so the lab can say they were not checked', () => {
+    expect(RULES.filter((r) => r.project).map((r) => r.id).sort()).toEqual(['old-sdk', 'portrait-only', 'requires-full-screen']);
   });
 });
 
@@ -64,7 +76,33 @@ describe('hardware assumptions', () => {
   });
 });
 
+describe('web content and games', () => {
+  it('flags web viewports pinned to a phone width, in HTML files and Swift strings', () => {
+    const html = audit([{ path: 'Web/index.html', content: '<head><meta name="viewport" content="width=375"></head>' }]);
+    expect(html.findings.map((f) => f.ruleId)).toEqual(['webview-viewport']);
+    expect(audit([{ path: 'Web/index.html', content: '<meta name="viewport" content="width=device-width, initial-scale=1">' }]).findings).toEqual([]);
+    expect(ids('web.loadHTMLString("<meta name=\\"viewport\\" content=\\"width=390\\">", baseURL: nil)')).toEqual(['webview-viewport']);
+    expect(ids('// viewport width=390')).toEqual([]);
+  });
+
+  it('flags web views reloaded on every size change', () => {
+    expect(ids('override func viewWillTransition(to size: CGSize, with c: UIViewControllerTransitionCoordinator) {\n  super.viewWillTransition(to: size, with: c)\n  web.reload()\n}')).toEqual(['webview-viewport']);
+    expect(ids('.onChange(of: horizontalSizeClass) { _ in\n  web.reload()\n}')).toEqual(['webview-viewport']);
+    expect(ids('func refresh() {\n  web.reload()\n}')).toEqual([]);
+  });
+
+  it('flags SpriteKit scenes that stretch or letterbox', () => {
+    expect(ids('scene.scaleMode = .fill\nother.scaleMode = .aspectFit')).toEqual(['game-aspect', 'game-aspect']);
+    expect(ids('scene.scaleMode = .resizeFill')).toEqual([]);
+  });
+});
+
 describe('hinge and edges', () => {
+  it('flags keyboard frame math unless the keyboard layout guide is used', () => {
+    expect(ids('let f = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect')).toEqual(['keyboard-frame']);
+    expect(ids('let f = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect\nfield.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor)')).toEqual([]);
+  });
+
   it('flags full-screen video and camera previews that ignore the hinge', () => {
     expect(ids('let layer = AVPlayerLayer(player: p)')).toEqual(['hinge-media']);
     expect(ids('VideoPlayer(player: p)')).toEqual(['hinge-media']);

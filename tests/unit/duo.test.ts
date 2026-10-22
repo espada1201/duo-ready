@@ -61,7 +61,24 @@ describe('Duo display model', () => {
   });
 
   it('has a label for every posture', () => {
-    expect(new Set(POSTURES.map((p) => p.id)).size).toBe(6);
+    expect(new Set(POSTURES.map((p) => p.id)).size).toBe(POSTURES.length);
+  });
+});
+
+describe('Split View', () => {
+  it('gives the app half the inner display at compact width', () => {
+    const p = present('split', '27.1');
+    expect(p.window).toEqual({ x: 0, y: 0, w: INNER.w / 2, h: INNER.h });
+    expect(p.sizeClass).toEqual({ horizontal: 'compact', vertical: 'regular' });
+    expect(p.share).toBe(0.5);
+    expect(p.coverage).toBe(1);
+    expect(p.statusBar).toBeNull();
+  });
+
+  it('keeps old apps in an iPhone-shaped window inside their half', () => {
+    const p = present('split', '26');
+    expect(p.window.x + p.window.w).toBeLessThanOrEqual(INNER.w / 2);
+    expect(p.coverage).toBeLessThan(1);
   });
 });
 

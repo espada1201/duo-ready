@@ -1,7 +1,8 @@
 // Layout of "Encore", the demo music app, before and after duo-ready's fixes.
 // Pure geometry so the claims the lab makes ("no collisions after fixes") are testable.
 
-import { arrange, intersect, present, type Arrangement, type Posture, type Presentation, type Rect } from '../core/duo';
+import { arrange, present, type Arrangement, type Posture, type Presentation } from '../core/duo';
+import { area, intersect, translate, type Rect } from '../core/rect';
 import type { SdkTier } from '../core/types';
 
 export type Build = 'legacy-26' | 'legacy-27' | 'legacy-27.1' | 'ready';
@@ -10,7 +11,19 @@ export const BUILDS: { id: Build; tier: SdkTier; label: string; detail: string }
   { id: 'legacy-26', tier: '26', label: 'iOS 26 SDK', detail: 'Today: the app as shipped' },
   { id: 'legacy-27', tier: '27', label: 'iOS 27 SDK', detail: 'Rebuilt, code unchanged' },
   { id: 'legacy-27.1', tier: '27.1', label: 'iOS 27.1 SDK', detail: 'Rebuilt, code unchanged' },
-  { id: 'ready', tier: '27.1', label: '27.1 + duo-ready', detail: 'Rebuilt with fixes applied' },
+  { id: 'ready', tier: '27.1', label: '27.1 + recommended changes', detail: 'Rebuilt with duo-ready’s fixes and the manual changes it recommends' },
+];
+
+export const buildTier = (build: Build): SdkTier => BUILDS.find((b) => b.id === build)!.tier;
+
+/** What separates the "ready" build from the rebuilt one, and who does each part. */
+export const RECOMMENDED: { change: string; rule: string; how: 'automatic' | 'review' | 'manual' }[] = [
+  { change: 'NavigationView becomes NavigationStack', rule: 'navigation-view', how: 'automatic' },
+  { change: 'Insets use every side of the safe area', rule: 'symmetric-safe-area', how: 'automatic' },
+  { change: 'Sizes come from the view, not UIScreen.main', rule: 'uiscreen-main', how: 'review' },
+  { change: 'Player and Up next sit in an ArrangementView', rule: 'manual-two-pane', how: 'manual' },
+  { change: 'The custom tab bar becomes a system TabView', rule: 'hand-built-bar', how: 'manual' },
+  { change: 'The album list keeps one view and switches layout with AnyLayout', rule: 'state-reset', how: 'manual' },
 ];
 
 type PieceRole = 'bar' | 'rail' | 'artwork' | 'title' | 'controls' | 'list' | 'mini';
@@ -89,10 +102,10 @@ function ready(p: Presentation): { pieces: Piece[]; arrangement: Arrangement } {
   }
   const local = p.regions.flatMap((r) => {
     const clipped = intersect(r.frame, content);
-    return clipped ? [{ ...r, frame: { ...clipped, x: clipped.x - content.x, y: clipped.y - content.y } }] : [];
+    return clipped ? [{ ...r, frame: translate(clipped, -content.x, -content.y) }] : [];
   });
   const a = arrange(content, local, 'split');
-  const shift = (r: Rect): Rect => ({ ...r, x: r.x + content.x, y: r.y + content.y });
+  const shift = (r: Rect): Rect => translate(r, content.x, content.y);
   const primary = shift(a.primary);
   if (a.secondary) {
     pieces.push(...player(primary), { role: 'list', label: 'Up next', rect: shift(a.secondary) });
@@ -103,10 +116,8 @@ function ready(p: Presentation): { pieces: Piece[]; arrangement: Arrangement } {
   return { pieces, arrangement: a };
 }
 
-const area = (r: Rect) => r.w * r.h;
-
 export function layoutEncore(posture: Posture, build: Build, cameraActive = false): EncoreLayout {
-  const tier = BUILDS.find((b) => b.id === build)!.tier;
+  const tier = buildTier(build);
   const p = present(posture, tier, cameraActive);
   const compat = p.display === 'inner' && tier === '26';
   let pieces: Piece[];
@@ -138,16 +149,19 @@ export interface Continuity {
   lost: string[];
 }
 
-const ENCORE_STATE = ['the album you had open', 'your scroll position in Up next', 'the search you were typing'];
+/** State that lives above the size-class switch in LibraryView.swift, so it survives either way. */
+const ALWAYS_KEPT = ['the tab you were on', 'the track that is playing'];
+/** State inside AlbumGrid's `if horizontalSizeClass == .regular { … } else { … }`. */
+const SWAPPED = ['your scroll position in the album list'];
 
 /**
- * What Encore keeps when the pose changes. The unchanged code swaps views on size class
- * (LibraryView.swift), so their @State is rebuilt; the fixed build keeps one view tree and
- * changes only its layout.
+ * What Encore keeps when the pose changes. The sample's AlbumGrid swaps views on size
+ * class, so the album list is rebuilt and its scroll position lost; the ready build keeps
+ * one view and changes only its layout.
  */
 export function continuity(from: Posture, to: Posture, build: Build): Continuity {
-  const tier = BUILDS.find((b) => b.id === build)!.tier;
+  const tier = buildTier(build);
   const resized = present(from, tier).sizeClass.horizontal !== present(to, tier).sizeClass.horizontal;
-  if (!resized || build === 'ready') return { resized, kept: ENCORE_STATE, lost: [] };
-  return { resized, kept: ['the track that is playing'], lost: ENCORE_STATE };
+  if (!resized || build === 'ready') return { resized, kept: [...ALWAYS_KEPT, ...SWAPPED], lost: [] };
+  return { resized, kept: ALWAYS_KEPT, lost: SWAPPED };
 }

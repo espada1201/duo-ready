@@ -64,3 +64,10 @@ export function toggle(label: string, checked: boolean, onChange: (v: boolean) =
     h('span', {}, label),
   );
 }
+
+export function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number> = {}, ...children: SVGElement[]): SVGElementTagNameMap[K] {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+  el.append(...children);
+  return el;
+}

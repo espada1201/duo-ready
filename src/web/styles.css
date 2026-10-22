@@ -1295,3 +1295,95 @@ label.button:focus-within {
   background: var(--ok-soft);
   color: var(--ok);
 }
+
+.pain-chips .unchecked strong {
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-family: var(--sans);
+}
+
+.pain:focus {
+  outline: none;
+}
+
+.pain.focus .pain-head h3 {
+  text-decoration: underline 2px var(--focus);
+  text-underline-offset: 6px;
+}
+
+.partial {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--warn-soft);
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.screens-first {
+  margin: 18px 0 6px;
+  padding: 14px 18px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.screens-first h3 {
+  margin: 0 0 6px;
+}
+
+.screens-first ol {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.screens-first li {
+  margin: 4px 0;
+}
+
+.changes {
+  margin-bottom: 12px;
+}
+
+.changes ul {
+  margin: 2px 0 10px;
+  padding-left: 18px;
+}
+
+.changes li {
+  margin: 3px 0;
+  font-size: 14px;
+}
+
+.changes .how {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.how-automatic .how {
+  color: var(--ok);
+}
+
+.how-review .how {
+  color: var(--info);
+}
+
+.how-manual .how {
+  color: var(--warn);
+}
+
+.other-app {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  background: repeating-linear-gradient(135deg, #2b2a26 0 10px, #24231f 10px 20px);
+  border-left: 3px solid #0b0b0a;
+  color: #b9b3a5;
+  font-size: 12px;
+}
+
+.pain,
+.rule {
+  scroll-margin-top: 84px;
+}

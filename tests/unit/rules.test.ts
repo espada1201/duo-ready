@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { applyFixes, audit } from '../../src/core/audit';
+import { screensFirst } from '../../src/core/findings';
 import { RULES } from '../../src/core/rules';
 import type { SourceFile } from '../../src/core/types';
 
@@ -48,8 +49,8 @@ describe('rules', () => {
 
   it('flags idiom and orientation checks', () => {
     expect(ids(swift('let pad = UIDevice.current.userInterfaceIdiom == .pad\nif UIDevice.current.orientation.isLandscape {}'))).toEqual([
-      'idiom-layout',
       'orientation-layout',
+      'idiom-layout',
     ]);
   });
 
@@ -73,9 +74,14 @@ describe('rules', () => {
     ]);
   });
 
-  it('replaces single-column NavigationView with NavigationStack', () => {
-    const files = swift('NavigationView {\n  List { Text("a") }\n}');
-    expect(fixAll(files, 'safe')).toBe('NavigationStack {\n  List { Text("a") }\n}');
+  it('replaces single-column NavigationView with NavigationStack only where iOS 16 is guaranteed', () => {
+    const code = 'NavigationView {\n  List { Text("a") }\n}';
+    const withTarget = (target: string): SourceFile[] => [...swift(code), { path: 'A.xcodeproj/project.pbxproj', content: `IPHONEOS_DEPLOYMENT_TARGET = ${target};\nIPHONEOS_DEPLOYMENT_TARGET = 17.0;` }];
+    expect(fixAll(withTarget('16.0'), 'safe')).toBe('NavigationStack {\n  List { Text("a") }\n}');
+    const old = audit(withTarget('15.0')).findings.find((f) => f.ruleId === 'navigation-view')!;
+    expect(old.fix).toBeUndefined();
+    expect(old.message).toContain('iOS 15');
+    expect(audit(swift(code)).findings[0].fix?.confidence).toBe('review');
     const twoColumn = swift('NavigationView {\n  Sidebar()\n  Detail()\n}');
     expect(audit(twoColumn).findings[0].fix).toBeUndefined();
   });
@@ -141,26 +147,27 @@ describe('sample project (Encore)', () => {
   it('finds every planted Duo problem with its location', () => {
     const where = result.findings.map((f) => `${f.ruleId} ${f.path}:${f.line}`);
     expect(where).toEqual([
+      'portrait-only Encore.xcodeproj/project.pbxproj:28',
       'no-scene-lifecycle Encore/AppDelegate.swift:5',
       'uiscreen-main Encore/AppDelegate.swift:9',
+      'portrait-only Encore/Info.plist:11',
       'arrangement-in-scroll Encore/NowPlayingView.swift:6',
       'navigation-in-arrangement Encore/NowPlayingView.swift:9',
       'uiscreen-main Encore/PlayerViewController.swift:12',
+      'orientation-layout Encore/PlayerViewController.swift:21',
       'old-sdk Encore.xcodeproj/project.pbxproj:13',
-      'portrait-only Encore.xcodeproj/project.pbxproj:28',
-      'portrait-only Encore/Info.plist:11',
       'idiom-layout Encore/LibraryView.swift:24',
       'state-reset Encore/LibraryView.swift:28',
       'fixed-device-size Encore/LibraryView.swift:51',
       'hand-built-bar Encore/LibraryView.swift:55',
+      'webview-viewport Encore/LyricsViewController.swift:13',
+      'webview-viewport Encore/LyricsViewController.swift:19',
+      'keyboard-frame Encore/LyricsViewController.swift:23',
       'hand-built-bar Encore/PlayerViewController.swift:5',
       'symmetric-safe-area Encore/PlayerViewController.swift:17',
-      'orientation-layout Encore/PlayerViewController.swift:21',
       'camera-hardware Encore/ScannerViewController.swift:10',
       'key-window Encore/ScannerViewController.swift:24',
       'stretched-image Encore/UnlockView.swift:10',
-      'biometry-faceid Encore/UnlockView.swift:15',
-      'biometry-faceid Encore/UnlockView.swift:21',
       'requires-full-screen Encore/Info.plist:9',
       'tab-sidebar Encore/LibraryView.swift:8',
       'navigation-view Encore/LibraryView.swift:9',
@@ -169,10 +176,18 @@ describe('sample project (Encore)', () => {
       'hinge-media Encore/ScannerViewController.swift:14',
       'edge-gesture Encore/ScannerViewController.swift:18',
       'fixed-font Encore/UnlockView.swift:13',
-
+      'biometry-faceid Encore/UnlockView.swift:15',
+      'biometry-faceid Encore/UnlockView.swift:21',
     ]);
     expect(result.tier).toEqual({ value: '26', source: 'LastUpgradeCheck 2600, Xcode 26.0' });
     expect(result.grade).toBe('Not ready');
+    expect(result.partial).toBe(false);
+  });
+
+  it('names the screen each finding is in and ranks the worst screens first', () => {
+    expect(result.findings.find((f) => f.ruleId === 'state-reset')?.screen).toBe('AlbumGrid');
+    expect(result.findings.find((f) => f.ruleId === 'old-sdk')?.screen).toBeUndefined();
+    expect(screensFirst(result.findings).map((s) => s.screen).slice(0, 3)).toEqual(['PlayerViewController', 'NowPlayingView', 'AlbumGrid']);
   });
 
   it('safe fixes remove their findings, leave the rest, and are idempotent', () => {

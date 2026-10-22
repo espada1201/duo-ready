@@ -3,14 +3,8 @@
 // spec pixels at 3x. Status bar, hinge and camera geometry are approximations:
 // confirm them in the Xcode 27.1 iPhone Duo simulator.
 
+import { intersect, translate, type Rect } from './rect';
 import type { SdkTier } from './types';
-
-export interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
 
 interface Insets {
   top: number;
@@ -19,7 +13,7 @@ interface Insets {
   right: number;
 }
 
-export type Posture = 'closed' | 'closed-landscape' | 'open' | 'open-portrait' | 'book' | 'tent';
+export type Posture = 'closed' | 'closed-landscape' | 'open' | 'open-portrait' | 'split' | 'book' | 'tent';
 type SizeClass = 'compact' | 'regular';
 
 interface ReservedRegion {
@@ -39,7 +33,9 @@ export interface Presentation {
   regions: ReservedRegion[];
   /** The system status bar in window coordinates, when it overlaps the window. */
   statusBar: Rect | null;
-  /** Share of the display the app can draw on. */
+  /** Share of the display the system gives this app: half in Split View. */
+  share: number;
+  /** Share of that space the app can draw on. */
   coverage: number;
 }
 
@@ -61,6 +57,7 @@ export const POSTURES: { id: Posture; label: string; detail: string }[] = [
   { id: 'closed-landscape', label: 'Closed, sideways', detail: 'Outer display, landscape' },
   { id: 'open', label: 'Open', detail: 'Inner display, flat' },
   { id: 'open-portrait', label: 'Open, rotated', detail: 'Inner display turned upright' },
+  { id: 'split', label: 'Split View', detail: 'Inner display shared 50/50 with another app' },
   { id: 'book', label: 'Book', detail: 'Half folded, hinge runs top to bottom' },
   { id: 'tent', label: 'Propped up', detail: 'Half folded on a table, hinge runs across' },
 ];
@@ -74,6 +71,7 @@ function screenFor(posture: Posture): { display: 'inner' | 'outer'; w: number; h
     case 'closed-landscape':
       return { display: 'outer', w: OUTER.h, h: OUTER.w };
     case 'open':
+    case 'split':
     case 'book':
       return { display: 'inner', ...INNER };
     case 'open-portrait':
@@ -98,19 +96,11 @@ function screenRegions(posture: Posture, screen: { w: number; h: number }, camer
   return out;
 }
 
-function statusBarRect(screen: { w: number; h: number }): Rect {
+/** The system status bar in screen coordinates: a column on the right of the landscape inner display. */
+export function statusBarRect(screen: { w: number; h: number }): Rect {
   return screen.w > screen.h
     ? { x: screen.w - STATUS_STRIP, y: 0, w: STATUS_STRIP, h: STATUS_STRIP_HEIGHT }
     : { x: 0, y: 0, w: screen.w, h: STATUS_TOP };
-}
-
-export function intersect(a: Rect, b: Rect): Rect | null {
-  const x = Math.max(a.x, b.x);
-  const y = Math.max(a.y, b.y);
-  const r = Math.min(a.x + a.w, b.x + b.w);
-  const bt = Math.min(a.y + a.h, b.y + b.h);
-  if (r < x || bt < y) return null;
-  return { x, y, w: r - x, h: bt - y };
 }
 
 /**
@@ -126,14 +116,20 @@ export function present(posture: Posture, tier: SdkTier, cameraActive = false): 
   let window: Rect = { x: 0, y: 0, w: s.w, h: s.h };
   let safeArea: Insets = { ...ZERO };
   let bars: Presentation['bars'] = 'horizontal';
+  // In Split View the app gets the leading half; the other app and the status bar take the rest.
+  const share = posture === 'split' ? 0.5 : 1;
+  const space = { w: s.w * share, h: s.h };
 
   if (s.display === 'inner' && tier === '26') {
-    // A familiar iPhone: the outer display's shape, scaled to fit the inner one.
-    const k = Math.min(1, s.h / OUTER.h, s.w / OUTER.w);
+    // A familiar iPhone: the outer display's shape, scaled to fit the space.
+    const k = Math.min(1, space.h / OUTER.h, space.w / OUTER.w);
     const w = OUTER.w * k;
     const h = OUTER.h * k;
-    window = { x: (s.w - w) / 2, y: (s.h - h) / 2, w, h };
+    window = { x: (space.w - w) / 2, y: (space.h - h) / 2, w, h };
     safeArea = { top: STATUS_TOP * k, left: 0, bottom: HOME_INDICATOR * k, right: 0 };
+  } else if (share < 1) {
+    window = { x: 0, y: 0, ...space };
+    safeArea = { top: 0, left: 0, bottom: HOME_INDICATOR, right: 0 };
   } else if (landscape && tier !== '27.1') {
     window = { x: 0, y: 0, w: s.w - STATUS_STRIP, h: s.h };
     safeArea = { top: 0, left: 0, bottom: HOME_INDICATOR, right: 0 };
@@ -144,7 +140,7 @@ export function present(posture: Posture, tier: SdkTier, cameraActive = false): 
     safeArea = { top: STATUS_TOP, left: 0, bottom: HOME_INDICATOR, right: 0 };
   }
 
-  const toWindow = (r: Rect): Rect => ({ x: r.x - window.x, y: r.y - window.y, w: r.w, h: r.h });
+  const toWindow = (r: Rect): Rect => translate(r, -window.x, -window.y);
   const regions: ReservedRegion[] = [];
   for (const r of screenRegions(posture, screen, cameraActive)) {
     const clipped = intersect(r.frame, window);
@@ -163,7 +159,8 @@ export function present(posture: Posture, tier: SdkTier, cameraActive = false): 
     bars,
     regions,
     statusBar: status && status.w * status.h > 0 ? toWindow(status) : null,
-    coverage: (window.w * window.h) / (s.w * s.h),
+    share,
+    coverage: (window.w * window.h) / (space.w * space.h),
   };
 }
 

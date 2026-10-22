@@ -222,6 +222,11 @@ export function blockAt(root: Block, offset: number): Block {
   return root;
 }
 
+/** Offset of the call that owns `block`, e.g. the `N` of `NavigationView {`. */
+export function labelOffset(src: SwiftSource, block: Block): number {
+  return src.masked.lastIndexOf(block.label ?? '', block.open);
+}
+
 /** Text of the statement that opens `block`, back to the previous brace, semicolon or line break. */
 export function headerOf(src: SwiftSource, block: Block): string {
   let j = block.open - 1;
@@ -230,6 +235,9 @@ export function headerOf(src: SwiftSource, block: Block): string {
 }
 
 interface DeclaredType {
+  name: string;
+  /** Offset of the `class` / `struct` / … keyword. */
+  start: number;
   inherits: string[];
   block: Block | null;
 }
@@ -250,7 +258,7 @@ export function declaredTypes(src: SwiftSource): DeclaredType[] {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    out.push({ inherits, block: byOpen.get(m.index! + m[0].length - 1) ?? null });
+    out.push({ name: m[1], start: m.index!, inherits, block: byOpen.get(m.index! + m[0].length - 1) ?? null });
   }
   typeCache.set(src, out);
   return out;

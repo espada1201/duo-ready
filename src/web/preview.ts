@@ -1,7 +1,9 @@
-import { POSTURES, type Posture, type Presentation, type Rect } from '../core/duo';
+import { POSTURES, statusBarRect, type Posture, type Presentation } from '../core/duo';
+import type { Rect } from '../core/rect';
 import { RULE_BY_ID } from '../core/rules';
+import { groupBy, joinEnglish } from '../core/text';
 import { h, segmented, toggle } from './dom';
-import { BUILDS, continuity, layoutEncore, type Build, type EncoreLayout, type Piece } from './encoreLayout';
+import { buildTier, BUILDS, continuity, layoutEncore, RECOMMENDED, type Build, type EncoreLayout, type Piece } from './encoreLayout';
 import { icon } from './icons';
 
 export interface PreviewState {
@@ -72,7 +74,7 @@ function statusBar(p: Presentation, s: number, compat: boolean): HTMLElement | n
   const landscape = p.screen.w > p.screen.h;
   // Over the app's light background the status bar draws dark; over black it draws light.
   const overApp = !!p.statusBar;
-  const r = landscape ? { x: p.screen.w - 40, y: 0, w: 40, h: 96 } : { x: 0, y: 0, w: p.screen.w, h: 54 };
+  const r = statusBarRect(p.screen);
   return h(
     'div',
     { class: `status${landscape ? ' status-side' : ''}${overApp ? ' status-dark' : ''}`, style: `${px(r, s)};font-size:${Math.max(7, 13 * s)}px`, 'aria-hidden': 'true' },
@@ -85,7 +87,7 @@ function renderStage(layout: EncoreLayout, state: PreviewState, width: number): 
   const p = layout.presentation;
   const maxH = Math.min(window.innerHeight * 0.62, 560);
   const s = Math.min((width - 24 - BEZEL * 2) / p.screen.w, (maxH - BEZEL * 2) / p.screen.h);
-  const compat = p.display === 'inner' && BUILDS.find((b) => b.id === state.build)!.tier === '26';
+  const compat = p.display === 'inner' && buildTier(state.build) === '26';
   const folded = state.posture === 'book' || state.posture === 'tent';
   const vertical = p.bars === 'vertical';
 
@@ -128,6 +130,7 @@ function renderStage(layout: EncoreLayout, state: PreviewState, width: number): 
       class: `screen${folded ? ` folded folded-${p.screen.w > p.screen.h ? 'v' : 'h'}` : ''}`,
       style: `width:${p.screen.w * s}px;height:${p.screen.h * s}px`,
     },
+    p.share < 1 ? h('div', { class: 'other-app', style: px({ x: p.screen.w * p.share, y: 0, w: p.screen.w * (1 - p.share), h: p.screen.h }, s) }, 'Another app') : null,
     win,
     statusBar(p, s, compat),
   );
@@ -158,16 +161,14 @@ function readout(layout: EncoreLayout, state: PreviewState): HTMLElement {
     ? p.regions.map((r) => h('li', {}, h('code', {}, `.${r.kind}`), ` ${r.active ? 'active' : 'inactive'}, ${fmt(r.frame)}`))
     : [h('li', {}, 'None on this display')];
   const problems: HTMLElement[] = [];
-  const hits = new Map<string, string[]>();
-  for (const c of layout.collisions) hits.set(c.obstacle, [...(hits.get(c.obstacle) ?? []), c.piece.label.toLowerCase()]);
-  for (const [obstacle, labels] of hits) {
-    const what = [...new Set(labels)];
-    const list = what.length > 1 ? `${what.slice(0, -1).join(', ')} and ${what[what.length - 1]}` : what[0];
-    problems.push(h('li', { class: 'problem' }, `The ${obstacle} cuts through the ${list}.`));
+  for (const [obstacle, hits] of groupBy(layout.collisions, (c) => c.obstacle)) {
+    const what = [...new Set(hits.map((c) => c.piece.label.toLowerCase()))];
+    problems.push(h('li', { class: 'problem' }, `The ${obstacle} cuts through the ${joinEnglish(what)}.`));
   }
   const flagged = [...new Set(layout.pieces.map((x) => x.rule).filter(Boolean) as string[])];
   for (const id of flagged) problems.push(h('li', { class: 'problem' }, RULE_BY_ID.get(id)!.title, '. ', h('a', { href: `#rules/${id}` }, 'Why')));
-  if (p.coverage < 0.98) problems.unshift(h('li', { class: 'problem' }, `${pct(1 - p.coverage)} of the display is left black.`));
+  const space = p.share < 1 ? 'its half of the display' : 'the display';
+  if (p.coverage < 0.98) problems.unshift(h('li', { class: 'problem' }, `${pct(1 - p.coverage)} of ${space} is left black.`));
   if (layout.contentWidth < 0.6 && p.display === 'inner') problems.push(h('li', { class: 'problem' }, `Content uses only ${pct(layout.contentWidth)} of the window’s width.`));
 
   return h(
@@ -180,7 +181,7 @@ function readout(layout: EncoreLayout, state: PreviewState): HTMLElement {
       h('dt', {}, 'Display'),
       h('dd', {}, `${p.display === 'inner' ? 'Inner 7.6″' : 'Outer 5.4″'}, ${Math.round(p.screen.w)} × ${Math.round(p.screen.h)} pt`),
       h('dt', {}, 'App window'),
-      h('dd', { 'data-testid': 'window' }, `${Math.round(p.window.w)} × ${Math.round(p.window.h)} pt, ${pct(p.coverage)} of the display`),
+      h('dd', { 'data-testid': 'window' }, `${Math.round(p.window.w)} × ${Math.round(p.window.h)} pt, ${pct(p.coverage)} of ${space}`),
       h('dt', {}, 'Size classes'),
       h('dd', {}, `${p.sizeClass.horizontal} width, ${p.sizeClass.vertical} height`),
       h('dt', {}, 'Safe area'),
@@ -195,6 +196,7 @@ function readout(layout: EncoreLayout, state: PreviewState): HTMLElement {
       ? h('ul', { class: 'problems', 'data-testid': 'problems' }, problems)
       : h('p', { class: 'all-clear', 'data-testid': 'problems' }, icon('check', 16), ' No collisions. Content stays clear of the hinge, camera and status bar.'),
     foldCheck(state),
+    state.build === 'ready' ? changes() : null,
     state.build === 'ready' ? snippet(layout) : null,
   );
 }
@@ -205,7 +207,6 @@ function foldCheck(state: PreviewState): HTMLElement {
     return h('div', { class: 'fold-check', 'data-testid': 'continuity' }, h('h3', {}, 'Fold test'), h('p', { class: 'hint' }, 'Switch between Closed and Open to see whether Encore keeps your place.'));
   }
   const c = continuity(state.previous, state.posture, state.build);
-  const list = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items[0]);
   return h(
     'div',
     { class: 'fold-check', 'data-testid': 'continuity' },
@@ -214,15 +215,33 @@ function foldCheck(state: PreviewState): HTMLElement {
       ? h(
           'p',
           { class: 'problem' },
-          `The size class changed and Encore rebuilt its views. Lost: ${list(c.lost)}. `,
+          `The size class changed and Encore rebuilt its views. Lost: ${joinEnglish(c.lost)}. `,
           h('a', { href: '#rules/state-reset' }, 'Why'),
         )
       : h(
           'p',
           { class: 'all-clear' },
           icon('check', 16),
-          c.resized ? ` Kept ${list(c.kept)}: the layout changed, the views didn’t.` : ' The size class didn’t change, so nothing was rebuilt.',
+          c.resized ? ` Kept ${joinEnglish(c.kept)}: the layout changed, the views didn’t.` : ' The size class didn’t change, so nothing was rebuilt.',
         ),
+  );
+}
+
+const HOW = { automatic: 'duo-ready applies', review: 'duo-ready suggests, you review', manual: 'You change' };
+
+function changes(): HTMLElement {
+  return h(
+    'div',
+    { class: 'changes', 'data-testid': 'changes' },
+    h('h3', {}, 'What changed in this build'),
+    [...groupBy(RECOMMENDED, (c) => c.how)].map(([how, items]) =>
+      h(
+        'div',
+        { class: `how-${how}` },
+        h('p', { class: 'how' }, HOW[how]),
+        h('ul', {}, items.map((c) => h('li', {}, `${c.change}. `, h('a', { href: `#rules/${c.rule}` }, 'Why')))),
+      ),
+    ),
   );
 }
 
@@ -311,7 +330,7 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
       h(
         'p',
         {},
-        'Encore is a typical iPhone music app. Step through the builds: as shipped, rebuilt with each new SDK, and rebuilt with duo-ready’s fixes. Then fold the phone.',
+        'Encore is a typical iPhone music app. Step through the builds: as shipped, rebuilt with each new SDK, and rebuilt with the changes duo-ready recommends. Then fold the phone, or share the screen in Split View.',
       ),
     ),
     h('div', { class: 'preview-grid' }, h('div', { class: 'preview-main' }, controls, stageHost), readout(layout, state)),

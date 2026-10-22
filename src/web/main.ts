@@ -1,6 +1,5 @@
 import './styles.css';
-import type { SdkTier } from '../core/types';
-import { h } from './dom';
+import { h, svg } from './dom';
 import { initialAudit, renderAudit, type AuditState } from './auditView';
 import { BUILDS } from './encoreLayout';
 import { renderPreview, type PreviewState } from './preview';
@@ -23,13 +22,12 @@ function route(): { tab: Tab; focus: string | null } {
 }
 
 function mark(): SVGSVGElement {
-  const ns = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', '0 0 32 32');
-  svg.setAttribute('class', 'mark');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.innerHTML = '<rect x="3" y="6" width="12" height="20" rx="3"/><rect x="17" y="6" width="12" height="20" rx="3"/>';
-  return svg;
+  return svg(
+    'svg',
+    { viewBox: '0 0 32 32', class: 'mark', 'aria-hidden': 'true' },
+    svg('rect', { x: 3, y: 6, width: 12, height: 20, rx: 3 }),
+    svg('rect', { x: 17, y: 6, width: 12, height: 20, rx: 3 }),
+  );
 }
 
 function render() {
@@ -48,7 +46,7 @@ function render() {
               render();
             },
             (tier) => {
-              const build = BUILDS.find((b) => b.id !== 'ready' && b.tier === (tier as SdkTier));
+              const build = BUILDS.find((b) => b.id !== 'ready' && b.tier === tier);
               preview = { ...preview, build: build?.id ?? 'legacy-26' };
               location.hash = 'preview';
             },

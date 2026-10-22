@@ -27,6 +27,8 @@ export interface Finding {
   message: string;
   /** The offending source line, trimmed, for reports. */
   excerpt: string;
+  /** The SwiftUI view or UIKit view controller the finding is in, when there is one. */
+  screen?: string;
   fix?: Fix;
 }
 
@@ -40,4 +42,6 @@ export interface AuditResult {
   grade: 'Duo-ready' | 'Close' | 'Needs work' | 'Not ready';
   /** Best guess of what Duo users see today, from the Xcode version the project was last upgraded with. */
   tier: { value: SdkTier; source: string } | null;
+  /** No Info.plist or Xcode project was given, so project-level checks did not run and the grade is capped. */
+  partial: boolean;
 }
