@@ -12,23 +12,33 @@ concurrency:
   cancel-in-progress: true
 jobs:
   deploy:
-    # Pages on a private repo needs a paid plan, so the job waits until the repo is public.
-    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # Pages is switched on once in Settings > Pages > Source: GitHub Actions; until then this skips.
+      - id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/${{ github.repository }}/pages")
+          if [ "$code" = 200 ]; then echo "on=true" >> "$GITHUB_OUTPUT"; else echo "::notice::GitHub Pages is off. Turn it on in Settings > Pages > Source: GitHub Actions, then run this workflow."; fi
+      - if: steps.pages.outputs.on
+        uses: actions/checkout@v4
+      - if: steps.pages.outputs.on
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npx vite build
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - if: steps.pages.outputs.on
+        run: npm ci && npx vite build
+      - if: steps.pages.outputs.on
+        uses: actions/configure-pages@v5
+      - if: steps.pages.outputs.on
+        uses: actions/upload-pages-artifact@v3
         with:
           path: dist
-      - uses: actions/deploy-pages@v4
+      - if: steps.pages.outputs.on
+        uses: actions/deploy-pages@v4
         id: deployment

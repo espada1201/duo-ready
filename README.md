@@ -50,4 +50,4 @@ Fixes come in two kinds. *Safe fixes* are Apple's own before/after rewrites, off
 
 ## Develop
 
-`npm test` (unit), `npm run e2e` (Playwright), `npm run typecheck`. The Pages workflow needs the repo to be public.
+`npm test` (unit), `npm run e2e` (Playwright), `npm run typecheck`. The Pages workflow deploys the Lab once Pages is on (Settings > Pages > Source: GitHub Actions).
