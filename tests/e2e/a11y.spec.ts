@@ -29,6 +29,15 @@ const pages: [string, (page: import('@playwright/test').Page) => Promise<void>][
       await page.getByTestId('partial').waitFor();
     },
   ],
+  ['empty audit', async (page) => void (await page.goto('./#audit'))],
+  [
+    'screenshot error',
+    async (page) => {
+      await page.goto('./');
+      await page.getByTestId('shot-input').setInputFiles({ name: 'IMG.HEIC', mimeType: 'image/heic', buffer: Buffer.from('x') });
+      await page.getByRole('alert').waitFor();
+    },
+  ],
   ['rules', async (page) => void (await page.goto('./#rules'))],
 ];
 
