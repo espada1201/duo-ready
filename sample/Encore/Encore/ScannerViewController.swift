@@ -16,7 +16,7 @@ final class ScannerViewController: UIViewController {
         view.layer.addSublayer(preview)
 
         let back = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(close))
-        back.edges = .left
+        back.edges = .right
         view.addGestureRecognizer(back)
     }
 

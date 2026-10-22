@@ -67,7 +67,7 @@ const stripConfigComments = (text: string) => text.replace(/(^|[ \t])(?:\/\/|#).
 const SQUARE_MODIFIER = /\bfunc\s+(\w+)\s*\(\s*(?:_\s+)?(\w+)\s*:\s*CGFloat\b[^)]*\)\s*->\s*some\s+View\s*\{\s*(?:return\s+)?(?:self\s*\.\s*)?frame\s*\(\s*width\s*:\s*\2\s*,\s*height\s*:\s*\2\b/g;
 /** `var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }`, with nothing else in the body. */
 const IDIOM_WRAPPER = /\bvar\s+(\w+)\s*:\s*Bool\s*\{\s*(?:return\s+)?(?:[\w.]+\.)?userInterfaceIdiom\s*==\s*\.(?:pad|phone)\s*\}/g;
-const WIDGET = /\b(?:TimelineProvider|TimelineEntry|WidgetConfiguration|WidgetBundle|widgetAccentedRenderingMode)\b|@Environment\s*\(\s*\\\.widgetFamily\s*\)/;
+const WIDGET = /\b(?:TimelineProvider|TimelineEntry|WidgetConfiguration|WidgetBundle|widgetAccentedRenderingMode)\b|@Environment\s*\(\s*\\\.(?:widgetFamily|widgetRenderingMode|showsWidgetContainerBackground)\s*\)/;
 
 function parse(file: SourceFile): Parsed | null {
   const name = file.path.split('/').pop()!;

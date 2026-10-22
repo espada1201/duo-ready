@@ -57,10 +57,14 @@ export const misplaced = defineGroup({
 
   objc({ masked: m, report }) {
     for (const hit of m.matchAll(/\[\s*(?:\[\s*(UITabBar|UIToolbar|UINavigationBar)\s+alloc\s*\]|(UITabBar|UIToolbar|UINavigationBar)\s+new\s*\])/g)) {
-      if (!/inputAccessoryView/.test(lineAround(m, hit.index!))) report('hand-built-bar', hit.index!, `${hit[1] ?? hit[2]} created by hand won’t get Duo’s vertical bar layout.`);
+      if (/inputAccessoryView/.test(lineAround(m, hit.index!))) continue;
+      // `self.doneToolbar = [UIToolbar new]` later set as a field's `inputAccessoryView` sits above the keyboard.
+      const name = /([\w.]+)\s*=\s*$/.exec(m.slice(Math.max(0, hit.index! - 60), hit.index))?.[1];
+      if (name && new RegExp(`inputAccessoryView\\s*=\\s*${name.replace(/\./g, '\\.')}\\s*;`).test(m)) continue;
+      report('hand-built-bar', hit.index!, `${hit[1] ?? hit[2]} created by hand won’t get Duo’s vertical bar layout.`);
     }
     for (const hit of m.matchAll(/safeAreaInsets\s*\.\s*(left|right|top|bottom)\s*\*\s*2(?![.\w])/g)) report('symmetric-safe-area', hit.index!);
-    for (const hit of m.matchAll(/\[\s*UIScreenEdgePanGestureRecognizer\s+alloc\b/g)) if (!internalOnly(m, hit.index!)) report('edge-gesture', hit.index!);
+    for (const hit of m.matchAll(/\[\s*UIScreenEdgePanGestureRecognizer\s+alloc\b/g)) if (!internalOnly(m, hit.index!) && !leftEdgeOnly(m, hit.index!)) report('edge-gesture', hit.index!);
   },
 
   swift({ file, src, masked: m, blocks, facts, report }) {
@@ -114,10 +118,19 @@ export const misplaced = defineGroup({
       });
     }
 
-    for (const hit of m.matchAll(/\bUIScreenEdgePanGestureRecognizer\s*\(/g)) if (!internalOnly(m, hit.index!)) report('edge-gesture', hit.index!);
+    for (const hit of m.matchAll(/\bUIScreenEdgePanGestureRecognizer\s*\(/g)) if (!internalOnly(m, hit.index!) && !leftEdgeOnly(m, hit.index!)) report('edge-gesture', hit.index!);
   },
 });
 
 /** A swipe that opens a debug menu, or sits behind an internal-build check, never reaches Duo users. */
 const internalOnly = (m: string, at: number): boolean =>
   /debug/i.test(lineAround(m, at)) || /\b(?:is|show)(?:Internal|Debug|Dogfood|Staff|Employee)\w*\b/.test(m.slice(Math.max(0, at - 400), at));
+
+/** The system bars and the fold are on the trailing side and in the middle; a left-edge swipe (back navigation) stays clear of both. */
+function leftEdgeOnly(m: string, at: number): boolean {
+  const name = m.indexOf('UIScreenEdgePanGestureRecognizer', at) + 'UIScreenEdgePanGestureRecognizer'.length;
+  const after = m.slice(name, name + 300);
+  // Read only this recognizer's setup, not the next one's.
+  const next = after.search(/UIScreenEdgePanGestureRecognizer/);
+  return /\bedges\s*=\s*(?:\.left|\[\s*\.left\s*\]|UIRectEdgeLeft)\b(?!\s*[|,])/.test(next < 0 ? after : after.slice(0, next));
+}

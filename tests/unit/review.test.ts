@@ -726,3 +726,38 @@ describe('onboarding footers', () => {
     expect(ids([{ path: 'A.swift', content: 'struct PlayerToolbar: View {\n  var body: some View { HStack {} }\n}' }])).toContain('hand-built-bar');
   });
 });
+
+describe('fifth precision review', () => {
+  const swiftIds = (content: string, path = 'A.swift') => ids([{ path, content }]);
+  it.each([
+    ['a placeholder on its own line in a multi-line call', 'AvatarView(\n  diameter: 96,\n  placeholderImage: Image("gravatar").resizable()\n)'],
+    ['an async image framed after its placeholder', 'CachedAsyncImage(url: url) { image in\n  image.resizable()\n} placeholder: {\n  Color.gray\n}\n.frame(width: 40, height: 40)'],
+    ['images in a switch inside a fixed frame', 'Group {\n  switch state {\n  case .a:\n    Image(.a).resizable()\n  case .b:\n    Image(.b).resizable()\n  }\n}\n.frame(width: 64, height: 64)'],
+    ['a picture capped after its aspect ratio', 'UserProfileImage(id: id)\n  .aspectRatio(contentMode: .fit)\n  .frame(maxWidth: 400)'],
+    ['a card capped both ways', 'VStack {\n  Text("a")\n}\n.frame(maxWidth: 350, maxHeight: 350)'],
+    ['a thin progress bar', 'ZStack {\n  Capsule()\n}\n.frame(height: 4)\n.frame(maxWidth: 360)'],
+    ['a left-edge back swipe', 'let g = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(back))\ng.edges = .left'],
+    ['an idiom parameter default', 'init(userInterfaceIdiom: UIUserInterfaceIdiom = .phone) {}'],
+    ['a font drawn into an image', 'let image = UIGraphicsImageRenderer(size: s).image { _ in\n  let a = NSAttributedString(string: l, attributes: [.font: UIFont.systemFont(ofSize: 12)])\n}'],
+    ['a widget view in a shared module', 'struct WidgetRow: View {\n  @Environment(\\.widgetRenderingMode) var mode\n  var body: some View { Text("1").font(.system(size: 12)) }\n}'],
+  ])('ignores %s', (_, code) => {
+    expect(swiftIds(code)).toEqual([]);
+  });
+  it('still flags a right-edge swipe, read per recognizer', () => {
+    const code = 'let l = with(UIScreenEdgePanGestureRecognizer()) { $0.edges = .left }\nlet r = with(UIScreenEdgePanGestureRecognizer()) { $0.edges = .right }';
+    expect(swiftIds(code)).toEqual(['edge-gesture']);
+  });
+  it.each([
+    ['a starting frame handed to super', '- (instancetype)init {\n  if (self = [super initWithFrame:CGRectMake(0, 0, 320, 393)]) {}\n  return self;\n}'],
+    ['a toolbar used as a field accessory', 'self.doneToolbar = [UIToolbar new];\nself.field.inputAccessoryView = self.doneToolbar;'],
+    ['a left-edge swipe', 'UIScreenEdgePanGestureRecognizer *g = [[UIScreenEdgePanGestureRecognizer alloc] initWithTarget:self action:@selector(back:)];\ng.edges = UIRectEdgeLeft;'],
+  ])('ignores Objective-C %s', (_, code) => {
+    expect(ids([{ path: 'A.m', content: code }])).toEqual([]);
+  });
+});
+
+describe('tall columns', () => {
+  it('still flags a column capped in width but free in height', () => {
+    expect(ids([{ path: 'A.swift', content: 'VStack {\n  Text("a")\n}\n.frame(maxWidth: 600, maxHeight: .infinity)' }])).toContain('centered-column');
+  });
+});

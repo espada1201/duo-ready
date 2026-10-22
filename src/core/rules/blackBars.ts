@@ -83,12 +83,15 @@ export const blackBars = defineGroup({
     }
     for (const hit of m.matchAll(/\.frame\s*\(\s*maxWidth\s*:\s*(\d{3})(?:\.0)?\s*[,)]/g)) {
       const n = Number(hit[1]);
-      // A capped image (`.resizable()...frame(maxWidth: 400)`) is a picture, not a column.
-      if (/\.resizable\s*\(\s*\)[^{}\n]*(?:\n[ \t]*\.[^{}\n]*)*\n?[ \t]*$/.test(m.slice(Math.max(0, hit.index! - 250), hit.index))) continue;
+      // A capped image (`.resizable()...frame(maxWidth: 400)`, or one kept to its aspect ratio) is a picture, not a column.
+      const chainBefore = /(?:^|\n)[ \t]*[^\s.][^\n]*((?:\n[ \t]*\.[^\n]*)*)\n?[ \t]*$/.exec(m.slice(Math.max(0, hit.index! - 400), hit.index))?.[1] ?? '';
+      if (/\.resizable\s*\(\s*\)[^{}\n]*(?:\n[ \t]*\.[^{}\n]*)*\n?[ \t]*$/.test(m.slice(Math.max(0, hit.index! - 250), hit.index)) || /\.(?:aspectRatio|scaledToFit|scaledToFill)\s*\(/.test(chainBefore)) continue;
+      // A box capped both ways (`maxWidth: 350, maxHeight: 350`) is a card, not a column.
+      if (/^[^)]*\bmaxHeight\s*:\s*\d/.test(m.slice(hit.index!, hit.index! + 120))) continue;
       // A capped button or progress bar is a control, not a column of content.
       if (CONTROL.test(chainRoot(src, hit.index!)?.name ?? '')) continue;
       // A few points tall is a bar or divider, not a column of content.
-      if (/\bheight\s*:\s*1?\d(?:\.\d+)?\s*[,)]/.test(lineAround(m, hit.index!)) || chainHas(m, m.indexOf(')', hit.index!) + 1, /^frame$/, /\bheight\s*:\s*1?\d(?:\.\d+)?\s*(?:,|$)/)) continue;
+      if (/\bheight\s*:\s*1?\d(?:\.\d+)?\s*[,)]/.test(lineAround(m, hit.index!) + chainBefore) || chainHas(m, m.indexOf(')', hit.index!) + 1, /^frame$/, /\bheight\s*:\s*1?\d(?:\.\d+)?\s*(?:,|$)/)) continue;
       if (n >= 320 && n <= 720) report('centered-column', hit.index!, `A ${n} pt column fills about ${Math.round((n / INNER.w) * 100)}% of the open inner display.`);
     }
   },
@@ -97,6 +100,8 @@ export const blackBars = defineGroup({
     for (const hit of m.matchAll(/\b(?:CGRectMake\s*\([^,()]*,[^,()]*,|CGSizeMake\s*\()\s*(\d{2,4})(?:\.0*)?[fF]?\s*,\s*(\d{2,4})(?:\.0*)?[fF]?\s*\)/g)) {
       const [w, h] = [Number(hit[1]), Number(hit[2])];
       if (NOT_SCREEN.test(lineAround(m, hit.index!)) || !(PHONE_WIDTHS.has(w) || PHONE_HEIGHTS.has(h))) continue;
+      // `[super initWithFrame:CGRectMake(0, 0, 320, 393)]` is a starting size; layout replaces it.
+      if (/\[\s*super\s+initWithFrame\s*:\s*$/.test(m.slice(Math.max(0, hit.index! - 40), hit.index))) continue;
       report('fixed-device-size', hit.index!, `${w} × ${h} pt is an iPhone screen size; Duo windows are other sizes and change live.`);
     }
   },

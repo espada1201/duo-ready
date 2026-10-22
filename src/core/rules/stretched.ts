@@ -1,21 +1,21 @@
 import { blockAt, type Block } from '../swift';
 import { eolOf, lineAround } from '../text';
-import { defineGroup, chainHas, declaredAt, matchBefore, PREPARE } from './engine';
+import { defineGroup, chainHas, closeOf, declaredAt, matchBefore, PREPARE } from './engine';
 
 const VIEWPORT_WIDTH = /viewport[^\n>]{0,160}?\bwidth\s*=\s*(\d{3,4})\b/g;
 const viewportMessage = (width: string) => `The web viewport is fixed at ${width} px instead of device-width.`;
 /** Callbacks that run when the window changes size. */
 const ON_RESIZE = /\bfunc\s+(viewWillTransition|traitCollectionDidChange|viewWillLayoutSubviews|viewDidLayoutSubviews)\b|\.onChange\s*\(\s*of\s*:\s*\w*[sS]izeClass\b/g;
 
-const PDF = /\bUIGraphicsPDFRenderer\b|\bUIGraphicsBeginPDFContext/;
+const PDF = /\bUIGraphicsPDFRenderer\b|\bUIGraphicsBeginPDFContext|\bUIGraphicsImageRenderer\b|\bUIGraphicsBeginImageContext/;
 
-/** Inside draw(_:), a function or closure that renders a PDF, or a type made for PDF output. */
+/** Inside draw(_:), a function or closure that renders a PDF or an image, or a type made for PDF output. */
 function inDrawing(m: string, scope: Block | null): boolean {
   for (let b = scope; b?.parent; b = b.parent) {
     const head = m.slice(Math.max(0, b.open - 120), b.open);
     if (/\bfunc\s+draw\s*\([^{]*$/.test(head)) return true;
     const type = /\b(?:class|struct|enum|actor|extension)\s+(\w+)[^{}]*$/.exec(head);
-    if (type ? /PDF|Pdf/.test(type[1]) : PDF.test(m.slice(b.open, b.close))) return true;
+    if (type ? /PDF|Pdf/.test(type[1]) : PDF.test(m.slice(b.open, b.close)) || /\bUIGraphicsImageRenderer\b[^{}]*$/.test(head)) return true;
   }
   return false;
 }
@@ -32,6 +32,21 @@ function callText(masked: string, from: number): string {
 
 /** `width: 40, height: 40` or `width: Layout.icon, height: Layout.icon`: both set, neither read from a window, geometry or container. */
 const FIXED_FRAME = /^\s*width\s*:\s*(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+,\s*height\s*:\s*(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+(?:,|$)/i;
+
+/** Whether a block around the image (`AsyncImage { image in … } placeholder: { … }`, a `Group`, a `switch`) ends in a fixed frame. */
+function framedOutside(m: string, block: Block): boolean {
+  for (let b: Block | null = block, depth = 0; b?.parent && depth < 3; b = b.parent, depth++) {
+    let at = b.close + 1;
+    // Skip the call's other labelled closures: `} placeholder: { … }`.
+    for (let next; (next = /^\s*\w+\s*:\s*\{/.exec(m.slice(at, at + 80))); ) {
+      const close = closeOf(m, at + next[0].length - 1);
+      if (close < 0) break;
+      at = close;
+    }
+    if (chainHas(m, at, /^frame$/, FIXED_FRAME)) return true;
+  }
+  return false;
+}
 
 export const stretched = defineGroup({
   id: 'stretched',
@@ -91,7 +106,8 @@ export const stretched = defineGroup({
       const line = lineAround(m, hit.index!);
       // Picking a keyboard type by idiom is about input, not layout; a tvOS, Mac or CarPlay check is
       // false on Duo either way; and a wrapper like `isPad` is reported where it's used.
-      if (declaredAt(m, hit.index!) || /\bkeyboardType\b|\bpreferredStyle\b/.test(line) || /^userInterfaceIdiom\s*[!=]=\s*\.(?:tv|mac|carPlay|vision)\b/.test(m.slice(hit.index!, hit.index! + 60))) continue;
+      // `userInterfaceIdiom: UIUserInterfaceIdiom = .phone` declares a parameter or property; its readers are what matter.
+      if (declaredAt(m, hit.index!) || /^userInterfaceIdiom\s*:\s*UIUserInterfaceIdiom\b/.test(m.slice(hit.index!, hit.index! + 60)) || /\bkeyboardType\b|\bpreferredStyle\b/.test(line) || /^userInterfaceIdiom\s*[!=]=\s*\.(?:tv|mac|carPlay|vision)\b/.test(m.slice(hit.index!, hit.index! + 60))) continue;
       if (facts.idiomWrappers.some((w) => new RegExp(`\\bvar\\s+${w}\\s*:\\s*Bool\\s*\\{[^{}]*$`).test(m.slice(Math.max(0, hit.index! - 120), hit.index)))) continue;
       report('idiom-layout', hit.index!);
     }
@@ -120,12 +136,12 @@ export const stretched = defineGroup({
       if (chainHas(m, end, /^(aspectRatio|scaledToFit|scaledToFill)$/)) continue;
       const before = m.slice(Math.max(0, hit.index! - 300), hit.index);
       // A placeholder handed to a sized view (`AvatarView(diameter: 72, placeholderImage: Image("g").resizable())`) takes its frame there.
-      if (/\b\w+\s*:\s*Image\s*\((?:[^()]|\([^()]*\))*\)\s*$/.test(before) && /^\s*[,)]/.test(m.slice(end, end + 5))) continue;
+      if (/\b\w+\s*:\s*Image\s*\((?:[^()]|\([^()]*\))*\)\s*$/.test(before) && /^\s*[,)]/.test(m.slice(end, end + 200))) continue;
       // A blur-hash placeholder is meant to stretch; an image handed to a caller's closure gets its aspect there.
       if (matchBefore(m, hit.index!, /(?:\bImage\s*\(\s*blurHash\s*:[^()]*(?:\([^()]*\)[^()]*)*\)\??|(?:^|[^.\w])\w+\s*\(\s*Image\s*\((?:[^()]|\([^()]*\))*\))\s*$/) !== null) continue;
       // A fixed width and height (or the project's square(size:)) never follow the window, so Duo can't stretch the image any more than an iPhone does.
       if (square && chainHas(m, end, square, /^\s*(?:size\s*:\s*)?(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+(?:,|$)/)) continue;
-      if (chainHas(m, end, /^frame$/, FIXED_FRAME)) continue;
+      if (chainHas(m, end, /^frame$/, FIXED_FRAME) || framedOutside(m, blockAt(src.root, hit.index!))) continue;
       const indent = /\n([ \t]*)\.resizable/.exec(file.content.slice(Math.max(0, hit.index! - 200), end));
       // A full-bleed background should keep filling the window, not letterbox inside it.
       const scale = chainHas(m, end, /^(ignoresSafeArea|edgesIgnoringSafeArea)$/) ? '.scaledToFill()' : '.scaledToFit()';
