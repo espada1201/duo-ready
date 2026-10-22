@@ -72,6 +72,14 @@ export const blackBars = defineGroup({
     }
   },
 
+  objc({ masked: m, report }) {
+    for (const hit of m.matchAll(/\b(?:CGRectMake\s*\([^,()]*,[^,()]*,|CGSizeMake\s*\()\s*(\d{3})(?:\.0)?f?\s*,\s*(\d{3})(?:\.0)?f?\s*\)/g)) {
+      const [w, h] = [Number(hit[1]), Number(hit[2])];
+      if (NOT_SCREEN.test(lineAround(m, hit.index!)) || !(PHONE_WIDTHS.has(w) || PHONE_HEIGHTS.has(h))) continue;
+      report('fixed-device-size', hit.index!, `${w} × ${h} pt is an iPhone screen size; Duo windows are other sizes and change live.`);
+    }
+  },
+
   plist({ plist, report }) {
     const full = plist.keys.get('UIRequiresFullScreen');
     if (full && full.value === true) report('requires-full-screen', full.offset);

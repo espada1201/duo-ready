@@ -98,6 +98,15 @@ export const hinge = defineGroup({
     }
   },
 
+  objc({ masked: m, report }) {
+    if (!/\breservedRegions\b/.test(m)) {
+      for (const hit of m.matchAll(/\[\s*(?:AVPlayerLayer|AVCaptureVideoPreviewLayer)\s+\w+/g)) report('hinge-media', hit.index!);
+    }
+    if (!/\bkeyboardLayoutGuide\b/.test(m)) {
+      for (const hit of m.matchAll(/\bUIKeyboardFrame(?:End|Begin)UserInfoKey\b/g)) report('keyboard-frame', hit.index!);
+    }
+  },
+
   manifest({ file, report }) {
     if (file.path.endsWith('package.json') && /"react-native"\s*:/.test(file.content)) {
       report(

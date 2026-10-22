@@ -219,6 +219,18 @@ export const fold = defineGroup({
     }
   },
 
+  objc({ masked: m, report }) {
+    for (const hit of m.matchAll(/\[\s*UIScreen\s+mainScreen\s*\]|\bUIScreen\s*\.\s*mainScreen\b/g)) report('uiscreen-main', hit.index!, '[UIScreen mainScreen] is ambiguous on a two-display phone.');
+    for (const hit of m.matchAll(/\bsharedApplication\s*\]?\s*(?:\.\s*|\s+)(?:keyWindow|windows)\b/g)) report('key-window', hit.index!);
+    const camera = /\b(videoOrientation|videoRotationAngle)\b/.test(m);
+    for (const hit of m.matchAll(/\bstatusBarOrientation\b|\[\s*\[\s*UIDevice\s+currentDevice\s*\]\s+orientation\s*\]|\bUIDevice\s*\.\s*currentDevice\s*\.\s*orientation\b|\bUI(?:Interface|Device)OrientationIs(?:Landscape|Portrait)\b/g)) {
+      if (!camera && !/AVCapture|videoOrientation|imageOrientation/.test(lineAround(m, hit.index!))) report('orientation-layout', hit.index!);
+    }
+    for (const hit of m.matchAll(/\bsupportedInterfaceOrientations(?:ForWindow\s*:[^{]*)?\s*\{\s*return\s+UIInterfaceOrientationMaskPortrait\s*;\s*\}/g)) {
+      report('portrait-only', hit.index!, 'This code locks to portrait. The inner display ignores the lock, so the layout gets a landscape canvas anyway.');
+    }
+  },
+
   plist({ plist, report }) {
     const orientations = plist.keys.get('UISupportedInterfaceOrientations~iphone') ?? plist.keys.get('UISupportedInterfaceOrientations');
     const list = orientations?.value;

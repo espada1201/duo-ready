@@ -28,7 +28,7 @@ export const fixLabel = (f: Finding) => (f.fix ? ` [${f.fix.confidence} fix]` : 
 
 /** What to tell the reader about Objective-C the rules can't read. */
 export const objcNote = (n: number) =>
-  `${n === 1 ? '1 Objective-C file was' : `${n} Objective-C files were`} not scanned: the rules read Swift. Check ${n === 1 ? 'it' : 'them'} by hand for [UIScreen mainScreen], userInterfaceIdiom and keyboard frame math.`;
+  `${n === 1 ? '1 Objective-C file' : `${n} Objective-C files`} got the core checks (screen, idiom, orientation, keyboard, fonts, bars, gestures, cameras). Fixes and the SwiftUI checks are Swift only.`;
 
 export const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 

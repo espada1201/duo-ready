@@ -35,7 +35,7 @@ export interface PainPoint {
 export const PAIN_POINTS: PainPoint[] = GROUPS.map(({ id, title, seen, cause, rules }) => ({ id, title, seen, cause, rules: rules.map((r) => r.id) }));
 
 type Parsed =
-  | { kind: 'swift'; file: SourceFile; src: SwiftSource }
+  | { kind: 'swift' | 'objc'; file: SourceFile; src: SwiftSource }
   | { kind: 'plist'; file: SourceFile; plist: PlistContext['plist'] }
   | { kind: 'pbxproj' | 'manifest' | 'html'; file: SourceFile }
   /** An .xcconfig or XcodeGen spec: build settings only, no rules of its own. */
@@ -74,6 +74,8 @@ function parse(file: SourceFile): Parsed | null {
     // Home Screen widgets are laid out by WidgetKit, not in the app's window.
     return WIDGET.test(src.masked) ? null : { kind: 'swift', file, src };
   }
+  // The Swift masker blanks Objective-C comments and @"strings" the same way.
+  if (/\.mm?$/.test(name)) return { kind: 'objc', file, src: parseSwift(file.content) };
   if (name.endsWith('.plist')) {
     const plist = parsePlist(file.content);
     // Watch apps and extensions have their own Info.plist; only the iPhone app's matters here.
@@ -210,6 +212,9 @@ export function checkFiles(files: SourceFile[]): { findings: Finding[]; facts: P
     if (p.kind === 'swift') {
       const ctx = { file: p.file, facts, report: reporter(p.file, findings, p.src), src: p.src, masked: p.src.masked, blocks: [...walk(p.src.root)] };
       for (const g of GROUPS) g.swift?.(ctx);
+    } else if (p.kind === 'objc') {
+      const ctx = { file: p.file, facts, report: reporter(p.file, findings, p.src), masked: p.src.masked, strings: p.src.strings };
+      for (const g of GROUPS) g.objc?.(ctx);
     } else if (p.kind === 'plist') {
       const ctx = { file: p.file, facts, report: reporter(p.file, findings), plist: p.plist };
       for (const g of GROUPS) g.plist?.(ctx);
@@ -218,7 +223,7 @@ export function checkFiles(files: SourceFile[]): { findings: Finding[]; facts: P
       for (const g of GROUPS) g[p.kind]?.(ctx);
     }
   }
-  const swiftOf = new Map(parsed.flatMap((p) => (p.kind === 'swift' ? [[p.file, p.src] as const] : [])));
+  const swiftOf = new Map(parsed.flatMap((p) => (p.kind === 'swift' || p.kind === 'objc' ? [[p.file, p.src] as const] : [])));
   for (const g of GROUPS) g.project?.({ facts, reporterFor: (file) => reporter(file, findings, swiftOf.get(file)) });
   return { findings, facts };
 }

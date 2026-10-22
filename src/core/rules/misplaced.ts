@@ -1,4 +1,4 @@
-import { eolOf, lineIndent } from '../text';
+import { eolOf, lineAround, lineIndent } from '../text';
 import { blockAt, labelOffset, type Block } from '../swift';
 import { defineGroup, chainHas, PREPARE } from './engine';
 
@@ -54,6 +54,14 @@ export const misplaced = defineGroup({
       source: PREPARE,
     },
   ],
+
+  objc({ masked: m, report }) {
+    for (const hit of m.matchAll(/\[\s*\[\s*(UITabBar|UIToolbar|UINavigationBar)\s+alloc\s*\]/g)) {
+      if (!/inputAccessoryView/.test(lineAround(m, hit.index!))) report('hand-built-bar', hit.index!, `${hit[1]} created by hand won’t get Duo’s vertical bar layout.`);
+    }
+    for (const hit of m.matchAll(/safeAreaInsets\s*\.\s*(left|right|top|bottom)\s*\*\s*2(?![.\w])/g)) report('symmetric-safe-area', hit.index!);
+    for (const hit of m.matchAll(/\[\s*UIScreenEdgePanGestureRecognizer\s+alloc\b/g)) report('edge-gesture', hit.index!);
+  },
 
   swift({ file, src, masked: m, blocks, facts, report }) {
     // `UINavigationBar().bounds` only measures a default bar.

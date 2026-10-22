@@ -34,12 +34,11 @@ function grade(value: number, findings: Finding[], partial: boolean): AuditResul
   return 'Not ready';
 }
 
-/** Objective-C is read only to count it: the rules understand Swift. */
+/** Objective-C gets the checks that have an Objective-C spelling, not the SwiftUI ones. */
 const OBJC = /\.mm?$/;
 
 export function audit(input: SourceFile[]): AuditResult {
-  const relevant = input.filter((f) => isRelevant(f.path));
-  const files = relevant.filter((f) => !OBJC.test(f.path));
+  const files = input.filter((f) => isRelevant(f.path));
   const { findings, facts } = checkFiles(files);
   findings.sort(
     (a, b) =>
@@ -60,7 +59,7 @@ export function audit(input: SourceFile[]): AuditResult {
     grade: grade(value, findings, partial),
     tier: check ? { value: tierFromUpgradeCheck(check), source: `LastUpgradeCheck ${check}, Xcode ${xcodeVersion(check)}` } : null,
     partial,
-    objcFiles: relevant.length - files.length,
+    objcFiles: files.filter((f) => OBJC.test(f.path)).length,
     unreadable: files.filter((f) => /(^|\/)Info\.plist$/.test(f.path) && f.content.startsWith('bplist')).map((f) => f.path),
   };
 }

@@ -146,6 +146,19 @@ export const stretched = defineGroup({
     }
   },
 
+  objc({ masked: m, report }) {
+    for (const hit of m.matchAll(/\buserInterfaceIdiom\b|\bUI_USER_INTERFACE_IDIOM\s*\(/g)) {
+      if (!/UIUserInterfaceIdiom(?:TV|Mac|CarPlay|Vision)\b/.test(lineAround(m, hit.index!))) report('idiom-layout', hit.index!);
+    }
+    for (const hit of m.matchAll(/\b(?:systemFontOfSize|boldSystemFontOfSize|italicSystemFontOfSize|monospacedSystemFontOfSize|fontWithName\s*:[^\]\n]*\bsize)\s*:/g)) {
+      if (!/preferredFontForTextStyle|UIFontMetrics|scaledFontForFont/.test(lineAround(m, hit.index!))) report('fixed-font', hit.index!);
+    }
+    for (const hit of m.matchAll(/\bUIViewContentModeScaleToFill\b/g)) report('stretched-image', hit.index!);
+    for (const hit of m.matchAll(/\bSKSceneScaleMode(Fill|AspectFit)\b/g)) {
+      report('game-aspect', hit.index!, hit[1] === 'Fill' ? 'SKSceneScaleModeFill stretches the scene to the window’s shape.' : 'SKSceneScaleModeAspectFit leaves black bars on windows of another shape.');
+    }
+  },
+
   html({ file, report }) {
     for (const hit of file.content.matchAll(VIEWPORT_WIDTH)) {
       report('webview-viewport', hit.index!, viewportMessage(hit[1]));

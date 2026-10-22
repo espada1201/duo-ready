@@ -400,7 +400,7 @@ describe('sixth review: games, web views, media and cross-platform apps', () => 
     expect(one('class A: UIResponder, UIApplicationDelegate {\n  func application(_ app: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {\n    return .portrait\n  }\n}')).toContain('portrait-only');
   });
 
-  it('counts Objective-C it cannot read, and ignores Mac-only Xcode projects and Flutter plugins', () => {
+  it('checks Objective-C too, and ignores Mac-only Xcode projects and Flutter plugins', () => {
     const r = audit([
       { path: 'App/A.swift', content: 'let a = 1' },
       { path: 'App/Legacy.m', content: '[UIScreen mainScreen];' },
@@ -409,6 +409,32 @@ describe('sixth review: games, web views, media and cross-platform apps', () => 
     ]);
     expect(r.objcFiles).toBe(1);
     expect(r.swiftFiles).toBe(1);
-    expect(r.findings).toEqual([]);
+    expect(r.findings.map((f) => [f.ruleId, f.path])).toEqual([['uiscreen-main', 'App/Legacy.m']]);
+  });
+
+  it.each([
+    ['[UIScreen mainScreen] bounds', 'CGRect r = [[UIScreen mainScreen] bounds];', 'uiscreen-main'],
+    ['an idiom macro', 'if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) { cols = 4; }', 'idiom-layout'],
+    ['a fixed font', 'label.font = [UIFont systemFontOfSize:17];', 'fixed-font'],
+    ['keyboard frame math', 'CGRect k = [info[UIKeyboardFrameEndUserInfoKey] CGRectValue];', 'keyboard-frame'],
+    ['the key window', 'UIWindow *w = [UIApplication sharedApplication].keyWindow;', 'key-window'],
+    ['status bar orientation', 'if (UIInterfaceOrientationIsLandscape([UIApplication sharedApplication].statusBarOrientation)) {}', 'orientation-layout'],
+    ['a portrait lock', '- (UIInterfaceOrientationMask)supportedInterfaceOrientations {\n    return UIInterfaceOrientationMaskPortrait;\n}', 'portrait-only'],
+    ['a hand-built toolbar', 'UIToolbar *bar = [[UIToolbar alloc] initWithFrame:CGRectZero];', 'hand-built-bar'],
+    ['an edge pan', 'id g = [[UIScreenEdgePanGestureRecognizer alloc] initWithTarget:self action:@selector(back:)];', 'edge-gesture'],
+    ['an iPhone-sized frame', 'self.view.frame = CGRectMake(0, 0, 375, 667);', 'fixed-device-size'],
+    ['TrueDepth alone', 'AVCaptureDevice *d = [AVCaptureDevice defaultDeviceWithDeviceType:AVCaptureDeviceTypeBuiltInTrueDepthCamera mediaType:AVMediaTypeVideo position:AVCaptureDevicePositionFront];', 'camera-hardware'],
+    ['Face ID copy', 'label.text = @"Unlock with Face ID";', 'biometry-faceid'],
+  ])('finds %s in Objective-C', (_, code, rule) => {
+    expect(ids([{ path: 'Legacy.m', content: code }])).toContain(rule);
+  });
+
+  it.each([
+    ['a tvOS idiom check', 'if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomTV) {}'],
+    ['scaled fonts', 'label.font = [[UIFontMetrics defaultMetrics] scaledFontForFont:[UIFont systemFontOfSize:17]];'],
+    ['TrueDepth among lenses', 'NSArray *t = @[AVCaptureDeviceTypeBuiltInWideAngleCamera, AVCaptureDeviceTypeBuiltInTrueDepthCamera];'],
+    ['code in comments', '// [UIScreen mainScreen]\n/* UIKeyboardFrameEndUserInfoKey */'],
+  ])('ignores %s in Objective-C', (_, code) => {
+    expect(ids([{ path: 'Legacy.m', content: code }])).toEqual([]);
   });
 });

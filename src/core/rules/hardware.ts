@@ -27,6 +27,25 @@ export const hardware = defineGroup({
     },
   ],
 
+  objc({ file, masked: m, strings, report }) {
+    if (!/\bLABiometryTypeTouchID\b/.test(m)) {
+      for (const hit of m.matchAll(/\bLABiometryTypeFaceID\b/g)) report('biometry-faceid', hit.index!);
+    }
+    for (const hit of file.content.matchAll(/Face ID/g)) {
+      const i = hit.index!;
+      const note = /\bcomment\s*:\s*@?"[^"\n]*$|NSLocalizedString\s*\(\s*@"[^"\n]*"\s*,\s*@"[^"\n]*$/.test(file.content.slice(Math.max(0, i - 200), i));
+      if (strings[i] && strings[i + 6] && !note && !/Touch ID|fingerprint|passcode/i.test(lineAround(file.content, i))) {
+        report('biometry-faceid', i, 'User-facing text mentions Face ID, which iPhone Duo doesn’t have.');
+      }
+    }
+    for (const hit of m.matchAll(/\bAVCaptureDeviceTypeBuiltInTrueDepthCamera\b/g)) {
+      const open = m.lastIndexOf('@[', hit.index!);
+      const close = m.indexOf(']', hit.index!);
+      const list = open !== -1 && close !== -1 && !m.slice(open, hit.index).includes(']') ? m.slice(open, close) : '';
+      if ((list.match(/\bAVCaptureDeviceTypeBuiltIn\w+/g) ?? []).length < 2) report('camera-hardware', hit.index!, 'The TrueDepth camera comes with Face ID; iPhone Duo has neither.');
+    }
+  },
+
   swift({ file, src, masked: m, report }) {
     if (!/\.touchID\b/.test(m)) {
       for (const hit of m.matchAll(/\.faceID\b/g)) report('biometry-faceid', hit.index!);

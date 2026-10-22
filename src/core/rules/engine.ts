@@ -49,6 +49,13 @@ interface Context<Id extends string = string> {
   report: Report<Id>;
 }
 
+export interface ObjCContext<Id extends string = string> extends Context<Id> {
+  /** The source with comments and string contents blanked. */
+  masked: string;
+  /** Offsets that are inside string literals. */
+  strings: SwiftSource['strings'];
+}
+
 export interface SwiftContext<Id extends string = string> extends Context<Id> {
   src: SwiftSource;
   /** The source with comments and string contents blanked. */
@@ -75,6 +82,8 @@ export interface RuleGroup<Id extends string = string> {
   cause: string;
   rules: readonly Rule<Id>[];
   swift?: (c: SwiftContext<Id>) => void;
+  /** Objective-C .m files: the same problems, spelled the Objective-C way. */
+  objc?: (c: ObjCContext<Id>) => void;
   plist?: (c: PlistContext<Id>) => void;
   pbxproj?: (c: Context<Id>) => void;
   /** package.json or pubspec.yaml. */
