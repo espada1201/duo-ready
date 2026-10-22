@@ -1,6 +1,6 @@
 import { blockAt } from '../swift';
 import { eolOf, lineAround } from '../text';
-import { chainHas, declaredAt, PREPARE, type RuleGroup } from './engine';
+import { defineGroup, chainHas, declaredAt, PREPARE } from './engine';
 
 const VIEWPORT_WIDTH = /viewport[^\n>]{0,160}?\bwidth\s*=\s*(\d{3,4})\b/g;
 const viewportMessage = (width: string) => `The web viewport is fixed at ${width} px instead of device-width.`;
@@ -17,7 +17,7 @@ function callText(masked: string, from: number): string {
   return masked.slice(from);
 }
 
-export const stretched: RuleGroup = {
+export const stretched = defineGroup({
   id: 'stretched',
   title: 'Small or stretched elements',
   seen: 'Elements that look small or stretched on the big inner display.',
@@ -113,4 +113,4 @@ export const stretched: RuleGroup = {
       report('webview-viewport', hit.index!, viewportMessage(hit[1]));
     }
   },
-};
+});

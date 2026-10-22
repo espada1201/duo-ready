@@ -1,6 +1,6 @@
 // Diffs for fixes, built from the fixes' own edits so a hunk is exactly the lines an edit touches.
 
-import { lineStarts, position } from './swift';
+import { lineStarts, position } from './text';
 import type { Edit } from './types';
 
 export interface Hunk {
@@ -16,8 +16,8 @@ export function hunks(content: string, edits: Edit[]): Hunk[] {
   const lines = content.split('\n');
   const groups: { first: number; last: number; edits: Edit[] }[] = [];
   for (const e of [...edits].sort((a, b) => a.start - b.start)) {
-    const first = position({ lineStarts: starts }, e.start).line - 1;
-    const last = position({ lineStarts: starts }, e.end).line - 1;
+    const first = position(starts, e.start).line - 1;
+    const last = position(starts, e.end).line - 1;
     const prev = groups[groups.length - 1];
     if (prev && first <= prev.last) {
       prev.last = Math.max(prev.last, last);

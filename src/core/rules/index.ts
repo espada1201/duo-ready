@@ -2,9 +2,9 @@
 // parses each file once, learns project-wide facts, then hands every file to every group.
 
 import { parsePlist } from '../plist';
-import { blockAt, declaredTypes, lineStarts, parseSwift, position, walk, type Block, type SwiftSource } from '../swift';
+import { blockAt, declaredTypes, parseSwift, walk, type Block, type SwiftSource } from '../swift';
 import { deploymentTarget, upgradeCheck } from '../sdk';
-import { lineAround } from '../text';
+import { lineAround, lineStarts, position } from '../text';
 import type { Finding, SourceFile } from '../types';
 import { blackBars } from './blackBars';
 import type { PlistContext, ProjectFacts, Report, Rule, RuleGroup } from './engine';
@@ -16,7 +16,10 @@ import { stretched } from './stretched';
 
 export type { ProjectFacts, Rule } from './engine';
 
-const GROUPS: RuleGroup[] = [blackBars, misplaced, stretched, fold, hinge, hardware];
+const TYPED = [blackBars, misplaced, stretched, fold, hinge, hardware] as const;
+/** Every rule id, checked at compile time wherever one is written by hand. */
+export type RuleId = (typeof TYPED)[number]['rules'][number]['id'];
+const GROUPS: readonly RuleGroup[] = TYPED;
 
 export const RULES: Rule[] = GROUPS.flatMap((g) => g.rules);
 export const RULE_BY_ID = new Map(RULES.map((r) => [r.id, r]));
@@ -110,7 +113,7 @@ function reporter(file: SourceFile, findings: Finding[], src?: SwiftSource): Rep
   return (ruleId, offset, message, fix) => {
     if (src && inPreview(src, offset)) return;
     const rule = RULE_BY_ID.get(ruleId)!;
-    const { line, column } = position({ lineStarts: starts }, offset);
+    const { line, column } = position(starts, offset);
     findings.push({
       ruleId,
       severity: rule.severity,

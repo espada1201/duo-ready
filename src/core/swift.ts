@@ -2,6 +2,8 @@
 // `masked` keeps every offset of the source but blanks comments and string literal
 // contents, so pattern rules never fire on prose or user-facing text.
 
+import { lineStarts } from './text';
+
 export interface Block {
   /** Call that owns this closure, e.g. "ScrollView" for `ScrollView(.vertical) {`. */
   label: string | null;
@@ -197,21 +199,14 @@ export function parseSwift(text: string): SwiftSource {
   return { masked, strings, root, lineStarts: lineStarts(text) };
 }
 
-export function lineStarts(text: string): number[] {
-  const out = [0];
-  for (let i = 0; i < text.length; i++) if (text[i] === '\n') out.push(i + 1);
-  return out;
-}
-
-export function position(src: { lineStarts: number[] }, offset: number): { line: number; column: number } {
-  let lo = 0;
-  let hi = src.lineStarts.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1;
-    if (src.lineStarts[mid] <= offset) lo = mid;
-    else hi = mid - 1;
-  }
-  return { line: lo + 1, column: offset - src.lineStarts[lo] + 1 };
+/** The contents of the string literal around `at` in `text`, or null when `at` is not inside one. */
+export function stringLiteralAt(src: SwiftSource, text: string, at: number): string | null {
+  if (!src.strings[at]) return null;
+  let from = at;
+  let to = at;
+  while (from > 0 && src.strings[from - 1]) from--;
+  while (to < text.length && src.strings[to]) to++;
+  return text.slice(from, to);
 }
 
 /** Every block under `block`, parents before children. Iterative, so deep nesting can't overflow the stack. */

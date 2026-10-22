@@ -1,6 +1,7 @@
 // Layout of "Encore", the demo music app, before and after duo-ready's fixes.
 // Pure geometry so the claims the lab makes ("no collisions after fixes") are testable.
 
+import type { RuleId } from '../core/rules';
 import { arrange, present, safeFrame, type Arrangement, type Posture, type Presentation } from '../core/duo';
 import { area, clipTo, intersect, translate, type Rect } from '../core/rect';
 import type { SdkTier } from '../core/types';
@@ -17,7 +18,7 @@ export const BUILDS: { id: Build; tier: SdkTier; label: string; detail: string }
 export const buildTier = (build: Build): SdkTier => BUILDS.find((b) => b.id === build)!.tier;
 
 /** What separates the "ready" build from the rebuilt one, and who does each part. */
-export const RECOMMENDED: { change: string; rule: string; how: 'automatic' | 'review' | 'manual' }[] = [
+export const RECOMMENDED: { change: string; rule: RuleId; how: 'automatic' | 'review' | 'manual' }[] = [
   { change: 'NavigationView becomes NavigationStack', rule: 'navigation-view', how: 'automatic' },
   { change: 'Insets use every side of the safe area', rule: 'symmetric-safe-area', how: 'automatic' },
   { change: 'Sizes come from the view, not UIScreen.main', rule: 'uiscreen-main', how: 'review' },
@@ -26,14 +27,14 @@ export const RECOMMENDED: { change: string; rule: string; how: 'automatic' | 're
   { change: 'The album list keeps one view and switches layout with AnyLayout', rule: 'state-reset', how: 'manual' },
 ];
 
-type PieceRole = 'bar' | 'rail' | 'artwork' | 'title' | 'controls' | 'list' | 'mini';
+type PieceRole = 'nav-bar' | 'tab-bar' | 'rail' | 'artwork' | 'title' | 'controls' | 'list' | 'mini';
 
 export interface Piece {
   role: PieceRole;
   label: string;
   rect: Rect;
   /** duo-ready rule that explains why this piece misbehaves. */
-  rule?: string;
+  rule?: RuleId;
 }
 
 interface Collision {
@@ -79,11 +80,11 @@ function legacy(p: Presentation, fullWidth: boolean, flagBars: boolean): Piece[]
   const colX = (W - colW) / 2;
   const tabY = H - bottom - TAB;
   const body = player({ x: colX, y: top + NAV, w: colW, h: tabY - top - NAV });
-  const sized = colW < W ? 'fixed-device-size' : undefined;
+  const sized: RuleId | undefined = colW < W ? 'fixed-device-size' : undefined;
   return [
-    { role: 'bar', label: 'Custom navigation bar', rect: { x: 0, y: top, w: W, h: NAV }, rule: flagBars ? 'hand-built-bar' : undefined },
+    { role: 'nav-bar', label: 'Custom navigation bar', rect: { x: 0, y: top, w: W, h: NAV }, rule: flagBars ? 'hand-built-bar' : undefined },
     ...body.map((piece) => ({ ...piece, rule: sized })),
-    { role: 'bar', label: 'Custom tab bar', rect: { x: 0, y: tabY, w: W, h: TAB }, rule: flagBars ? 'hand-built-bar' : undefined },
+    { role: 'tab-bar', label: 'Custom tab bar', rect: { x: 0, y: tabY, w: W, h: TAB }, rule: flagBars ? 'hand-built-bar' : undefined },
   ];
 }
 
@@ -97,7 +98,7 @@ function ready(p: Presentation): { pieces: Piece[]; arrangement: Arrangement } {
     pieces.push({ role: 'rail', label: 'System tab bar (vertical)', rect: { x: W - sa.right, y: railTop, w: sa.right, h: H - sa.bottom - railTop } });
   } else {
     content = { ...content, h: content.h - TAB };
-    pieces.push({ role: 'bar', label: 'System tab bar', rect: { x: sa.left, y: content.y + content.h, w: content.w, h: TAB } });
+    pieces.push({ role: 'tab-bar', label: 'System tab bar', rect: { x: sa.left, y: content.y + content.h, w: content.w, h: TAB } });
   }
   const local = p.regions.flatMap((r) => {
     const clipped = clipTo(r.frame, content);
@@ -135,7 +136,7 @@ export function layoutEncore(posture: Posture, build: Build, cameraActive = fals
       if (hit && area(hit) > 0.5) collisions.push({ piece, obstacle: o.obstacle, rect: hit });
     }
   }
-  const body = pieces.filter((x) => x.role !== 'bar' && x.role !== 'rail');
+  const body = pieces.filter((x) => x.role !== 'nav-bar' && x.role !== 'tab-bar' && x.role !== 'rail');
   const left = Math.min(...body.map((x) => x.rect.x));
   const right = Math.max(...body.map((x) => x.rect.x + x.rect.w));
   return { presentation: p, pieces, collisions, arrangement, contentWidth: (right - left) / p.window.w };

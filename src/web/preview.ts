@@ -31,16 +31,15 @@ function piece(p: Piece, s: number): HTMLElement {
   const style = px(p.rect, s);
   const icons = (names: string[], size: number) => names.map((n) => icon(n, size));
   switch (p.role) {
-    case 'bar':
-      if (p.label.includes('navigation')) {
-        return h(
-          'div',
-          { class: `enc-bar enc-nav${p.rule ? ' enc-custom' : ''}`, style: `${style};${font(15, s)}` },
-          h('span', {}, '‹ Library'),
-          h('strong', {}, 'Now Playing'),
-          h('span', {}, ''),
-        );
-      }
+    case 'nav-bar':
+      return h(
+        'div',
+        { class: `enc-bar enc-nav${p.rule ? ' enc-custom' : ''}`, style: `${style};${font(15, s)}` },
+        h('span', {}, '‹ Library'),
+        h('strong', {}, 'Now Playing'),
+        h('span', {}, ''),
+      );
+    case 'tab-bar':
       return h('div', { class: `enc-bar${p.rule ? ' enc-custom' : ''}`, style }, icons(TAB_ICONS, Math.max(10, 20 * s)));
     case 'rail':
       return h('div', { class: 'enc-rail', style }, icons(TAB_ICONS, Math.max(10, 20 * s)));

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { hunks } from '../../src/core/diff';
-import { maskSwift, parseSwift, position, walk } from '../../src/core/swift';
+import { maskSwift, parseSwift, walk } from '../../src/core/swift';
+import { position } from '../../src/core/text';
 
 describe('maskSwift', () => {
   it('blanks comments and string bodies but keeps offsets and newlines', () => {
@@ -51,9 +52,9 @@ describe('parseSwift', () => {
 
   it('maps offsets to 1-based lines and columns', () => {
     const src = parseSwift('a\nbc\ndef');
-    expect(position(src, 0)).toEqual({ line: 1, column: 1 });
-    expect(position(src, 3)).toEqual({ line: 2, column: 2 });
-    expect(position(src, 7)).toEqual({ line: 3, column: 3 });
+    expect(position(src.lineStarts, 0)).toEqual({ line: 1, column: 1 });
+    expect(position(src.lineStarts, 3)).toEqual({ line: 2, column: 2 });
+    expect(position(src.lineStarts, 7)).toEqual({ line: 3, column: 3 });
   });
 });
 

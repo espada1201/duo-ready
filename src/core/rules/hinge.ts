@@ -1,11 +1,11 @@
 import { ancestors, labelOffset, type Block } from '../swift';
-import { matchBefore, POSE, PREPARE, type RuleGroup } from './engine';
+import { defineGroup, matchBefore, POSE, PREPARE } from './engine';
 
 const SCROLLERS = new Set(['List', 'ScrollView', 'LazyVStack', 'LazyHStack', 'Form']);
 /** Closures whose content is presented elsewhere, so it is not laid out inside the enclosing scroller. */
 const PRESENTED = new Set(['NavigationLink', 'sheet', 'fullScreenCover', 'popover', 'navigationDestination', 'inspector']);
 
-export const hinge: RuleGroup = {
+export const hinge = defineGroup({
   id: 'hinge',
   title: 'Ignores the hinge',
   seen: 'Half-folded is the pose reviewers liked for video and the split keyboard, but content that ignores the fold gets cut in two.',
@@ -110,4 +110,4 @@ export const hinge: RuleGroup = {
       );
     }
   },
-};
+});

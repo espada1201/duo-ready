@@ -1,14 +1,14 @@
 import { INNER } from '../duo';
 import { tierFromUpgradeCheck, tierLabel, upgradeCheck, xcodeVersion } from '../sdk';
 import { lineAround } from '../text';
-import { PREPARE, POSE, type RuleGroup } from './engine';
+import { defineGroup, PREPARE, POSE } from './engine';
 
 // iPhone point sizes from the iPhone SE through the 17 Pro Max.
 const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize)\b/i;
 const PHONE_WIDTHS = new Set([320, 375, 390, 393, 402, 414, 428, 430, 440]);
 const PHONE_HEIGHTS = new Set([568, 667, 736, 812, 844, 852, 874, 896, 926, 932, 956]);
 
-export const blackBars: RuleGroup = {
+export const blackBars = defineGroup({
   id: 'black-bars',
   title: 'Black bars',
   seen: 'MKBHD and others found apps sitting in a window with black bars around it on the inner display.',
@@ -75,8 +75,9 @@ export const blackBars: RuleGroup = {
     const full = /INFOPLIST_KEY_UIRequiresFullScreen\s*=\s*YES;/.exec(file.content);
     if (full) report('requires-full-screen', full.index);
     const check = upgradeCheck(file.content);
-    if (check && Number(check.value) < 2710) {
-      report('old-sdk', check.offset, `Last upgraded with Xcode ${xcodeVersion(check.value)}; Duo users likely see ${tierLabel(tierFromUpgradeCheck(check.value))}.`);
+    const tier = check ? tierFromUpgradeCheck(check.value) : '27.1';
+    if (check && tier !== '27.1') {
+      report('old-sdk', check.offset, `Last upgraded with Xcode ${xcodeVersion(check.value)}; Duo users likely see ${tierLabel(tier)}.`);
     }
   },
-};
+});

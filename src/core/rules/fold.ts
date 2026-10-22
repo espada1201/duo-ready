@@ -1,7 +1,7 @@
 import { blockAt, declaredTypes, headerOf, labelOffset, type Block, type SwiftSource } from '../swift';
 import type { Fix } from '../types';
 import { lineAround } from '../text';
-import { chainHas, declaredAt, matchBefore, PREPARE, type RuleGroup } from './engine';
+import { defineGroup, chainHas, declaredAt, matchBefore, PREPARE } from './engine';
 
 const SCENES = 'Apple, WWDC25 “Make your UIKit app more flexible” (UIScene required after iOS 26)';
 
@@ -62,7 +62,7 @@ function iPhoneBuildSettings(pbxproj: string): { text: string; offset: number }[
 
 const isPortraitOnly = (orientations: string[]) => orientations.length > 0 && orientations.every((o) => o.includes('Portrait'));
 
-export const fold: RuleGroup = {
+export const fold = defineGroup({
   id: 'fold',
   title: 'Breaks when you fold or unfold',
   seen: 'Reviewers praise how Apple’s own apps carry on mid-task when you open or close the phone. Third-party apps only do the same if they are built for it.',
@@ -223,4 +223,4 @@ export const fold: RuleGroup = {
     const usesScenes = facts.swiftUIApp || (facts.sceneManifest && facts.sceneDelegate);
     if (!usesScenes && facts.appDelegate) reporterFor(facts.appDelegate.file)('no-scene-lifecycle', facts.appDelegate.offset);
   },
-};
+});

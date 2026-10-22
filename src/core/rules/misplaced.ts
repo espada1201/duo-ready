@@ -1,8 +1,8 @@
 import { eolOf, lineIndent } from '../text';
 import { labelOffset } from '../swift';
-import { chainHas, PREPARE, type RuleGroup } from './engine';
+import { defineGroup, chainHas, PREPARE } from './engine';
 
-export const misplaced: RuleGroup = {
+export const misplaced = defineGroup({
   id: 'misplaced',
   title: 'Misplaced buttons and bars',
   seen: 'Buttons and bars in the wrong place or colliding with the status bar. MKBHD also pointed out that the inner display puts the status bar and system bars in a column on the right, which suits right-handed use better than left.',
@@ -87,4 +87,4 @@ export const misplaced: RuleGroup = {
 
     for (const hit of m.matchAll(/\bUIScreenEdgePanGestureRecognizer\s*\(/g)) report('edge-gesture', hit.index!);
   },
-};
+});

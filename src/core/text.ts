@@ -27,3 +27,22 @@ export function lineIndent(text: string, offset: number): string {
 }
 
 export const eolOf = (text: string) => (text.includes('\r\n') ? '\r\n' : '\n');
+
+/** Offset where each line begins. */
+export function lineStarts(text: string): number[] {
+  const out = [0];
+  for (let i = 0; i < text.length; i++) if (text[i] === '\n') out.push(i + 1);
+  return out;
+}
+
+/** 1-based line and column of `offset`, given the text's `lineStarts`. */
+export function position(starts: number[], offset: number): { line: number; column: number } {
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= offset) lo = mid;
+    else hi = mid - 1;
+  }
+  return { line: lo + 1, column: offset - starts[lo] + 1 };
+}

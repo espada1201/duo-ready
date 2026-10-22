@@ -184,7 +184,7 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
       status(c.dim(`\n${applied.length} fixes would be applied. Nothing was written.`));
       if (cmd.format === 'text' && !cmd.out) return exitCode(result, cmd.failOn);
     } else {
-      const base = statSync(root).isDirectory() ? root : dirname(root);
+      const base = baseDir(root);
       try {
         fixed.forEach((file, i) => {
           if (file.content !== files[i].content) writeFileSync(join(base, file.path), file.content);
@@ -198,12 +198,12 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
     }
   }
 
-  const body =
-    cmd.format === 'json'
-      ? JSON.stringify(result, null, 2)
-      : cmd.format === 'sarif'
-        ? JSON.stringify(toSarif(result, __VERSION__, repoPrefix(root)), null, 2)
-        : textReport(result, cmd.out ? paint(false) : c);
+  const render: Record<AuditOptions['format'], () => string> = {
+    json: () => JSON.stringify(result, null, 2),
+    sarif: () => JSON.stringify(toSarif(result, __VERSION__, repoPrefix(root)), null, 2),
+    text: () => textReport(result, cmd.out ? paint(false) : c),
+  };
+  const body = render[cmd.format]();
   if (cmd.out) {
     try {
       writeFileSync(cmd.out, body + '\n');
@@ -222,9 +222,12 @@ function exitCode(result: AuditResult, failOn: AuditOptions['failOn']): number {
   return result.findings.some((f) => f.severity === 'error' || (failOn === 'warning' && f.severity === 'warning')) ? 1 : 0;
 }
 
+/** The folder that relative paths in the report start from. */
+const baseDir = (root: string) => (statSync(root).isDirectory() ? root : dirname(root));
+
 /** Path from the enclosing git checkout to the audited folder, so SARIF paths match the repo. */
 function repoPrefix(root: string): string {
-  const start = statSync(root).isDirectory() ? root : dirname(root);
+  const start = baseDir(root);
   for (let dir = start; ; dir = dirname(dir)) {
     if (existsSync(join(dir, '.git'))) return relative(dir, start).split('\\').join('/');
     if (dirname(dir) === dir) return '';

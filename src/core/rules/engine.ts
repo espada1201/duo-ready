@@ -5,8 +5,8 @@ import type { parsePlist } from '../plist';
 import type { Block, SwiftSource } from '../swift';
 import type { Fix, Severity, SourceFile } from '../types';
 
-export interface Rule {
-  id: string;
+export interface Rule<Id extends string = string> {
+  id: Id;
   title: string;
   severity: Severity;
   /** Why it matters on iPhone Duo, in one or two sentences. */
@@ -37,48 +37,51 @@ export interface ProjectFacts {
   hasProjectFiles: boolean;
 }
 
-export type Report = (ruleId: string, offset: number, message?: string, fix?: Fix) => void;
+export type Report<Id extends string = string> = (ruleId: Id, offset: number, message?: string, fix?: Fix) => void;
 
-interface Context {
+interface Context<Id extends string = string> {
   file: SourceFile;
   facts: ProjectFacts;
-  report: Report;
+  report: Report<Id>;
 }
 
-export interface SwiftContext extends Context {
+export interface SwiftContext<Id extends string = string> extends Context<Id> {
   src: SwiftSource;
   /** The source with comments and string contents blanked. */
   masked: string;
   blocks: Block[];
 }
 
-export interface PlistContext extends Context {
+export interface PlistContext<Id extends string = string> extends Context<Id> {
   plist: NonNullable<ReturnType<typeof parsePlist>>;
 }
 
-export interface ProjectContext {
+export interface ProjectContext<Id extends string = string> {
   facts: ProjectFacts;
-  reporterFor: (file: SourceFile) => Report;
+  reporterFor: (file: SourceFile) => Report<Id>;
 }
 
 /** A reviewer pain point, its root cause, and the rules that catch it. */
-export interface RuleGroup {
+export interface RuleGroup<Id extends string = string> {
   id: string;
   title: string;
   /** What reviewers reported. */
   seen: string;
   /** Why it happens, from first principles. */
   cause: string;
-  rules: Rule[];
-  swift?: (c: SwiftContext) => void;
-  plist?: (c: PlistContext) => void;
-  pbxproj?: (c: Context) => void;
+  rules: readonly Rule<Id>[];
+  swift?: (c: SwiftContext<Id>) => void;
+  plist?: (c: PlistContext<Id>) => void;
+  pbxproj?: (c: Context<Id>) => void;
   /** package.json or pubspec.yaml. */
-  manifest?: (c: Context) => void;
-  html?: (c: Context) => void;
+  manifest?: (c: Context<Id>) => void;
+  html?: (c: Context<Id>) => void;
   /** Runs once after every file, for rules that need the whole project. */
-  project?: (c: ProjectContext) => void;
+  project?: (c: ProjectContext<Id>) => void;
 }
+
+/** Declares a group so that `report` only accepts the ids of the group's own rules. */
+export const defineGroup = <const Id extends string>(group: RuleGroup<Id>): RuleGroup<Id> => group;
 
 /** Offset just past the bracket that closes the one at `open`, or -1. Strings are already masked. */
 function closeOf(masked: string, open: number): number {

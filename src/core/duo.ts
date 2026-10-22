@@ -202,6 +202,7 @@ export function arrange(
   axes: ('horizontal' | 'vertical')[] = ['horizontal', 'vertical'],
 ): Arrangement {
   const full: Rect = { x: 0, y: 0, w: bounds.w, h: bounds.h };
+  const primaryOnly: Arrangement = { primary: full, secondary: null, secondaryZIndex: 0, axis: null };
   const division = regions.find((r) => r.kind === 'division' && r.active && area(r.frame) > 0);
   const divisionAxis = division ? (division.frame.h >= bounds.h - 0.5 ? 'horizontal' : 'vertical') : null;
 
@@ -211,7 +212,7 @@ export function arrange(
   }
 
   const axis = divisionAxis ?? (bounds.w > bounds.h ? 'horizontal' : 'vertical');
-  if (!axes.includes(axis)) return { primary: full, secondary: null, secondaryZIndex: 0, axis: null };
+  if (!axes.includes(axis)) return primaryOnly;
 
   const length = axis === 'horizontal' ? bounds.w : bounds.h;
   let a: number;
@@ -222,7 +223,7 @@ export function arrange(
   } else {
     a = b = length / 2;
   }
-  if (a < MIN_PANE || length - b < MIN_PANE) return { primary: full, secondary: null, secondaryZIndex: 0, axis: null };
+  if (a < MIN_PANE || length - b < MIN_PANE) return primaryOnly;
 
   const first: Rect = axis === 'horizontal' ? { x: 0, y: 0, w: a, h: bounds.h } : { x: 0, y: 0, w: bounds.w, h: a };
   const second: Rect = axis === 'horizontal' ? { x: b, y: 0, w: bounds.w - b, h: bounds.h } : { x: 0, y: b, w: bounds.w, h: bounds.h - b };

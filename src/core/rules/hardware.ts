@@ -1,9 +1,10 @@
+import { stringLiteralAt } from '../swift';
 import { lineAround } from '../text';
-import type { RuleGroup } from './engine';
+import { defineGroup } from './engine';
 
 const FORCED_CAMERA = /\bAVCaptureDevice\s*\.\s*default\s*\((?:[^()]|\([^()]*\))*\)\s*!(?!=)/;
 
-export const hardware: RuleGroup = {
+export const hardware = defineGroup({
   id: 'hardware',
   title: 'Assumes iPhone hardware',
   seen: 'Reviewers noted that Duo unlocks with Touch ID in the side button instead of Face ID, uses an under-display selfie camera on the inner screen, and has a hole-punch camera on the outer one.',
@@ -35,7 +36,8 @@ export const hardware: RuleGroup = {
     for (const hit of file.content.matchAll(/Face ID/g)) {
       const i = hit.index!;
       // Copy that already offers Touch ID or a passcode reads fine on Duo.
-      if (src.strings[i] && src.strings[i + 6] && !/Touch ID|fingerprint|passcode/i.test(stringAround(src.strings, file.content, i))) {
+      const literal = stringLiteralAt(src, file.content, i);
+      if (literal?.includes('Face ID') && !/Touch ID|fingerprint|passcode/i.test(literal)) {
         report('biometry-faceid', i, 'User-facing text mentions Face ID, which iPhone Duo doesn’t have.');
       }
     }
@@ -47,13 +49,4 @@ export const hardware: RuleGroup = {
       if (!FORCED_CAMERA.test(lineAround(m, hit.index!))) report('camera-hardware', hit.index!, 'The TrueDepth camera comes with Face ID; iPhone Duo has neither.');
     }
   },
-};
-
-/** The whole string literal that contains `at`. */
-function stringAround(strings: Uint8Array, text: string, at: number): string {
-  let from = at;
-  let to = at;
-  while (from > 0 && strings[from - 1]) from--;
-  while (to < text.length && strings[to]) to++;
-  return text.slice(from, to);
-}
+});
