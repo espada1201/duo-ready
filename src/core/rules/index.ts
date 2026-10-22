@@ -1,6 +1,7 @@
 // The rule registry. Rules live with the reviewer pain point they prevent; this file
 // parses each file once, learns project-wide facts, then hands every file to every group.
 
+import { parseObjC } from '../objc';
 import { parsePlist } from '../plist';
 import { blockAt, declaredTypes, parseSwift, walk, type Block, type SwiftSource } from '../swift';
 import { configDeploymentTarget, deploymentTarget, upgradeCheck } from '../sdk';
@@ -74,8 +75,7 @@ function parse(file: SourceFile): Parsed | null {
     // Home Screen widgets are laid out by WidgetKit, not in the app's window.
     return WIDGET.test(src.masked) ? null : { kind: 'swift', file, src };
   }
-  // The Swift masker blanks Objective-C comments and @"strings" the same way.
-  if (/\.mm?$/.test(name)) return { kind: 'objc', file, src: parseSwift(file.content) };
+  if (/\.(mm?|h)$/.test(name)) return { kind: 'objc', file, src: parseObjC(file.content) };
   if (name.endsWith('.plist')) {
     const plist = parsePlist(file.content);
     // Watch apps and extensions have their own Info.plist; only the iPhone app's matters here.
@@ -117,6 +117,11 @@ function learn(parsed: Parsed[]): ProjectFacts {
       if (appDelegate && !facts.appDelegate) facts.appDelegate = { file: p.file, offset: appDelegate.index };
       if (/\b(?:struct|class|enum|actor)\s+VideoPlayer\b/.test(m)) facts.ownVideoPlayer = true;
       for (const hit of m.matchAll(IDIOM_WRAPPER)) if (!facts.idiomWrappers.includes(hit[1])) facts.idiomWrappers.push(hit[1]);
+    } else if (p.kind === 'objc') {
+      const m = p.src.masked;
+      if (/\bUIWindowSceneDelegate\b/.test(m)) facts.sceneDelegate = true;
+      const appDelegate = /@interface\s+\w+\s*:\s*\w+\s*<[^>]*\bUIApplicationDelegate\b/.exec(m);
+      if (appDelegate && !facts.appDelegate) facts.appDelegate = { file: p.file, offset: appDelegate.index };
     } else if (p.kind === 'plist') {
       facts.hasProjectFiles = true;
       if (p.plist.keys.has('UIApplicationSceneManifest')) facts.sceneManifest = true;

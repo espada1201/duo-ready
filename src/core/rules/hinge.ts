@@ -100,7 +100,10 @@ export const hinge = defineGroup({
 
   objc({ masked: m, report }) {
     if (!/\breservedRegions\b/.test(m)) {
-      for (const hit of m.matchAll(/\[\s*(?:AVPlayerLayer|AVCaptureVideoPreviewLayer)\s+\w+/g)) report('hinge-media', hit.index!);
+      // `[AVPlayerLayer class]` is a type check, except where `+layerClass` makes the view a video surface.
+      for (const hit of m.matchAll(/\[\s*(?:AVPlayerLayer|AVCaptureVideoPreviewLayer)\s+(\w+)/g)) {
+        if (hit[1] !== 'class' || /\(\s*Class\s*\)\s*layerClass\s*\{[^{}]*$/.test(m.slice(Math.max(0, hit.index! - 120), hit.index))) report('hinge-media', hit.index!);
+      }
     }
     if (!/\bkeyboardLayoutGuide\b/.test(m)) {
       for (const hit of m.matchAll(/\bUIKeyboardFrame(?:End|Begin)UserInfoKey\b/g)) report('keyboard-frame', hit.index!);

@@ -88,7 +88,7 @@ export const stretched = defineGroup({
       const line = lineAround(m, hit.index!);
       // Picking a keyboard type by idiom is about input, not layout; a tvOS, Mac or CarPlay check is
       // false on Duo either way; and a wrapper like `isPad` is reported where it's used.
-      if (declaredAt(m, hit.index!) || /\bkeyboardType\b/.test(line) || /userInterfaceIdiom\s*[!=]=\s*\.(?:tv|mac|carPlay|vision)\b/.test(line)) continue;
+      if (declaredAt(m, hit.index!) || /\bkeyboardType\b/.test(line) || /^userInterfaceIdiom\s*[!=]=\s*\.(?:tv|mac|carPlay|vision)\b/.test(m.slice(hit.index!, hit.index! + 60))) continue;
       if (facts.idiomWrappers.some((w) => new RegExp(`\\bvar\\s+${w}\\s*:\\s*Bool\\s*\\{[^{}]*$`).test(m.slice(Math.max(0, hit.index! - 120), hit.index)))) continue;
       report('idiom-layout', hit.index!);
     }
@@ -96,7 +96,8 @@ export const stretched = defineGroup({
     const scaled = m.includes('scaledFont');
     for (const hit of m.matchAll(/\.system\s*\(\s*size\s*:|\bUIFont\s*\.\s*(?:systemFont|boldSystemFont|italicSystemFont|monospacedSystemFont)\s*\(\s*ofSize\s*:|\bUIFont\s*\(\s*name\s*:[^)]*size\s*:|\.custom\s*\([^)]*size\s*:/g)) {
       // A size read from a text style follows the reader's text size when the font is made.
-      if (/relativeTo\s*:|UIFontMetrics|scaledFont|forTextStyle/.test(lineAround(m, hit.index!) + callText(m, hit.index!))) continue;
+      const call = callText(m, hit.index!);
+      if (/relativeTo\s*:|UIFontMetrics|scaledFont/.test(lineAround(m, hit.index!) + call) || /forTextStyle|withTextStyle/.test(call)) continue;
       // A point size on an SF Symbol sizes an icon; PDF and draw(_:) output has no Dynamic Type to follow.
       if (/\bImage\s*\(\s*system(?:Name|Symbol)\s*:[^()]*\)(?:\s*\.\w+\s*\((?:[^()]|\([^()]*\))*\))*\s*\.font\s*\(\s*$/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
       if (inDrawing(m, blockAt(src.root, hit.index!))) continue;
@@ -148,13 +149,20 @@ export const stretched = defineGroup({
   },
 
   objc({ masked: m, report }) {
-    for (const hit of m.matchAll(/\buserInterfaceIdiom\b|\bUI_USER_INTERFACE_IDIOM\s*\(/g)) {
-      if (!/UIUserInterfaceIdiom(?:TV|Mac|CarPlay|Vision)\b/.test(lineAround(m, hit.index!))) report('idiom-layout', hit.index!);
+    for (const hit of m.matchAll(/\buserInterfaceIdiom\b|\bUI_USER_INTERFACE_IDIOM\s*\(\s*\)/g)) {
+      // A tvOS, Mac or CarPlay check is false on Duo either way; a keyboard type is about input.
+      const after = m.slice(hit.index! + hit[0].length, hit.index! + hit[0].length + 60);
+      if (/^\s*\]?\s*[!=]=\s*UIUserInterfaceIdiom(?:TV|Mac|CarPlay|Vision)\b/.test(after) || /\bkeyboardType\b/.test(lineAround(m, hit.index!))) continue;
+      report('idiom-layout', hit.index!);
     }
-    for (const hit of m.matchAll(/\b(?:systemFontOfSize|boldSystemFontOfSize|italicSystemFontOfSize|monospacedSystemFontOfSize|fontWithName\s*:[^\]\n]*\bsize)\s*:/g)) {
+    for (const hit of m.matchAll(/\b(?:systemFontOfSize|boldSystemFontOfSize|italicSystemFontOfSize|monospacedSystemFontOfSize|fontWithName)\s*:/g)) {
+      if (/@selector\s*\(\s*$/.test(m.slice(Math.max(0, hit.index! - 20), hit.index))) continue;
+      // The rest of the message, so a size on the next line or a nested [self fontName] is still read.
       const end = m.indexOf(';', hit.index!);
-      const statement = m.slice(hit.index!, end < 0 ? undefined : end);
-      if (!/UIFontTextStyle|ForTextStyle|UIFontMetrics|scaledFontForFont/.test(lineAround(m, hit.index!) + statement)) report('fixed-font', hit.index!);
+      const statement = m.slice(hit.index!, Math.min(end < 0 ? m.length : end, hit.index! + 400));
+      if (hit[0].startsWith('fontWithName') && !/\bsize\s*:/.test(statement)) continue;
+      if (/UIFontMetrics|scaledFontForFont/.test(lineAround(m, hit.index!)) || /UIFontTextStyle|ForTextStyle|UIFontMetrics|scaledFontForFont/.test(statement)) continue;
+      report('fixed-font', hit.index!);
     }
     for (const hit of m.matchAll(/\bUIViewContentModeScaleToFill\b/g)) report('stretched-image', hit.index!);
     for (const hit of m.matchAll(/\bSKSceneScaleMode(Fill|AspectFit)\b/g)) {

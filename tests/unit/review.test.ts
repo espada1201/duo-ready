@@ -440,3 +440,68 @@ describe('sixth review: games, web views, media and cross-platform apps', () => 
     expect(ids([{ path: 'Legacy.m', content: code }])).toEqual([]);
   });
 });
+
+const ids = (files: SourceFile[]) => audit(files).findings.map((f) => f.ruleId);
+
+describe('seventh review: Objective-C', () => {
+  const objc = (content: string, path = 'App/Legacy.m') => ids([{ path, content }]);
+
+  it.each([
+    ['a selector named like a font call', 'SEL s = @selector(systemFontOfSize:weight:);'],
+    ['a layer type check', 'if ([layer isKindOfClass:[AVPlayerLayer class]]) {}'],
+    ['a Mac idiom check', 'if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomMac) {}'],
+    ['a keyboard type by idiom', 'field.keyboardType = UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad ? UIKeyboardTypeDefault : UIKeyboardTypeNumberPad;'],
+    ['two empty strings joined', 'NSString *s = @"" "";'],
+    ['a quote character', "unichar q = '\"';"],
+    ['C++ raw strings', 'auto s = R"(\nAvoid [UIScreen mainScreen]\n)";'],
+    ['code under #if 0', '#if 0\nCGRect r = [UIScreen mainScreen].bounds;\n#endif'],
+  ])('ignores %s', (_, code) => {
+    expect(objc(code, 'App/Legacy.mm')).toEqual([]);
+  });
+
+  it.each([
+    ['code after two empty strings', 'NSString *s = @"" "";\nCGRect r = [UIScreen mainScreen].bounds;', 'uiscreen-main'],
+    ['code after a quote character', "unichar q = '\"'; CGRect r = [UIScreen mainScreen].bounds;", 'uiscreen-main'],
+    ['the #else of #if 0', '#if 0\nint a;\n#else\nCGRect r = [UIScreen mainScreen].bounds;\n#endif', 'uiscreen-main'],
+    ['an iPad check next to a Mac check', 'BOOL big = idiom == UIUserInterfaceIdiomMac || [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad;', 'idiom-layout'],
+    ['a nested font name', 'l.font = [UIFont fontWithName:[self fontName] size:12];', 'fixed-font'],
+    ['a size on the next line', 'l.font = [UIFont fontWithName:@"Avenir"\n                      size:12];', 'fixed-font'],
+    ['the delegate window', 'UIWindow *w = [UIApplication sharedApplication].delegate.window;', 'key-window'],
+    ['the delegate window as messages', 'UIWindow *w = [[[UIApplication sharedApplication] delegate] window];', 'key-window'],
+    ['interfaceOrientation', 'if (UIInterfaceOrientationIsLandscape(self.interfaceOrientation)) {}', 'orientation-layout'],
+    ['a bar made with new', 'UITabBar *bar = [UITabBar new];', 'hand-built-bar'],
+    ['an iPhone width with a bar height', 'v.frame = CGRectMake(0, 0, 375, 44);', 'fixed-device-size'],
+    ['a float suffix', 'v.frame = CGRectMake(0, 0, 320.f, 568.f);', 'fixed-device-size'],
+    ['a parenthesised portrait lock', '- (UIInterfaceOrientationMask)supportedInterfaceOrientations {\n  return (UIInterfaceOrientationMaskPortrait);\n}', 'portrait-only'],
+    ['a video view', '+ (Class)layerClass {\n  return [AVPlayerLayer class];\n}', 'hinge-media'],
+    ['a macro in a header', '#define SCREEN_W [UIScreen mainScreen].bounds.size.width', 'uiscreen-main'],
+  ])('finds %s', (_, code, rule) => {
+    expect(objc(code, /define/.test(code) ? 'App/Constants.h' : 'App/Legacy.m')).toContain(rule);
+  });
+
+  it('reads the app and scene delegates from Objective-C', () => {
+    const plist = { path: 'App/Info.plist', content: '<plist><dict><key>UIApplicationSceneManifest</key><dict/></dict></plist>' };
+    const swiftApp = { path: 'App/AppDelegate.swift', content: 'class AppDelegate: UIResponder, UIApplicationDelegate {}' };
+    expect(ids([swiftApp, plist, { path: 'App/SceneDelegate.m', content: '@interface SceneDelegate : UIResponder <UIWindowSceneDelegate>\n@end' }])).not.toContain('no-scene-lifecycle');
+    expect(ids([{ path: 'App/AppDelegate.h', content: '@interface AppDelegate : UIResponder <UIApplicationDelegate>\n@end' }])).toContain('no-scene-lifecycle');
+  });
+
+  it('skips vendored "Third Party" folders and Objective-C tests', () => {
+    expect(objc('CGRect r = [UIScreen mainScreen].bounds;', 'App/Third Party Code/NYT/View.m')).toEqual([]);
+    expect(objc('CGRect r = [UIScreen mainScreen].bounds;', 'App/LegacyTests.m')).toEqual([]);
+  });
+
+  it('stays fast on odd input', () => {
+    const started = performance.now();
+    objc('[UIFont systemFontOfSize:12] '.repeat(20_000));
+    objc('- supportedInterfaceOrientationsForWindow:'.repeat(20_000));
+    objc(`x = @"${'Face ID '.repeat(50_000)}"; ${'[UIScreen mainScreen] '.repeat(20_000)}`);
+    expect(performance.now() - started).toBeLessThan(3000);
+  });
+});
+
+it('sees a fixed font beside a text-style font in Swift', () => {
+  expect(ids([{ path: 'A.swift', content: 'label.font = c ? UIFont.preferredFont(forTextStyle: .body) : UIFont.systemFont(ofSize: 14)' }])).toContain('fixed-font');
+  expect(ids([{ path: 'A.swift', content: 'label.font = UIFont.systemFont(ofSize: UIFontDescriptor.preferredFontDescriptor(withTextStyle: .body).pointSize)' }])).toEqual([]);
+});
+

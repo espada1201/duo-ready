@@ -15,15 +15,19 @@ export function groupBy<T, K>(items: Iterable<T>, key: (item: T) => K): Map<K, T
   return out;
 }
 
+/** The line holding `offset`; on a very long (minified) line, the 1,000 characters either side. */
 export function lineAround(text: string, offset: number): string {
-  const start = text.lastIndexOf('\n', offset - 1) + 1;
-  const end = text.indexOf('\n', offset);
-  return text.slice(start, end === -1 ? undefined : end).replace(/\r$/, '');
+  // Searching a bounded window keeps many hits on one huge line linear.
+  const from = Math.max(0, offset - 1000);
+  const before = text.slice(from, offset).lastIndexOf('\n');
+  const after = text.slice(offset, offset + 1000);
+  const end = after.indexOf('\n');
+  return text.slice(before < 0 ? from : from + before + 1, offset) + (end < 0 ? after : after.slice(0, end)).replace(/\r$/, '');
 }
 
 export function lineIndent(text: string, offset: number): string {
   const start = text.lastIndexOf('\n', offset - 1) + 1;
-  return /^[ \t]*/.exec(text.slice(start))![0];
+  return /^[ \t]*/.exec(text.slice(start, start + 200))![0];
 }
 
 export const eolOf = (text: string) => (text.includes('\r\n') ? '\r\n' : '\n');

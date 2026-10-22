@@ -192,7 +192,11 @@ function labelBefore(masked: string, brace: number): { label: string | null; arg
 }
 
 export function parseSwift(text: string): SwiftSource {
-  const { masked, strings } = maskParts(text);
+  return withBlocks(text, maskParts(text));
+}
+
+/** Adds the `{}` block tree to a masked source. */
+export function withBlocks(text: string, { masked, strings }: { masked: string; strings: Uint8Array }): SwiftSource {
   const root: Block = { label: null, argument: null, open: -1, close: text.length, parent: null, children: [] };
   let current = root;
   let lastClosed: Block | null = null;

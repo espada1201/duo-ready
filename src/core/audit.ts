@@ -3,10 +3,10 @@ import { checkFiles } from './rules';
 import { tierFromUpgradeCheck, xcodeVersion } from './sdk';
 import type { AuditResult, Finding, SourceFile } from './types';
 
-const SKIP_DIR = /(^|\/)(Pods|Carthage|DerivedData|node_modules|build|SourcePackages|fastlane|\.[^/]+|\w*Tests|\w*Mocks|TestHelpers|TestSupport|Preview Content|Previews|ThirdParty|third_party|[Vv]endor)\//;
+const SKIP_DIR = /(^|\/)(Pods|Carthage|DerivedData|node_modules|build|SourcePackages|fastlane|\.[^/]+|\w*Tests|\w*Mocks|TestHelpers|TestSupport|Preview Content|Previews|Third[ _-]?[Pp]arty(?: Code)?|third_party|[Vv]endor)\//;
 /** Test code and build scripts run on a Mac or in CI; they aren't what Duo users see. */
-const TEST_FILE = /((Tests|\.test)\.swift|(^|\/)(Dangerfile|Package)\.swift)$/;
-const RELEVANT = /(\.swift|\.mm?|\.plist|\.html?|\.xcconfig|(^|\/)project\.pbxproj|(^|\/)project[\w-]*\.ya?ml|(^|\/)package\.json|(^|\/)pubspec\.yaml)$/;
+const TEST_FILE = /((Tests|\.test)\.(swift|mm?)|(^|\/)(Dangerfile|Package)\.swift)$/;
+const RELEVANT = /(\.swift|\.mm?|\.h|\.plist|\.html?|\.xcconfig|(^|\/)project\.pbxproj|(^|\/)project[\w-]*\.ya?ml|(^|\/)package\.json|(^|\/)pubspec\.yaml)$/;
 
 /** Files larger than this are skipped: generated code, not something to audit. */
 export const MAX_BYTES = 2_000_000;
@@ -35,7 +35,7 @@ function grade(value: number, findings: Finding[], partial: boolean): AuditResul
 }
 
 /** Objective-C gets the checks that have an Objective-C spelling, not the SwiftUI ones. */
-const OBJC = /\.mm?$/;
+const OBJC = /\.(mm?|h)$/;
 
 export function audit(input: SourceFile[]): AuditResult {
   const files = input.filter((f) => isRelevant(f.path));

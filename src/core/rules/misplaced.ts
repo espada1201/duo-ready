@@ -56,8 +56,8 @@ export const misplaced = defineGroup({
   ],
 
   objc({ masked: m, report }) {
-    for (const hit of m.matchAll(/\[\s*\[\s*(UITabBar|UIToolbar|UINavigationBar)\s+alloc\s*\]/g)) {
-      if (!/inputAccessoryView/.test(lineAround(m, hit.index!))) report('hand-built-bar', hit.index!, `${hit[1]} created by hand won’t get Duo’s vertical bar layout.`);
+    for (const hit of m.matchAll(/\[\s*(?:\[\s*(UITabBar|UIToolbar|UINavigationBar)\s+alloc\s*\]|(UITabBar|UIToolbar|UINavigationBar)\s+new\s*\])/g)) {
+      if (!/inputAccessoryView/.test(lineAround(m, hit.index!))) report('hand-built-bar', hit.index!, `${hit[1] ?? hit[2]} created by hand won’t get Duo’s vertical bar layout.`);
     }
     for (const hit of m.matchAll(/safeAreaInsets\s*\.\s*(left|right|top|bottom)\s*\*\s*2(?![.\w])/g)) report('symmetric-safe-area', hit.index!);
     for (const hit of m.matchAll(/\[\s*UIScreenEdgePanGestureRecognizer\s+alloc\b/g)) report('edge-gesture', hit.index!);
@@ -73,7 +73,7 @@ export const misplaced = defineGroup({
       if (name && new RegExp(`inputAccessoryView\\s*=\\s*${name}\\b`).test(m.slice(scope.open + 1, scope.close))) continue;
       // A factory in `extension UIToolbar` makes bars for its callers, which decide where they go.
       if (insideExtensionOf(m, scope, hit[1])) continue;
-      report('hand-built-bar', hit.index!, `${hit[1]} created by hand won’t get Duo’s vertical bar layout.`);
+      report('hand-built-bar', hit.index!, `${hit[1] ?? hit[2]} created by hand won’t get Duo’s vertical bar layout.`);
     }
     for (const hit of m.matchAll(/\bstruct\s+(\w*(?:TabBar|Toolbar|NavBar|NavigationBar|BottomBar)(?:View)?)\s*:\s*[^{]*\bView\b/g)) {
       report('hand-built-bar', hit.index!, `${hit[1]} is a custom bar; it will stay horizontal while system bars go vertical.`);
