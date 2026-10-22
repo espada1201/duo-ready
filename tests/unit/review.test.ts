@@ -1051,3 +1051,11 @@ describe('toolbar factories', () => {
     expect(ids([{ path: 'A.swift', content: 'func createToolbarView() -> UIToolbar {\n  let bar = UIToolbar(frame: CGRect(x: 0, y: 0, width: webView.frame.width, height: 0))\n  bar.frame.size.height += statusBarHeight\n  return bar\n}' }])).toContain('hand-built-bar');
   });
 });
+
+describe('lettering drawn into artwork', () => {
+  it('ignores a font drawn into an image or sized from the view', () => {
+    expect(ids([{ path: 'A.swift', content: 'static func pin(for text: String) -> UIImage {\n  let attrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 30)]\n  return render(text, attrs)\n}' }])).toEqual([]);
+    expect(ids([{ path: 'A.m', content: '- (void)layoutSubviews {\n  _label.font = [UIFont systemFontOfSize:[Artwork fontSizeForSide:side] weight:UIFontWeightHeavy];\n}' }])).toEqual([]);
+    expect(ids([{ path: 'A.m', content: '- (void)setup {\n  _label.font = [UIFont systemFontOfSize:15 weight:UIFontWeightHeavy];\n}' }])).toContain('fixed-font');
+  });
+});

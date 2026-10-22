@@ -13,7 +13,8 @@ const OFFSCREEN_RENDER = /\bUIPrint(?:PageRenderer|Formatter)\b|\bUIMarkupTextPr
 function inDrawing(m: string, scope: Block | null): boolean {
   for (let b = scope; b?.parent; b = b.parent) {
     const head = m.slice(Math.max(0, b.open - 120), b.open);
-    if (/\bfunc\s+draw\s*\([^{]*$/.test(head)) return true;
+    // `func draw(_:)`, or a function that returns the image it draws (`static func pin(for text: String) -> UIImage`).
+    if (/\bfunc\s+draw\s*\([^{]*$|\bfunc\s+\w+\s*\([^{]*->\s*(?:UI|CG|NS)?Image\??\s*$/.test(head)) return true;
     const type = /\b(?:class|struct|enum|actor|extension)\s+(?!func\b|var\b|let\b)(\w+)[^{}]*$/.exec(head);
     if (type ? /PDF|Pdf|UIPrint/.test(type[0]) : OFFSCREEN_RENDER.test(m.slice(b.open, b.close)) || /\bUIGraphicsImageRenderer\b[^{}]*$/.test(head)) return true;
   }
@@ -215,6 +216,8 @@ export const stretched = defineGroup({
       const statement = m.slice(hit.index!, Math.min(end < 0 ? m.length : end, hit.index! + 400));
       if (hit[0].startsWith('fontWithName') && !/\bsize\s*:/.test(statement)) continue;
       if (/UIFontMetrics|scaledFontForFont/.test(lineAround(m, hit.index!)) || /UIFontTextStyle|ForTextStyle|UIFontMetrics|scaledFontForFont/.test(statement)) continue;
+      // A size worked out from the view's side, width or bounds scales lettering to artwork, like initials on a placeholder.
+      if (/^\w+\s*:\s*[^:\]]*?(?:side|width|height|bounds|frame)\b/i.test(statement)) continue;
       report('fixed-font', hit.index!);
     }
     for (const hit of m.matchAll(/\bUIViewContentModeScaleToFill\b/g)) report('stretched-image', hit.index!);
