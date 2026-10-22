@@ -43,6 +43,8 @@ export interface ProjectFacts {
   squareModifiers: string[];
   /** Views some caller in the project keeps to an aspect ratio: `ImageView(url: u).scaledToFit()`. */
   aspectViews: Set<string>;
+  /** Some TabView in the project already opts into a sidebar (`.sidebarAdaptable` or `defaultTabBarPlacement`). */
+  tabPlacement: boolean;
   /** The project's SwiftUI views, true where one keeps state a rebuild throws away (@State, a ScrollView, a TextField…). */
   views: Map<string, boolean>;
   /** LastUpgradeCheck, e.g. "2600". */

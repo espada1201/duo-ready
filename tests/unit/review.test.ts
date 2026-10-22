@@ -1019,3 +1019,35 @@ describe('eighth held-out review', () => {
     expect(swiftIds('func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {\n  let bar = UIToolbar(frame: .zero)\n  transitionContext.containerView.addSubview(bar)\n}')).toEqual([]);
   });
 });
+
+describe('ninth held-out review', () => {
+  it('keeps a multi-platform App whose Mac adaptor sits under #elseif', () => {
+    const app = '@main\nstruct MyApp: App {\n  #if os(iOS)\n  @UIApplicationDelegateAdaptor(AppDelegate.self) var d\n  #elseif os(macOS)\n  @NSApplicationDelegateAdaptor(AppDelegate.self) var d\n  #endif\n  var body: some Scene { WindowGroup { Text("") } }\n}';
+    const found = ids([{ path: 'App.swift', content: app }, { path: 'AppDelegate.swift', content: 'class AppDelegate: NSObject, UIApplicationDelegate {}' }]);
+    expect(found).not.toContain('no-scene-lifecycle');
+  });
+  it('reads the scene delegate from the Info.plist manifest', () => {
+    const plist = '<plist><dict><key>UIApplicationSceneManifest</key><dict><key>UISceneConfigurations</key><dict><key>UIWindowSceneSessionRoleApplication</key><array><dict><key>UISceneDelegateClassName</key><string>AppSceneDelegate</string></dict></array></dict></dict></dict></plist>';
+    const found = ids([{ path: 'Info.plist', content: plist }, { path: 'AppDelegate.h', content: '@interface AppDelegate : UIResponder <UIApplicationDelegate>\n@end' }]);
+    expect(found).not.toContain('no-scene-lifecycle');
+  });
+  it('ignores a toolbar factory that returns the bar', () => {
+    expect(ids([{ path: 'A.swift', content: 'enum UIUtils {\n  static func createToolbar() -> UIToolbar {\n    let bar = UIToolbar(frame: .zero)\n    return bar\n  }\n}' }])).toEqual([]);
+  });
+  it('skips the tab sidebar when another TabView in the project already has one', () => {
+    const compact = 'struct CompactTabs: View {\n  var body: some View {\n    TabView {\n      Text("a")\n    }\n  }\n}';
+    expect(ids([{ path: 'Compact.swift', content: compact }])).toContain('tab-sidebar');
+    expect(ids([{ path: 'Compact.swift', content: compact }, { path: 'Wide.swift', content: 'struct Wide: View {\n  var body: some View {\n    TabView { Text("a") }\n      .tabViewStyle(.sidebarAdaptable)\n  }\n}' }])).not.toContain('tab-sidebar');
+  });
+  it('skips code after an early return every Duo build takes', () => {
+    const fn = (v: string) => ids([{ path: 'A.swift', content: `func width() -> CGFloat {\n  if #available(iOS ${v}, *) {\n    return 300\n  }\n  return UIScreen.main.bounds.width\n}` }]);
+    expect(fn('26.0')).toEqual([]);
+    expect(fn('28.0')).toContain('uiscreen-main');
+  });
+});
+
+describe('toolbar factories', () => {
+  it('still flags a factory that pins its bar under the status bar', () => {
+    expect(ids([{ path: 'A.swift', content: 'func createToolbarView() -> UIToolbar {\n  let bar = UIToolbar(frame: CGRect(x: 0, y: 0, width: webView.frame.width, height: 0))\n  bar.frame.size.height += statusBarHeight\n  return bar\n}' }])).toContain('hand-built-bar');
+  });
+});

@@ -78,8 +78,10 @@ export const misplaced = defineGroup({
       // `lazy var inputToolbar: UIToolbar = { … }()` later set as a field's `inputAccessoryView`.
       const lazy = /\blazy\s+var\s+(\w+)\s*:\s*\w+\s*=\s*$/.exec(m.slice(Math.max(0, scope.open - 80), scope.open))?.[1];
       if (lazy && new RegExp(`inputAccessoryView\\s*=\\s*(?:self\\.)?${lazy}\\b`).test(m)) continue;
-      // A factory in `extension UIToolbar` makes bars for its callers, which decide where they go.
-      if (insideExtensionOf(m, scope, hit[1])) continue;
+      // A factory (`extension UIToolbar`, or `func makeToolbar() -> UIToolbar`) makes bars for its callers, which decide where
+      // they go, unless it pins the bar to the screen itself (under the status bar, as wide as a view).
+      const factory = new RegExp(`->\\s*${hit[1]}\\s*$`).test(headerOf(src, scope)) && !/\bstatusBar\w*|\.(?:frame|bounds)\.width\b/.test(m.slice(scope.open, scope.close));
+      if (insideExtensionOf(m, scope, hit[1]) || factory) continue;
       // A stand-in bar drawn during a custom transition is gone once the transition ends.
       if (TRANSITION_TYPE.test(enclosingType(m, scope) ?? '') || /\btransitionContext\b/.test(m.slice(scope.open, scope.close))) continue;
       // A toolbar inside a picker or keyboard accessory type is built to sit above the keyboard.
@@ -117,7 +119,7 @@ export const misplaced = defineGroup({
     }
 
     // A TabView built in a property or function often gets its placement where that is used.
-    const placedElsewhere = /\.defaultTabBarPlacement\s*\(|\.tabViewStyle\s*\(\s*\.sidebarAdaptable\b/.test(m);
+    const placedElsewhere = facts.tabPlacement;
     for (const b of blocks) {
       if (b.label !== 'TabView' || b.argument) continue;
       if (placedElsewhere && b.parent && /\b(?:var\s+\w+\s*:\s*some\s+View|func\s+\w+[^{]*->\s*some\s+View)\s*$/.test(headerOf(src, b.parent))) continue;

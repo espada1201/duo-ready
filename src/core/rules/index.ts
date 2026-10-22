@@ -58,8 +58,8 @@ const OTHER_PLATFORM_PATH = /(^|\/)(?:[^/]*(?:tvOS|watchOS|macOS|visionOS)|tvos|
  * A shared file that imports one only under `#if os(watchOS)` is still iPhone code.
  */
 function isOtherPlatformCode(masked: string): boolean {
-  if (/@WK(?:Extension|Application)DelegateAdaptor\b|@NSApplicationDelegateAdaptor\b/.test(masked)) return true;
-  for (const hit of masked.matchAll(/\bimport\s+(?:WatchKit|AppKit|TVUIKit|TVServices)\b/g)) {
+  // Only outside `#if`: a multi-platform `@main` App keeps its Mac adaptor and imports under `#elseif os(macOS)`.
+  for (const hit of masked.matchAll(/@WK(?:Extension|Application)DelegateAdaptor\b|@NSApplicationDelegateAdaptor\b|\bimport\s+(?:WatchKit|AppKit|TVUIKit|TVServices)\b/g)) {
     const before = masked.slice(0, hit.index);
     const depth = (before.match(/^[ \t]*#if\b/gm)?.length ?? 0) - (before.match(/^[ \t]*#endif\b/gm)?.length ?? 0);
     if (depth <= 0) return true;
@@ -120,6 +120,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
     idiomWrappers: [],
     squareModifiers: [],
     aspectViews: new Set(),
+    tabPlacement: false,
     views: new Map(),
     ownVideoPlayer: false,
     upgradeCheck: null,
@@ -148,6 +149,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
       }
       for (const hit of m.matchAll(SQUARE_MODIFIER)) if (!facts.squareModifiers.includes(hit[1])) facts.squareModifiers.push(hit[1]);
       for (const hit of m.matchAll(ASPECT_CALL)) if (hit[1] !== 'Image') facts.aspectViews.add(hit[1]);
+      if (TAB_PLACEMENT.test(m)) facts.tabPlacement = true;
     } else if (p.kind === 'objc') {
       const m = p.src.masked;
       if (/\bUIWindowSceneDelegate\b/.test(m)) facts.sceneDelegate = true;
@@ -157,6 +159,8 @@ function learn(parsed: Parsed[]): ProjectFacts {
       facts.hasProjectFiles = true;
       const manifest = p.plist.keys.get('UIApplicationSceneManifest');
       if (manifest) facts.sceneManifest = true;
+      // The manifest can name the scene delegate class, as Objective-C apps that declare the protocol in the .m do.
+      if (manifest && /<key>UISceneDelegateClassName<\/key>/.test(p.file.content)) facts.sceneDelegate = true;
       // The iOS manifest only: Catalyst's `UIApplicationSceneManifest-macos` doesn't apply on a phone.
       const multiple = (manifest?.value as Record<string, unknown> | undefined)?.UIApplicationSupportsMultipleScenes;
       if (multiple === true) facts.multipleScenes = true;
@@ -221,6 +225,9 @@ function previewHeads(src: SwiftSource): [number, number][] {
 
 /** Duo runs iOS 27.1, so code only older systems run never reaches it. */
 const DUO_OS = 27.1;
+/** `.tabViewStyle(.sidebarAdaptable)` or `.defaultTabBarPlacement(…)`: the app already shows a sidebar somewhere. */
+const TAB_PLACEMENT = /\.defaultTabBarPlacement\s*\(|\.tabViewStyle\s*\(\s*\.sidebarAdaptable\b/;
+
 const below = (version: string) => parseFloat(version) <= DUO_OS;
 
 const offDuoCache = new WeakMap<SwiftSource, [number, number][]>();
@@ -259,6 +266,25 @@ function offDuoRegions(src: SwiftSource): [number, number][] {
   return out;
 }
 
+const earlyReturnCache = new WeakMap<Block, number>();
+
+/** Where the first `if #available(…) { return … }` that Duo always takes closes inside `b`, or Infinity. Cached: a type body has thousands of children. */
+function earlyReturn(src: SwiftSource, b: Block): number {
+  let at = earlyReturnCache.get(b);
+  if (at === undefined) {
+    at = b.children.find((c) => returnsOnDuo(src, c))?.close ?? Infinity;
+    earlyReturnCache.set(b, at);
+  }
+  return at;
+}
+
+/** An `if #available(iOS N, *) { return … }` with no else that every Duo build takes. */
+function returnsOnDuo(src: SwiftSource, b: Block): boolean {
+  const available = /^if\s+#available\s*\(\s*iOS\s+([\d.]+)[^)]*\)\s*$/.exec(headerOf(src, b));
+  if (!available || !below(available[1]) || /^\s*else\b/.test(src.masked.slice(b.close + 1, b.close + 40))) return false;
+  return /^\s*return\b[^{};]*$/.test(src.masked.slice(b.open + 1, b.close));
+}
+
 /** Code under `#if DEBUG` or another platform's `#if` branch, or in a branch only an iOS older than Duo's runs (`if #available(iOS 16, *) {} else {…}`, `if #unavailable(iOS 17)`). */
 function neverShips(src: SwiftSource, offset: number): boolean {
   if (offDuoRegions(src).some(([from, to]) => offset > from && offset < to)) return true;
@@ -268,6 +294,8 @@ function neverShips(src: SwiftSource, offset: number): boolean {
     if (unavailable && below(unavailable[1])) return true;
     const guarded = /^guard\s+#available\s*\(\s*iOS\s+([\d.]+)[^)]*\)\s*else$/.exec(head);
     if (guarded && below(guarded[1])) return true;
+    // `if #available(iOS 26, *) { return x }` earlier in the block: Duo always leaves there, so the rest is a fallback.
+    if (offset > earlyReturn(src, b)) return true;
     if (head !== 'else') continue;
     const prev = b.parent.children[b.parent.children.indexOf(b) - 1];
     const available = prev && /^(?:\}?\s*else\s+)?if\s+#available\s*\(\s*iOS\s+([\d.]+)[^)]*\)\s*$/.exec(headerOf(src, prev));
