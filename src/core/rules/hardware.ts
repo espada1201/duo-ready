@@ -36,7 +36,9 @@ export const hardware = defineGroup({
       const i = hit.index!;
       // Copy on the same line that also offers Touch ID or a passcode reads fine on Duo; the line,
       // not the literal, so interpolation inside the string doesn't hide the alternative.
-      if (src.strings[i] && src.strings[i + 6] && !/Touch ID|fingerprint|passcode/i.test(lineAround(file.content, i))) {
+      // A translator note (`NSLocalizedString(..., comment: "...")`) is never shown.
+      const note = /\bcomment\s*:\s*"[^"\n]*$/.test(file.content.slice(Math.max(0, i - 200), i));
+      if (src.strings[i] && src.strings[i + 6] && !note && !/Touch ID|fingerprint|passcode/i.test(lineAround(file.content, i))) {
         report('biometry-faceid', i, 'User-facing text mentions Face ID, which iPhone Duo doesn’t have.');
       }
     }

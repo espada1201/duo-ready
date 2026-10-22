@@ -1,5 +1,5 @@
 import { ancestors, labelOffset, type Block } from '../swift';
-import { defineGroup, matchBefore, POSE, PREPARE } from './engine';
+import { defineGroup, matchBefore, POSE, PREPARE, sizeClassPattern } from './engine';
 
 const SCROLLERS = new Set(['List', 'ScrollView', 'LazyVStack', 'LazyHStack', 'Form']);
 /** Closures whose content is presented elsewhere, so it is not laid out inside the enclosing scroller. */
@@ -61,9 +61,11 @@ export const hinge = defineGroup({
     },
   ],
 
-  swift({ src, masked: m, blocks, report }) {
+  swift({ src, masked: m, blocks, facts, report }) {
     if (!/\breservedRegions\b|\bArrangementView\b/.test(m)) {
-      for (const hit of m.matchAll(/\b(VideoPlayer|AVPlayerLayer|AVCaptureVideoPreviewLayer)\s*\(/g)) report('hinge-media', hit.index!);
+      // SwiftUI's VideoPlayer comes from AVKit; where the app declares its own, only files importing AVKit mean Apple's.
+      const avkit = !facts.ownVideoPlayer || /\bimport\s+(?:AVKit|_AVKit_SwiftUI)\b/.test(m);
+      for (const hit of m.matchAll(/\b(VideoPlayer|AVPlayerLayer|AVCaptureVideoPreviewLayer)\s*\(/g)) if (hit[1] !== 'VideoPlayer' || avkit) report('hinge-media', hit.index!);
     }
 
     if (!/\bkeyboardLayoutGuide\b/.test(m)) {
@@ -72,9 +74,10 @@ export const hinge = defineGroup({
       }
     }
 
+    // `if horizontalSizeClass == .regular { HStack { … } }`, or `!= .compact`.
+    const regular = new RegExp(`\\b${sizeClassPattern(m)}\\s*(?:==\\s*\\.regular|!=\\s*\\.compact)\\s*$`);
     for (const b of blocks) {
-      // `if horizontalSizeClass == .regular { HStack { … } }`
-      const sizeCheck = matchBefore(m, b.open, /\b\w*[sS]izeClass\w*\s*==\s*\.regular\s*$/);
+      const sizeCheck = matchBefore(m, b.open, regular);
       if (sizeCheck !== null && b.children.some((c) => c.label === 'HStack')) report('manual-two-pane', sizeCheck);
 
       if (b.argument) continue;
@@ -102,7 +105,7 @@ export const hinge = defineGroup({
         file.content.indexOf('"react-native"'),
         'React Native app: Flexbox layouts resize, but nothing reports Duo’s hinge. Wrap reservedRegions(kind:) in a native module, and listen for Dimensions changes instead of reading the size once.',
       );
-    } else if (file.path.endsWith('pubspec.yaml') && /^\s*flutter\s*:/m.test(file.content)) {
+    } else if (file.path.endsWith('pubspec.yaml') && /^\s*flutter\s*:/m.test(file.content) && !/^\s+plugin\s*:/m.test(file.content)) {
       report(
         'cross-platform',
         file.content.search(/^\s*flutter\s*:/m),

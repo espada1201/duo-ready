@@ -85,8 +85,12 @@ export const stretched = defineGroup({
       }
     }
     for (const hit of m.matchAll(/\buserInterfaceIdiom\b/g)) {
-      // Picking a keyboard type by idiom is about input, not layout.
-      if (!declaredAt(m, hit.index!) && !/\bkeyboardType\b/.test(lineAround(m, hit.index!))) report('idiom-layout', hit.index!);
+      const line = lineAround(m, hit.index!);
+      // Picking a keyboard type by idiom is about input, not layout; a tvOS, Mac or CarPlay check is
+      // false on Duo either way; and a wrapper like `isPad` is reported where it's used.
+      if (declaredAt(m, hit.index!) || /\bkeyboardType\b/.test(line) || /userInterfaceIdiom\s*[!=]=\s*\.(?:tv|mac|carPlay|vision)\b/.test(line)) continue;
+      if (facts.idiomWrappers.some((w) => new RegExp(`\\bvar\\s+${w}\\s*:\\s*Bool\\s*\\{[^{}]*$`).test(m.slice(Math.max(0, hit.index! - 120), hit.index)))) continue;
+      report('idiom-layout', hit.index!);
     }
 
     const scaled = m.includes('scaledFont');
@@ -105,6 +109,8 @@ export const stretched = defineGroup({
     for (const hit of m.matchAll(/\.resizable\s*\(\s*\)/g)) {
       const end = hit.index! + hit[0].length;
       if (chainHas(m, end, /^(aspectRatio|scaledToFit|scaledToFill)$/)) continue;
+      // A blur-hash placeholder is meant to stretch; an image handed to a caller's closure gets its aspect there.
+      if (matchBefore(m, hit.index!, /(?:\bImage\s*\(\s*blurHash\s*:[^()]*(?:\([^()]*\)[^()]*)*\)\??|(?:^|[^.\w])\w+\s*\(\s*Image\s*\((?:[^()]|\([^()]*\))*\))\s*$/) !== null) continue;
       // A symbol or bundled asset (Image(name), Image(.resource), SwiftGen's .swiftUIImage) in a fixed square frame is an icon:
       // it neither distorts nor follows the window. Photos and avatars (uiImage:, AsyncImage) can be
       // any shape, so they still count.
@@ -128,12 +134,14 @@ export const stretched = defineGroup({
     }
     for (const hit of m.matchAll(ON_RESIZE)) {
       const open = m.indexOf('{', hit.index!);
+      // A protocol requirement has no body: the next brace belongs to something else.
+      if (/\bfunc\b|[};]/.test(m.slice(hit.index! + 4, open))) continue;
       const body = blocks.find((b) => b.open === open);
       const reload = body && /\.reload\s*\(\s*\)|\.loadHTMLString\s*\(|\.load\s*\(\s*URLRequest/.exec(m.slice(body.open, body.close));
       if (reload) report('webview-viewport', body.open + reload.index, 'Web content reloads when the size changes, so a fold throws away its scroll position and input.');
     }
 
-    for (const hit of m.matchAll(/\bscaleMode\s*=\s*\.(fill|aspectFit)\b/g)) {
+    for (const hit of m.matchAll(/\bscaleMode\s*=\s*(?:SKSceneScaleMode)?\.(fill|aspectFit)\b/g)) {
       report('game-aspect', hit.index!, hit[1] === 'fill' ? '.fill stretches the scene to the window’s shape.' : '.aspectFit leaves black bars on windows of another shape.');
     }
   },

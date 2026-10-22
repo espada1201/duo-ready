@@ -1,7 +1,7 @@
 import { blockAt, declaredTypes, headerOf, labelOffset, type Block, type SwiftSource } from '../swift';
 import type { Fix } from '../types';
 import { lineAround } from '../text';
-import { defineGroup, chainHas, declaredAt, matchBefore, PREPARE } from './engine';
+import { defineGroup, chainHas, declaredAt, matchBefore, PREPARE, sizeClassPattern } from './engine';
 
 const SCENES = 'Apple, WWDC25 “Make your UIKit app more flexible” (UIScene required after iOS 26)';
 
@@ -170,13 +170,20 @@ export const fold = defineGroup({
     }
 
     // Swapping view types on size class rebuilds them, so @State is lost on fold.
+    const sizeCheck = new RegExp(`\\bif\\s+${sizeClassPattern(m)}\\s*[!=]=\\s*\\.\\w+\\s*$`);
     for (const b of blocks) {
       const sibling = b.parent?.children[b.parent.children.indexOf(b) + 1];
-      const cond = matchBefore(m, b.open, /\bif\s+\w*[sS]izeClass\w*\s*[!=]=\s*\.\w+\s*$/);
+      const cond = matchBefore(m, b.open, sizeCheck);
       if (cond !== null && sibling && headerOf(src, sibling) === 'else') report('state-reset', cond);
     }
     for (const hit of m.matchAll(/\.id\s*\(\s*UUID\s*\(\s*\)\s*\)/g)) {
       report('state-reset', hit.index!, '.id(UUID()) gives the view a new identity on every update, so its state never survives a fold.');
+    }
+
+    // Portrait locks in code: `override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }`,
+    // or the app delegate's `application(_:supportedInterfaceOrientationsFor:)` returning only portrait.
+    for (const hit of m.matchAll(/\bsupportedInterfaceOrientations(For\b[^{]*|\s*:\s*UIInterfaceOrientationMask\s*)\{\s*(?:get\s*\{\s*)?(?:return\s+)?(?:UIInterfaceOrientationMask)?\.portrait\s*\}/g)) {
+      report('portrait-only', hit.index!, `${hit[1].startsWith('For') ? 'The app delegate locks every screen' : 'This screen locks itself'} to portrait. The inner display ignores the lock, so the layout gets a landscape canvas anyway.`);
     }
 
     for (const hit of m.matchAll(/\bUIApplication\s*\.\s*shared\s*\.\s*(windows|keyWindow|connectedScenes\s*\.\s*first|delegate\s*\??\s*\.\s*window)\b/g)) {

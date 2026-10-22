@@ -31,6 +31,8 @@ export interface ProjectFacts {
   deploymentTarget: number | null;
   /** The project also builds for watchOS, macOS, tvOS or visionOS, whose SwiftUI versions lag iOS. */
   otherPlatforms: boolean;
+  /** The app declares its own `VideoPlayer` type, shadowing AVKit's. */
+  ownVideoPlayer: boolean;
   /** Properties like `UIDevice.isPad` whose whole body is an idiom comparison. */
   idiomWrappers: string[];
   /** LastUpgradeCheck, e.g. "2600". */
@@ -160,3 +162,9 @@ export function matchBefore(masked: string, open: number, re: RegExp): number | 
 
 /** Whether the name at `at` is being declared (a property, function or enum case) rather than read. */
 export const declaredAt = (masked: string, at: number): boolean => matchBefore(masked, at, /\b(?:case\s+\.?|var\s+|let\s+|func\s+)$/) !== null;
+
+/** A pattern for a size class in an expression: `horizontalSizeClass`, or a name it was bound to (`@Environment(\\.horizontalSizeClass) var hs`). */
+export function sizeClassPattern(masked: string): string {
+  const names = [...masked.matchAll(/@Environment\s*\(\s*\\\.(?:horizontal|vertical)SizeClass\s*\)\s*(?:(?:private|fileprivate)\s+)?var\s+(\w+)/g)].map((h) => h[1]);
+  return `(?:\\w*[sS]izeClass\\w*${names.map((n) => `|${n}`).join('')})`;
+}

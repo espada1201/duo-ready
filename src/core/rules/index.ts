@@ -82,7 +82,8 @@ function parse(file: SourceFile): Parsed | null {
     const app = keys.some((k) => /^(CF|UI|LS)/.test(k)) && !keys.some((k) => k === 'NSExtension' || WATCH_KEY.test(k));
     return app ? { kind: 'plist', file, plist: plist! } : null;
   }
-  if (name === 'project.pbxproj') return { kind: 'pbxproj', file };
+  // A Mac or TV project beside the iPhone one (Flutter's macos/Runner, say) says nothing about the iPhone app.
+  if (name === 'project.pbxproj') return /SDKROOT\s*=/.test(file.content) && !/SDKROOT\s*=\s*iphoneos\b/.test(file.content) ? null : { kind: 'pbxproj', file };
   if (name === 'package.json' || name === 'pubspec.yaml') return { kind: 'manifest', file };
   if (/\.html?$/.test(name)) return { kind: 'html', file };
   if (name.endsWith('.xcconfig') || /^project[\w-]*\.ya?ml$/.test(name)) return { kind: 'config', file };
@@ -98,6 +99,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
     deploymentTarget: null,
     otherPlatforms: false,
     idiomWrappers: [],
+    ownVideoPlayer: false,
     upgradeCheck: null,
     hasProjectFiles: false,
   };
@@ -111,6 +113,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
       if (/\bUIWindowSceneDelegate\b/.test(m)) facts.sceneDelegate = true;
       const appDelegate = /\bclass\s+\w+\s*:\s*[^{]*\bUIApplicationDelegate\b/.exec(m);
       if (appDelegate && !facts.appDelegate) facts.appDelegate = { file: p.file, offset: appDelegate.index };
+      if (/\b(?:struct|class|enum|actor)\s+VideoPlayer\b/.test(m)) facts.ownVideoPlayer = true;
       for (const hit of m.matchAll(IDIOM_WRAPPER)) if (!facts.idiomWrappers.includes(hit[1])) facts.idiomWrappers.push(hit[1]);
     } else if (p.kind === 'plist') {
       facts.hasProjectFiles = true;

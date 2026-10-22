@@ -356,3 +356,59 @@ describe('scale', () => {
     expect(performance.now() - start).toBeLessThan(3000);
   });
 });
+
+describe('sixth review: games, web views, media and cross-platform apps', () => {
+  const ids = (files: SourceFile[]) => audit(files).findings.map((f) => f.ruleId);
+  const one = (content: string) => ids(swift(content));
+
+  it.each([
+    ['a protocol requirement named like a resize callback', 'protocol P {\n  func traitCollectionDidChange()\n}\nclass H {\n  func refresh() { web.reload() }\n}'],
+    ['a resizable image handed to a closure', 'struct V: View {\n  var body: some View {\n    content(Image(uiImage: ui).resizable())\n  }\n}'],
+    ['a blur-hash placeholder', 'struct V: View {\n  var body: some View {\n    Image(blurHash: hash, size: .init(width: 8, height: 8))?.resizable()\n  }\n}'],
+    ['an AdMob banner size', 'let banner = GADBannerView(adSize: GADAdSizeFromCGSize(CGSize(width: 320, height: 50)))'],
+    ['Face ID in a translator note', 'let t = NSLocalizedString("unlock", value: "Unlock", comment: "Shown on the Face ID prompt")'],
+    ['a tvOS idiom check', 'let gap = UIDevice.current.userInterfaceIdiom == .tv ? 30 : 15'],
+  ])('ignores %s', (_, code) => {
+    expect(one(code)).toEqual([]);
+  });
+
+  it('reports an idiom wrapper where it is used, not where it is defined', () => {
+    const files = [
+      { path: 'Ext.swift', content: 'extension UIDevice {\n  static var isPad: Bool {\n    current.userInterfaceIdiom == .pad\n  }\n}' },
+      { path: 'Grid.swift', content: 'let columns = UIDevice.isPad ? 4 : 2' },
+    ];
+    expect(audit(files).findings.map((f) => f.path)).toEqual(['Grid.swift']);
+  });
+
+  it('only counts VideoPlayer as AVKit’s when the app has no type of that name', () => {
+    const mine = { path: 'Player/VideoPlayer.swift', content: 'struct VideoPlayer: View {\n  var body: some View { Color.black }\n}' };
+    expect(ids([mine, { path: 'Route.swift', content: 'let v = VideoPlayer()' }])).toEqual([]);
+    expect(ids([mine, { path: 'Clip.swift', content: 'import AVKit\nlet v = VideoPlayer(player: p)' }])).toEqual(['hinge-media']);
+    expect(one('let v = VideoPlayer(player: p)')).toEqual(['hinge-media']);
+  });
+
+  it('reads SKSceneScaleMode spelled out', () => {
+    expect(one('scene.scaleMode = SKSceneScaleMode.aspectFit')).toEqual(['game-aspect']);
+  });
+
+  it('follows a size class bound to another name', () => {
+    expect(one('struct V: View {\n  @Environment(\\.horizontalSizeClass) var hs\n  var body: some View {\n    if hs != .compact {\n      HStack { A(); B() }\n    }\n  }\n}')).toEqual(['manual-two-pane']);
+  });
+
+  it('flags portrait locks set in code', () => {
+    expect(one('class C: UIViewController {\n  override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }\n}')).toEqual(['portrait-only']);
+    expect(one('class A: UIResponder, UIApplicationDelegate {\n  func application(_ app: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {\n    return .portrait\n  }\n}')).toContain('portrait-only');
+  });
+
+  it('counts Objective-C it cannot read, and ignores Mac-only Xcode projects and Flutter plugins', () => {
+    const r = audit([
+      { path: 'App/A.swift', content: 'let a = 1' },
+      { path: 'App/Legacy.m', content: '[UIScreen mainScreen];' },
+      { path: 'macos/Runner.xcodeproj/project.pbxproj', content: 'LastUpgradeCheck = 0600;\nSDKROOT = macosx;' },
+      { path: 'plugins/pay/pubspec.yaml', content: 'name: pay\nflutter:\n  plugin:\n    platforms: {}\n' },
+    ]);
+    expect(r.objcFiles).toBe(1);
+    expect(r.swiftFiles).toBe(1);
+    expect(r.findings).toEqual([]);
+  });
+});

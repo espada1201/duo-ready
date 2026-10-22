@@ -46,4 +46,6 @@ export interface AuditResult {
   partial: boolean;
   /** Binary Info.plists, which can't be read as text: convert them to XML to include them. */
   unreadable: string[];
+  /** Objective-C files found but not scanned. */
+  objcFiles: number;
 }

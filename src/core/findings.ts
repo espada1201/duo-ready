@@ -26,6 +26,10 @@ export const unreadableNote = (paths: string[]) =>
 /** " [safe fix]" or " [review fix]", the one name each kind of fix goes by. */
 export const fixLabel = (f: Finding) => (f.fix ? ` [${f.fix.confidence} fix]` : '');
 
+/** What to tell the reader about Objective-C the rules can't read. */
+export const objcNote = (n: number) =>
+  `${n === 1 ? '1 Objective-C file was' : `${n} Objective-C files were`} not scanned: the rules read Swift. Check ${n === 1 ? 'it' : 'them'} by hand for [UIScreen mainScreen], userInterfaceIdiom and keyboard frame math.`;
+
 export const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 
 export function summaryLine(r: AuditResult): string {

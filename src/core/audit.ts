@@ -3,10 +3,10 @@ import { checkFiles } from './rules';
 import { tierFromUpgradeCheck, xcodeVersion } from './sdk';
 import type { AuditResult, Finding, SourceFile } from './types';
 
-const SKIP_DIR = /(^|\/)(Pods|Carthage|DerivedData|node_modules|build|SourcePackages|fastlane|\.[^/]+|\w*Tests|\w*Mocks|TestHelpers|TestSupport|Preview Content|Previews)\//;
+const SKIP_DIR = /(^|\/)(Pods|Carthage|DerivedData|node_modules|build|SourcePackages|fastlane|\.[^/]+|\w*Tests|\w*Mocks|TestHelpers|TestSupport|Preview Content|Previews|ThirdParty|third_party|[Vv]endor)\//;
 /** Test code and build scripts run on a Mac or in CI; they aren't what Duo users see. */
 const TEST_FILE = /((Tests|\.test)\.swift|(^|\/)(Dangerfile|Package)\.swift)$/;
-const RELEVANT = /(\.swift|\.plist|\.html?|\.xcconfig|(^|\/)project\.pbxproj|(^|\/)project[\w-]*\.ya?ml|(^|\/)package\.json|(^|\/)pubspec\.yaml)$/;
+const RELEVANT = /(\.swift|\.mm?|\.plist|\.html?|\.xcconfig|(^|\/)project\.pbxproj|(^|\/)project[\w-]*\.ya?ml|(^|\/)package\.json|(^|\/)pubspec\.yaml)$/;
 
 /** Files larger than this are skipped: generated code, not something to audit. */
 export const MAX_BYTES = 2_000_000;
@@ -34,8 +34,12 @@ function grade(value: number, findings: Finding[], partial: boolean): AuditResul
   return 'Not ready';
 }
 
+/** Objective-C is read only to count it: the rules understand Swift. */
+const OBJC = /\.mm?$/;
+
 export function audit(input: SourceFile[]): AuditResult {
-  const files = input.filter((f) => isRelevant(f.path));
+  const relevant = input.filter((f) => isRelevant(f.path));
+  const files = relevant.filter((f) => !OBJC.test(f.path));
   const { findings, facts } = checkFiles(files);
   findings.sort(
     (a, b) =>
@@ -56,6 +60,7 @@ export function audit(input: SourceFile[]): AuditResult {
     grade: grade(value, findings, partial),
     tier: check ? { value: tierFromUpgradeCheck(check), source: `LastUpgradeCheck ${check}, Xcode ${xcodeVersion(check)}` } : null,
     partial,
+    objcFiles: relevant.length - files.length,
     unreadable: files.filter((f) => /(^|\/)Info\.plist$/.test(f.path) && f.content.startsWith('bplist')).map((f) => f.path),
   };
 }
