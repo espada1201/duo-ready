@@ -186,6 +186,7 @@ describe('third review', () => {
     expect(ids(swift('Image(uiImage: photo)\n  .resizable()\n  .frame(width: 60, height: 60)'))).toEqual(['stretched-image']);
     expect(ids(swift('Image("logo")\n  .resizable()\n  .frame(width: 60, height: 60)'))).toEqual([]);
     expect(ids(swift('Image(systemName: "star")\n  .resizable()\n  .frame(width: 20, height: 20)'))).toEqual([]);
+    expect(ids(swift('Image(iconName)\n  .resizable()\n  .frame(width: Size.icon, height: Size.icon)'))).toEqual([]);
   });
 
   it('only exempts a keyboard toolbar in the scope that assigns it', () => {

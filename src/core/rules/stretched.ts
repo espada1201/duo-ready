@@ -83,9 +83,10 @@ export const stretched = defineGroup({
     for (const hit of m.matchAll(/\.resizable\s*\(\s*\)/g)) {
       const end = hit.index! + hit[0].length;
       if (chainHas(m, end, /^(aspectRatio|scaledToFit|scaledToFill)$/)) continue;
-      // A symbol or bundled asset in a fixed square frame is an icon: it neither distorts nor
-      // follows the window. Photos and avatars (uiImage:, AsyncImage) can be any shape, so they still count.
-      const icon = matchBefore(m, hit.index!, /\bImage\s*\(\s*(?:systemName\s*:[^()]*|"[^"]*"|\.\w+)\s*\)\s*$/) !== null;
+      // A symbol or bundled asset (Image(name), Image(.resource)) in a fixed square frame is an icon:
+      // it neither distorts nor follows the window. Photos and avatars (uiImage:, AsyncImage) can be
+      // any shape, so they still count.
+      const icon = matchBefore(m, hit.index!, /\bImage\s*\(\s*(?:systemName\s*:[^()]*|"[^"]*"|\.?[A-Za-z_][\w.]*)\s*\)\s*$/) !== null;
       if (icon && chainHas(m, end, /^frame$/, /^\s*width\s*:\s*([^,]+?)\s*,\s*height\s*:\s*\1\s*(?:,|$)/)) continue;
       const indent = /\n([ \t]*)\.resizable/.exec(file.content.slice(Math.max(0, hit.index! - 200), end));
       // A full-bleed background should keep filling the window, not letterbox inside it.
