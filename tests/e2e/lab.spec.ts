@@ -151,7 +151,7 @@ test('auditing a chosen folder, pasted code, and a folder with nothing to audit'
   await expect(page.locator('.finding')).toHaveCount(31);
 
   await page.getByTestId('folder-input').setInputFiles('tests/e2e');
-  await expect(page.getByRole('alert')).toContainText('No Swift files');
+  await expect(page.getByRole('alert')).toContainText('No Swift or Objective-C files');
 });
 
 test('audit controls keep keyboard focus and results take it', async ({ page }) => {

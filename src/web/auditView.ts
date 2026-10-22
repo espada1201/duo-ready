@@ -44,7 +44,7 @@ function sampleFiles(): SourceFile[] {
   return Object.entries(SAMPLE).map(([path, content]) => ({ path: path.replace('../../sample/', ''), content }));
 }
 
-const NOTHING = 'No Swift files, Info.plist or Xcode project found there. Pick the folder that contains your .xcodeproj.';
+const NOTHING = 'No Swift or Objective-C files, Info.plist or Xcode project found there. Pick the folder that contains your .xcodeproj.';
 
 function stateFrom(files: SourceFile[], { result, previews }: Analysis, source: string): AuditState {
   const selected = new Set(result.findings.flatMap((f, i) => (f.fix?.confidence === 'safe' ? [i] : [])));

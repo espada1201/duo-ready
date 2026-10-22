@@ -194,7 +194,7 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
   }
   const c = paint(cmd.color);
   if (files.length === 0) {
-    err(`No Swift, Info.plist or Xcode project files found in ${root}. Point duo-ready at the folder that holds your .xcodeproj.`);
+    err(`No Swift, Objective-C, Info.plist or Xcode project files found in ${root}. Point duo-ready at the folder that holds your .xcodeproj.`);
     return 2;
   }
   let result = audit(files);
