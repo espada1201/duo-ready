@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hunks } from '../../src/core/diff';
+import { hunks, unifiedDiff } from '../../src/core/diff';
 import { maskSwift, parseSwift, walk } from '../../src/core/swift';
 import { position } from '../../src/core/text';
 
@@ -68,5 +68,22 @@ describe('diff', () => {
       { line: 1, removed: ['I.resizable()'], added: ['J.resizable()'] },
       { line: 2, removed: ['    I.resizable()'], added: ['    I.resizable()', '    .x()'] },
     ]);
+  });
+});
+
+describe('unifiedDiff', () => {
+  it('shifts later hunks by the lines earlier ones added, and merges hunks whose context touches', () => {
+    const content = Array.from({ length: 20 }, (_, i) => `l${i + 1}`).join('\n') + '\n';
+    const at = (line: number) => content.indexOf(`l${line}\n`);
+    const far = unifiedDiff('a.swift', content, [
+      { start: at(2), end: at(2), text: 'new\n' },
+      { start: at(15), end: at(15) + 3, text: 'L15' },
+    ]);
+    expect(far.split('\n').filter((l) => l.startsWith('@@'))).toEqual(['@@ -1,5 +1,6 @@', '@@ -12,7 +13,7 @@']);
+    const near = unifiedDiff('a.swift', content, [
+      { start: at(2), end: at(2) + 2, text: 'L2' },
+      { start: at(8), end: at(8) + 2, text: 'L8' },
+    ]);
+    expect(near.split('\n').filter((l) => l.startsWith('@@'))).toEqual(['@@ -1,11 +1,11 @@']);
   });
 });

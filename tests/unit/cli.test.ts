@@ -160,6 +160,19 @@ describe('duo-ready CLI patches and exit codes', () => {
     expect(capture([dir, '--dry-run', '--fix', 'all']).out).toBe('Nothing to fix.');
   });
 
+  it('patches files with Windows line endings or no final newline', () => {
+    dir = mkdtempSync(join(tmpdir(), 'duo-'));
+    const body = (eol: string) => ['import UIKit', 'class V: UIViewController {', '  override func viewDidLayoutSubviews() {', '    let side = view.bounds.width - view.safeAreaInsets.left * 2', '  }', '}'].join(eol);
+    writeFileSync(join(dir, 'Crlf.swift'), body('\r\n') + '\r\n');
+    writeFileSync(join(dir, 'NoEol.swift'), body('\n'));
+    const patch = capture([dir, '--dry-run', '--no-color']).out;
+    expect(patch).toContain('\\ No newline at end of file');
+    writeFileSync(join(dir, 'duo.patch'), patch);
+    execFileSync('git', ['apply', 'duo.patch'], { cwd: dir });
+    expect(readFileSync(join(dir, 'Crlf.swift'), 'utf8')).toBe(body('\r\n').replace('view.bounds.width - view.safeAreaInsets.left * 2', 'view.bounds.inset(by: view.safeAreaInsets).width') + '\r\n');
+    expect(readFileSync(join(dir, 'NoEol.swift'), 'utf8').endsWith('}')).toBe(true);
+  });
+
   it('says when only review fixes are left', () => {
     dir = mkdtempSync(join(tmpdir(), 'duo-'));
     writeFileSync(join(dir, 'A.swift'), 'struct V: View {\n  var body: some View {\n    Image(uiImage: img).resizable()\n  }\n}');
