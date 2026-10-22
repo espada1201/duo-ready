@@ -136,6 +136,9 @@ export const stretched = defineGroup({
       // A size read from a text style follows the reader's text size when the font is made.
       const call = callText(m, hit.index!);
       if (/relativeTo\s*:|UIFontMetrics|scaledFont/.test(lineAround(m, hit.index!) + call) || /forTextStyle|withTextStyle/.test(call)) continue;
+      // `ofSize: label.font.pointSize` keeps a size set elsewhere; `options.fontSize` is the reader's own setting
+      // (a type's `Constants.fontSize` is still a fixed number).
+      if (/^[^,]*(?:\.\s*pointSize\b|(?<![\w.])[a-z]\w*(?:\.\w+)*\.fontSize\b)/.test(call.slice(call.search(/(?:ofSize|size)\s*:/)))) continue;
       // `UIFont(name: "Avenir", size: 1)` only names the family; the size is set later.
       if (/\bsize\s*:\s*(?:0?\.\d+|[01](?:\.0+)?)\s*[,)]/.test(m.slice(hit.index!, hit.index! + hit[0].length + 20))) continue;
       // A point size on an SF Symbol sizes an icon; PDF and draw(_:) output has no Dynamic Type to follow.
@@ -176,6 +179,8 @@ export const stretched = defineGroup({
     }
     for (const hit of m.matchAll(/\.contentMode\s*=\s*\.scaleToFill\b/g)) {
       // Avatars, icons and thumbnails sit in fixed square frames: named on the line, just above it, or by the view type.
+      // A web view's contentMode scales its snapshot during resizes, not an image.
+      if (/\w*[wW]eb\w*\s*$/.test(m.slice(Math.max(0, hit.index! - 60), hit.index))) continue;
       const before = m.slice(Math.max(0, hit.index! - 200), hit.index).split('\n').slice(-3).join('\n');
       if (SMALL_IMAGE.test(lineAround(m, hit.index!) + before + (enclosingType(m, blockAt(src.root, hit.index!)) ?? ''))) continue;
       report('stretched-image', hit.index!);

@@ -256,6 +256,8 @@ export const fold = defineGroup({
       // A spinner or a label has nothing to lose; a fresh identity just restarts it.
       const root = chainRoot(src, hit.index!);
       if (root?.name && (root.body ? STATELESS.test(root.name) && !keepsState(m.slice(root.body.open, root.body.close), facts.views, m) : STATELESS.test(root.name) || facts.views.get(root.name) === false)) continue;
+      // Set in an initializer, the id is made once: the view keeps one identity for its life.
+      if (inInitializer(src, hit.index!)) continue;
       report('state-reset', hit.index!, '.id(UUID()) gives the view a new identity on every update, so its state never survives a fold.');
     }
 
@@ -350,3 +352,13 @@ export const fold = defineGroup({
     if (!usesScenes && facts.appDelegate) reporterFor(facts.appDelegate.file)('no-scene-lifecycle', facts.appDelegate.offset);
   },
 });
+
+/** Whether `at` runs in an `init`, not in a `body` that re-evaluates on every update. */
+function inInitializer(src: SwiftSource, at: number): boolean {
+  for (let b: Block | null = blockAt(src.root, at); b?.parent; b = b.parent) {
+    const head = src.masked.slice(Math.max(0, b.open - 400), b.open).split(/[{};]/).pop()!;
+    if (/\bvar\s+body\b|\bsome\s+View\b/.test(head)) return false;
+    if (/(?:^|\s)init\s*[?!]?\s*\(/.test(head)) return true;
+  }
+  return false;
+}

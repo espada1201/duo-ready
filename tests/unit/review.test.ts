@@ -1059,3 +1059,21 @@ describe('lettering drawn into artwork', () => {
     expect(ids([{ path: 'A.m', content: '- (void)setup {\n  _label.font = [UIFont systemFontOfSize:15 weight:UIFontWeightHeavy];\n}' }])).toContain('fixed-font');
   });
 });
+
+describe('tenth held-out review', () => {
+  const swiftIds = (content: string) => ids([{ path: 'A.swift', content }]);
+  it('ignores fonts that keep an existing or user-chosen size', () => {
+    expect(swiftIds('label.font = UIFont.systemFont(ofSize: label.font.pointSize, weight: .semibold)')).toEqual([]);
+    expect(swiftIds('let f = UIFont(name: options.fontFamily, size: CGFloat(options.fontSize))')).toEqual([]);
+    expect(swiftIds('let f = UIFont.systemFont(ofSize: 15, weight: .semibold)')).toContain('fixed-font');
+    expect(swiftIds('let f = UIFont.systemFont(ofSize: Constants.fontSize)')).toContain('fixed-font');
+    expect(swiftIds('let f = UIFont.systemFont(ofSize: Size.large.sizes.fontSize)')).toContain('fixed-font');
+  });
+  it('ignores a web view content mode', () => {
+    expect(swiftIds('monacoWebView.contentMode = .scaleToFill')).toEqual([]);
+  });
+  it('ignores an id made once in an initializer, but not one in a body', () => {
+    expect(swiftIds('class Tab: Base {\n  init(url: URL) {\n    super.init(view: AnyView(Preview().id(UUID())), url: url)\n  }\n}')).toEqual([]);
+    expect(swiftIds('struct A: View {\n  @State var t = ""\n  var body: some View {\n    TextField("", text: $t).id(UUID())\n  }\n}')).toContain('state-reset');
+  });
+});
