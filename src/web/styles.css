@@ -7,7 +7,7 @@
   --rule: #d9d3c5;
   --signal: #c2410c;
   --signal-soft: #fbe3d3;
-  --ok: #0f766e;
+  --ok: #0b5f58;
   --ok-soft: #d5ece8;
   --warn: #92580a;
   --warn-soft: #f6e7c8;
@@ -533,7 +533,7 @@ label.button:focus-within {
 
 .enc-nav span {
   min-width: 25%;
-  color: #c2410c;
+  color: #9a3412;
 }
 
 .enc-nav.enc-custom span {
@@ -1080,9 +1080,10 @@ label.button:focus-within {
   padding: 10px 12px;
   border-radius: 8px;
   background: color-mix(in srgb, var(--ink) 6%, transparent);
-  overflow-x: auto;
   font-size: 13px;
-  white-space: pre;
+  /* Wrap rather than scroll: a scrolling block would need its own tab stop, and there is one per finding. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .instead span {

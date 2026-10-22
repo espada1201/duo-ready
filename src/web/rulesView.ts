@@ -81,8 +81,8 @@ export function renderRules(focus: string | null): HTMLElement {
       { class: 'cli' },
       h('h2', {}, 'Use it from the terminal or CI'),
       h('p', {}, 'The same engine ships as a command-line tool. It prints a report, applies fixes in place, and can run on every pull request.'),
-      h('pre', {}, h('code', {}, CLI)),
-      h('pre', {}, h('code', {}, ACTION)),
+      h('pre', { tabindex: '0' }, h('code', {}, CLI)),
+      h('pre', { tabindex: '0' }, h('code', {}, ACTION)),
     ),
   );
   // `#rules/<rule-id>` focuses a rule, `#rules/pain-<id>` a whole pain point.

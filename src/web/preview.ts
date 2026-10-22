@@ -250,7 +250,7 @@ function snippet(layout: EncoreLayout): HTMLElement {
   }
 }
 // ${split ? `split ${layout.arrangement!.axis === 'horizontal' ? 'side by side' : 'top and bottom'}` : 'only the primary view fits here'}`;
-  return h('details', { class: 'snippet' }, h('summary', {}, 'The SwiftUI behind this layout'), h('pre', {}, h('code', {}, code)));
+  return h('details', { class: 'snippet' }, h('summary', {}, 'The SwiftUI behind this layout'), h('pre', { tabindex: '0' }, h('code', {}, code)));
 }
 
 let observer: ResizeObserver | null = null;
