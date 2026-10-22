@@ -289,7 +289,8 @@ export const fold = defineGroup({
     }
 
     for (const b of blocks) {
-      if (b.label !== 'NavigationView' || b.argument) continue;
+      // `enum NavigationView { … }` in generated strings is a namespace, not the SwiftUI view.
+      if (b.label !== 'NavigationView' || b.argument || /\b(?:enum|struct|class|extension|actor|protocol)\s+NavigationView$/.test(headerOf(src, b))) continue;
       const at = labelOffset(src, b);
       const target = facts.deploymentTarget;
       const edits = [{ start: at, end: at + 'NavigationView'.length, text: 'NavigationStack' }];

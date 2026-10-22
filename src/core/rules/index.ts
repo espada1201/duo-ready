@@ -130,6 +130,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
     if (target !== null && (facts.deploymentTarget === null || target < facts.deploymentTarget)) facts.deploymentTarget = target;
   };
   const views = new Map<string, { state: boolean; calls: string[] }>();
+  const projectTargets = new Map<string, number | null>();
   for (const p of parsed) {
     if (p.kind === 'swift') {
       const m = p.src.masked;
@@ -183,7 +184,9 @@ function learn(parsed: Parsed[]): ProjectFacts {
         }
       }
       if (OTHER_PLATFORM.test(p.file.content)) facts.otherPlatforms = true;
-      lower(deploymentTarget(p.file.content));
+      const target = deploymentTarget(p.file.content);
+      projectTargets.set(p.file.path, target);
+      lower(target);
     } else if (p.kind === 'config') {
       const config = stripConfigComments(p.file.content);
       if (OTHER_PLATFORM.test(config)) facts.otherPlatforms = true;
@@ -191,6 +194,9 @@ function learn(parsed: Parsed[]): ProjectFacts {
       lower(configDeploymentTarget(config));
     }
   }
+  // The shipping app's own target wins: a stale framework project at iOS 8 doesn't lower what the app deploys to.
+  const appTarget = facts.appProject ? projectTargets.get(facts.appProject) : null;
+  if (appTarget != null) facts.deploymentTarget = appTarget;
   facts.views = resolveViews(views);
   return facts;
 }

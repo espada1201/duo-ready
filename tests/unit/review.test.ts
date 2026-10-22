@@ -1122,3 +1122,17 @@ describe('review of the held-out skips', () => {
     expect(ids([{ path: 'A.m', content: 'NSInteger touchIdx = 0;\nif (ctx.biometryType == LABiometryTypeFaceID) { }' }])).toContain('biometry-faceid');
   });
 });
+
+describe('twelfth held-out review', () => {
+  it('ignores a generated enum named NavigationView', () => {
+    expect(ids([{ path: 'Strings.swift', content: 'public enum Filters {\n  public enum NavigationView {\n    public static let title = "Filters"\n  }\n}' }])).toEqual([]);
+  });
+  it('takes the deployment target from the app project, not a stale framework', () => {
+    const app = 'productType = "com.apple.product-type.application";\nIPHONEOS_DEPLOYMENT_TARGET = 16.0;\nLastUpgradeCheck = 2710;';
+    const framework = 'productType = "com.apple.product-type.framework";\nIPHONEOS_DEPLOYMENT_TARGET = 8.1;';
+    const view = 'struct A: View {\n  var body: some View {\n    NavigationView {\n      Text("a")\n    }\n  }\n}';
+    const found = audit([{ path: 'App/App.xcodeproj/project.pbxproj', content: app }, { path: 'Storage/Storage.xcodeproj/project.pbxproj', content: framework }, { path: 'A.swift', content: view }]).findings;
+    const nav = found.find((f) => f.ruleId === 'navigation-view');
+    expect(nav?.fix?.confidence).toBe('safe');
+  });
+});
