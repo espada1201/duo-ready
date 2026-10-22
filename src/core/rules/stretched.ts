@@ -85,10 +85,12 @@ export const stretched = defineGroup({
       // A fixed square frame is an icon: it neither distorts nor changes with the window.
       if (chainHas(m, end, /^frame$/, /^\s*width\s*:\s*([^,]+?)\s*,\s*height\s*:\s*\1\s*(?:,|$)/)) continue;
       const indent = /\n([ \t]*)\.resizable/.exec(file.content.slice(Math.max(0, hit.index! - 200), end));
+      // A full-bleed background should keep filling the window, not letterbox inside it.
+      const scale = chainHas(m, end, /^(ignoresSafeArea|edgesIgnoringSafeArea)$/) ? '.scaledToFill()' : '.scaledToFit()';
       report('stretched-image', hit.index!, undefined, {
         confidence: 'review',
         description: 'Keep the image’s aspect ratio.',
-        edits: [{ start: end, end, text: indent ? `${eolOf(file.content)}${indent[1]}.scaledToFit()` : '.scaledToFit()' }],
+        edits: [{ start: end, end, text: indent ? `${eolOf(file.content)}${indent[1]}${scale}` : scale }],
       });
     }
     for (const hit of m.matchAll(/\.contentMode\s*=\s*\.scaleToFill\b/g)) report('stretched-image', hit.index!);

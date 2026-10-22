@@ -15,15 +15,16 @@ const CONTROL_FLOW = /^(\}\s*)?(if|else|guard|for|while|switch|do|repeat|defer|c
  * (closures, initializers, static members, property initializers, unknown superclasses)
  * returns null so no fix is offered.
  */
-function uikitContext(src: SwiftSource, offset: number): 'controller' | 'view' | null {
+function uikitContext(src: SwiftSource, offset: number): { kind: 'controller' | 'view'; func: string } | null {
   let b: Block | null = blockAt(src.root, offset);
   while (b && b.parent && CONTROL_FLOW.test(headerOf(src, b))) b = b.parent;
   if (!b || !b.parent) return null;
-  if (!/^(@\w+\s+)*((public|private|fileprivate|internal|open|final|override|@objc|mutating|nonisolated)\s+)*func\s/.test(headerOf(src, b))) return null;
+  const func = headerOf(src, b);
+  if (!/^(@\w+\s+)*((public|private|fileprivate|internal|open|final|override|@objc|mutating|nonisolated)\s+)*func\s/.test(func)) return null;
   const owner = declaredTypes(src).find((t) => t.block === b!.parent);
   const base = owner?.inherits[0] ?? '';
-  if (UIKIT_CONTROLLERS.test(base)) return 'controller';
-  if (UIKIT_VIEWS.test(base)) return 'view';
+  if (UIKIT_CONTROLLERS.test(base)) return { kind: 'controller', func };
+  if (UIKIT_VIEWS.test(base)) return { kind: 'view', func };
   return null;
 }
 
@@ -133,21 +134,26 @@ export const fold = defineGroup({
       const member = hit[2];
       const span = { start: hit.index!, end: hit.index! + hit[0].length };
       let fix: Fix | undefined;
+      let message: string | undefined;
       if (member === 'scale' && ctx) {
         fix = {
           confidence: 'review',
           description: 'Use the trait collection’s display scale. Read it once the view is in a window.',
           edits: [{ ...span, text: 'self.traitCollection.displayScale' }],
         };
-      } else if (member === 'bounds' && ctx) {
+      } else if (member === 'bounds' && ctx && /\bviewWillTransition\s*\(/.test(ctx.func)) {
+        // Mid-transition the view still has its old bounds: the new size is the parameter.
+        message = 'UIScreen.main.bounds is ambiguous on a two-display phone. In viewWillTransition(to:with:), use the size parameter.';
+      } else if (member === 'bounds' && ctx && !/[=!<>]=|\s[<>]\s/.test(lineAround(m, hit.index!))) {
+        // In a comparison the other side is often the view's own size, and the rewrite would always be true.
         fix = {
           confidence: 'review',
-          description: ctx === 'controller' ? 'Size from the view controller’s view.' : 'Size from this view’s bounds.',
+          description: ctx.kind === 'controller' ? 'Size from the view controller’s view.' : 'Size from this view’s bounds.',
           // Explicit self, so a parameter or local named `view` or `bounds` can't capture it.
-          edits: [{ ...span, text: ctx === 'controller' ? 'self.view.bounds' : 'self.bounds' }],
+          edits: [{ ...span, text: ctx.kind === 'controller' ? 'self.view.bounds' : 'self.bounds' }],
         };
       }
-      report('uiscreen-main', hit.index!, member ? `UIScreen.main.${member} is ambiguous on a two-display phone.` : undefined, fix);
+      report('uiscreen-main', hit.index!, message ?? (member ? `UIScreen.main.${member} is ambiguous on a two-display phone.` : undefined), fix);
     }
 
     const cameraFile = /\b(videoOrientation|videoRotationAngle)\b/.test(m);

@@ -39,6 +39,17 @@ describe('UIScreen.main fixes only where traitCollection/view/bounds resolve', (
     expect(fixed('class C: UIViewController {\n  func layout(view: UIView) { view.frame.size.width = UIScreen.main.bounds.width - 32 }\n}')).toContain('= self.view.bounds.width - 32');
   });
 
+  it('offers no bounds fix in comparisons or mid-transition, and points to the size parameter', () => {
+    expect(fixes('class C: UIViewController {\n  func f() { if UIScreen.main.bounds.width == view.frame.size.width { } }\n}')).toEqual([]);
+    const transition = audit(swift('class C: UIViewController {\n  override func viewWillTransition(to size: CGSize, with c: UIViewControllerTransitionCoordinator) { let w = UIScreen.main.bounds.width }\n}')).findings;
+    expect(transition.map((f) => [f.ruleId, !!f.fix])).toEqual([['uiscreen-main', false]]);
+    expect(transition[0].message).toContain('size parameter');
+  });
+
+  it('fills, not fits, a full-bleed background', () => {
+    expect(fixed('Image("bg")\n  .resizable()\n  .edgesIgnoringSafeArea(.all)')).toContain('.resizable()\n  .scaledToFill()');
+  });
+
   it('does not rewrite nativeScale', () => {
     expect(fixes('class V: UIView { func f() { let s = UIScreen.main.nativeScale } }')).toEqual([]);
   });
