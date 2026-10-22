@@ -37,6 +37,8 @@ export interface ProjectFacts {
   idiomWrappers: string[];
   /** View modifiers like `square(size:)` whose whole body is `frame(width: size, height: size)`. */
   squareModifiers: string[];
+  /** The project's SwiftUI views, true where one keeps state a rebuild throws away (@State, a ScrollView, a TextField…). */
+  views: Map<string, boolean>;
   /** LastUpgradeCheck, e.g. "2600". */
   upgradeCheck: string | null;
   /** An Info.plist or project.pbxproj was given. */

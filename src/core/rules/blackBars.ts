@@ -1,5 +1,6 @@
 import { INNER } from '../duo';
 import { tierFromUpgradeCheck, tierLabel, upgradeCheck, xcodeVersion } from '../sdk';
+import { blockAt, type SwiftSource } from '../swift';
 import { lineAround } from '../text';
 import { defineGroup, PREPARE, POSE } from './engine';
 
@@ -7,6 +8,33 @@ import { defineGroup, PREPARE, POSE } from './engine';
 const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize|GADAdSize\w*|adSize|bannerSize)\b/i;
 const PHONE_WIDTHS = new Set([320, 375, 390, 393, 402, 414, 428, 430, 440]);
 const PHONE_HEIGHTS = new Set([568, 667, 736, 812, 844, 852, 874, 896, 926, 932, 956]);
+
+const CONTROL = /^(?:Button|Link|Menu|NavigationLink|ShareLink|PasteButton|Toggle|Picker|TextField|SecureField|Label|ProgressView|Capsule|Rectangle|RoundedRectangle|Circle)$/;
+
+/** The view a modifier chain starts from: `Button` for `Button { } label: { }.buttonStyle(…).frame(…)`. */
+function chainRoot(src: SwiftSource, at: number): string | null {
+  const m = src.masked;
+  for (let i = at, guard = 0; guard < 30; guard++) {
+    let j = i - 1;
+    while (j >= 0 && /\s/.test(m[j])) j--;
+    if (m[j] === '}') return blockAt(src.root, j - 1).label;
+    let start = j + 1;
+    if (m[j] === ')') {
+      for (let depth = 0; j >= 0; j--) {
+        if (m[j] === ')') depth++;
+        else if (m[j] === '(' && --depth === 0) break;
+      }
+      start = j;
+    }
+    const name = /([A-Za-z_]\w*)\s*$/.exec(m.slice(Math.max(0, start - 80), start));
+    if (!name) return null;
+    let k = start - (m.slice(Math.max(0, start - 80), start).length - name.index) - 1;
+    while (k >= 0 && /\s/.test(m[k])) k--;
+    if (m[k] !== '.') return name[1];
+    i = k;
+  }
+  return null;
+}
 
 export const blackBars = defineGroup({
   id: 'black-bars',
@@ -50,10 +78,11 @@ export const blackBars = defineGroup({
     },
   ],
 
-  swift({ masked: m, report }) {
+  swift({ src, masked: m, report }) {
     // `CGRect(width: 320, height: 568)` is one hard-coded size, so one finding per line.
     const lines = new Set<number>();
-    for (const hit of m.matchAll(/\b(width|height|maxWidth|maxHeight|minWidth|minHeight)\s*(?::|==|<=|>=|<|>)\s*(\d{3})(?:\.0)?\b/g)) {
+    // `width <= 320` against a live size is a breakpoint, which adapts; `width: 320` and `== 320` pin one phone.
+    for (const hit of m.matchAll(/\b(width|height|maxWidth|maxHeight|minWidth|minHeight)\s*(?::|==)\s*(\d{3})(?:\.0)?\b/g)) {
       const n = Number(hit[2]);
       const isWidth = /width/i.test(hit[1]);
       // Popovers, rendered images and thumbnails have their own sizes, not the screen's.
@@ -68,6 +97,8 @@ export const blackBars = defineGroup({
       const n = Number(hit[1]);
       // A capped image (`.resizable()...frame(maxWidth: 400)`) is a picture, not a column.
       if (/\.resizable\s*\(\s*\)[^{}\n]*(?:\n[ \t]*\.[^{}\n]*)*\n?[ \t]*$/.test(m.slice(Math.max(0, hit.index! - 250), hit.index))) continue;
+      // A capped button or progress bar is a control, not a column of content.
+      if (CONTROL.test(chainRoot(src, hit.index!) ?? '')) continue;
       if (n >= 320 && n <= 720) report('centered-column', hit.index!, `A ${n} pt column fills about ${Math.round((n / INNER.w) * 100)}% of the open inner display.`);
     }
   },

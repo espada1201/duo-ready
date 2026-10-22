@@ -100,7 +100,7 @@ describe('rules', () => {
   });
 
   it('spots centered columns and hand-rolled two-pane layouts', () => {
-    const files = swift('if horizontalSizeClass == .regular {\n  HStack { A(); B() }\n} else {\n  A().frame(maxWidth: 500)\n}');
+    const files = swift('if horizontalSizeClass == .regular {\n  HStack { AlbumList(); PlayerView() }\n} else {\n  AlbumList().frame(maxWidth: 500)\n}');
     const found = audit(files).findings;
     expect(found.map((f) => [f.ruleId, f.line])).toEqual([
       ['state-reset', 1],

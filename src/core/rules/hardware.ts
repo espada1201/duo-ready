@@ -28,7 +28,7 @@ export const hardware = defineGroup({
   ],
 
   objc({ file, masked: m, strings, report }) {
-    if (!/\bLABiometryTypeTouchID\b/.test(m)) {
+    if (!TOUCH_ID_CODE.test(m)) {
       for (const hit of m.matchAll(/\bLABiometryTypeFaceID\b/g)) report('biometry-faceid', hit.index!);
     }
     for (const i of faceIdCopy(file.content, strings, /\bcomment\s*:\s*@?"[^"\n]*$|NSLocalizedString\s*\(\s*@"[^"\n]*"\s*,\s*@"[^"\n]*$/)) report('biometry-faceid', i, FACE_ID_COPY);
@@ -38,7 +38,7 @@ export const hardware = defineGroup({
   },
 
   swift({ file, src, masked: m, report }) {
-    if (!/\.touchID\b/.test(m)) {
+    if (!TOUCH_ID_CODE.test(m)) {
       for (const hit of m.matchAll(/\.faceID\b/g)) report('biometry-faceid', hit.index!);
     }
     for (const i of faceIdCopy(file.content, src.strings, /\bcomment\s*:\s*"[^"\n]*$/)) report('biometry-faceid', i, FACE_ID_COPY);
@@ -52,6 +52,9 @@ export const hardware = defineGroup({
   },
 });
 
+/** The code already handles Touch ID too: `.touchID`, `LABiometryTypeTouchID`, or a `touchIdDescription` beside the Face ID one. */
+const TOUCH_ID_CODE = /touch_?id/i;
+
 const FACE_ID_COPY = 'User-facing text mentions Face ID, which iPhone Duo doesn’t have.';
 const TRUE_DEPTH = 'The TrueDepth camera comes with Face ID; iPhone Duo has neither.';
 
@@ -61,6 +64,8 @@ const TRUE_DEPTH = 'The TrueDepth camera comes with Face ID; iPhone Duo has neit
  * so interpolation can't hide the alternative), and a translator `note` is never shown.
  */
 function faceIdCopy(content: string, strings: Uint8Array, note: RegExp): number[] {
+  // Copy kept beside its Touch ID twin (a strings file or a picker) is one half of a choice the app already makes.
+  if (/Touch ID/.test(content)) return [];
   return [...content.matchAll(/Face ID/g)]
     .map((hit) => hit.index!)
     .filter((i) => strings[i] && strings[i + 6] && !note.test(content.slice(Math.max(0, i - 200), i)) && !/Touch ID|fingerprint|passcode/i.test(lineAround(content, i)));

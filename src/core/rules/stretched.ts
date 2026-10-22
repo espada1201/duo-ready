@@ -118,7 +118,12 @@ export const stretched = defineGroup({
       // A symbol or bundled asset (Image(name), Image(.resource), SwiftGen's .swiftUIImage) in a fixed square frame is an icon:
       // it neither distorts nor follows the window. Photos and avatars (uiImage:, AsyncImage) can be
       // any shape, so they still count.
-      const icon = matchBefore(m, hit.index!, /(?:\bImage\s*\(\s*(?:(?:systemName|decorative)\s*:[^()]*|"[^"]*"|\.?[A-Za-z_][\w.]*)\s*\)|\.swiftUIImage)\s*$/) !== null;
+      // A template rendering mode or an image drawn from an icon set is an icon too.
+      const before = m.slice(Math.max(0, hit.index! - 300), hit.index);
+      const icon =
+        matchBefore(m, hit.index!, /(?:\bImage\s*\(\s*(?:(?:systemName|decorative)\s*:[^()]*|"[^"]*"|\.?[A-Za-z_][\w.]*)\s*\)|\.swiftUIImage)\s*$/) !== null ||
+        /(?:\.swiftUIImage\s*,?\s*\)|\.renderingMode\s*\(\s*\.template\s*\)|\bImage\s*\(\s*uiImage\s*:\s*\w*[iI]con\w*(?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))\s*$/.test(before) ||
+        chainHas(m, end, /^renderingMode$/, /^\s*\.template\s*$/);
       if (icon && (chainHas(m, end, /^frame$/, /^\s*width\s*:\s*([^,]+?)\s*,\s*height\s*:\s*\1\s*(?:,|$)/) || (square && chainHas(m, end, square)))) continue;
       const indent = /\n([ \t]*)\.resizable/.exec(file.content.slice(Math.max(0, hit.index! - 200), end));
       // A full-bleed background should keep filling the window, not letterbox inside it.

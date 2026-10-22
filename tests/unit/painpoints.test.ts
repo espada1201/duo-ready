@@ -29,7 +29,12 @@ describe('partial audits', () => {
 
 describe('fold continuity', () => {
   it('flags views swapped on size class, which lose their state on fold', () => {
-    expect(ids('if sizeClass == .compact {\n  Compact()\n} else {\n  Wide()\n}')).toEqual(['state-reset']);
+    expect(ids('if sizeClass == .compact {\n  CompactView()\n} else {\n  WideView()\n}')).toEqual(['state-reset']);
+    expect(ids('if sizeClass == .compact {\n  ScrollView { Text("a") }\n} else {\n  Text("a")\n}')).toEqual(['state-reset']);
+    // Swapping views with nothing of their own to lose keeps nothing to lose.
+    expect(ids('if sizeClass == .compact {\n  Text("a").font(.body)\n} else {\n  HStack { Image("b"); Text("a") }\n}')).toEqual([]);
+    expect(ids('struct Badge: View {\n  var body: some View { Text("1") }\n}\nstruct Row: View {\n  var body: some View {\n    if sizeClass == .compact {\n      Badge()\n    } else {\n      HStack { Badge() }\n    }\n  }\n}')).toEqual([]);
+    expect(ids('struct Feed: View {\n  @State var page = 0\n  var body: some View { Text("1") }\n}\nstruct Row: View {\n  var body: some View {\n    if sizeClass == .compact {\n      Feed()\n    } else {\n      HStack { Feed() }\n    }\n  }\n}')).toEqual(['state-reset']);
     expect(ids('Player().id(UUID())')).toEqual(['state-reset']);
     expect(ids('if sizeClass == .compact {\n  Compact()\n}')).toEqual([]);
     expect(ids('let layout = sizeClass == .compact ? AnyLayout(VStackLayout()) : AnyLayout(HStackLayout())')).toEqual([]);

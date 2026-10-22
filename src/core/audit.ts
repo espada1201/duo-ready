@@ -3,7 +3,7 @@ import { checkFiles } from './rules';
 import { tierFromUpgradeCheck, xcodeVersion } from './sdk';
 import type { AuditResult, Finding, SourceFile } from './types';
 
-const SKIP_DIR = /(^|\/)(Pods|Carthage|DerivedData|node_modules|build|SourcePackages|fastlane|\.[^/]+|\w*Tests|(?:[\w-]*[-_])?tests|XCUITests?|\w*Mocks|TestHelpers|TestSupport|Preview Content|Previews|Third[ _-]?[Pp]arty(?: Code)?|third_party|[Vv]endor)\//;
+const SKIP_DIR = /(^|\/)(Pods|Carthage|DerivedData|node_modules|build|SourcePackages|fastlane|\.[^/]+|\w*Tests|(?:[\w-]*[-_])?tests|XCUITests?|Examples?|Demos?|\w*Mocks|TestHelpers|TestSupport|Preview Content|Previews|Third[ _-]?[Pp]arty(?: Code)?|third_party|[Vv]endor)\//;
 /** Test code and build scripts run on a Mac or in CI; they aren't what Duo users see. */
 const TEST_FILE = /((Tests|\.test)\.(swift|mm?)|(^|\/)(Dangerfile|Package)\.swift)$/;
 const RELEVANT = /(\.swift|\.mm?|\.h|\.plist|\.html?|\.xcconfig|(^|\/)project\.pbxproj|(^|\/)project[\w-]*\.ya?ml|(^|\/)package\.json|(^|\/)pubspec\.yaml)$/;

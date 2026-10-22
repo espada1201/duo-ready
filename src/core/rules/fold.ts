@@ -64,6 +64,38 @@ function iPhoneBuildSettings(pbxproj: string): { text: string; offset: number }[
 const isPortraitOnly = (orientations: string[]) => orientations.length > 0 && orientations.every((o) => o.includes('Portrait'));
 
 // Rotating camera output or reporting a sensor reads orientation for a reason that isn't layout.
+/** Built-in views that keep scroll position, focus, input or playback, which a rebuild resets. */
+const STATEFUL = /^(?:TextField|SecureField|TextEditor|ScrollView|ScrollViewReader|List|Form|NavigationStack|NavigationSplitView|NavigationView|TabView|VideoPlayer|Map|Picker|DatePicker|Slider|Stepper|Toggle|Lazy\w+|WebView|PhotosPicker)$/;
+/** Built-in views with nothing of their own to lose. */
+const STATELESS = /^(?:View|Text|Image|Label|Spacer|Divider|Color|Rectangle|RoundedRectangle|Circle|Capsule|HStack|VStack|ZStack|Group|ProgressView|Button|Link|AnyView|EmptyView|ViewThatFits|GeometryReader|Font|CGFloat|CGSize|EdgeInsets|LinearGradient)$/;
+
+/** A type from another module that is named like a view, so it may hold state we can't see. */
+const VIEW_NAME = /(?:View|Field|Editor|Player|Picker|List|Grid|Sheet|Screen|Page|Form)$/;
+
+/** The capitalised calls in `code`: views, mostly, and some initialisers. */
+export const callsIn = (code: string) => [...code.matchAll(/\b([A-Z]\w*)\s*[({]/g)].map((c) => c[1]);
+
+/** Whether the views called in `code` keep state: a stateful built-in, a project view that does, or a view from elsewhere. */
+export function keepsState(code: string, views: Map<string, boolean>): boolean {
+  // Content passed in or built elsewhere (`content: content`, `imageContent()`, a `body` property) could hold anything.
+  if (/(?<![.\w])[a-z]\w*\s*\(\s*\)|\bcontent\s*:\s*[a-z]\w*\s*[,)]|^\s*[a-z]\w*\s*$/m.test(code)) return true;
+  return callsIn(code).some((v) => STATEFUL.test(v) || (!STATELESS.test(v) && (views.get(v) ?? VIEW_NAME.test(v))));
+}
+
+/** Marks each project view stateful when it declares state, uses a stateful built-in, or shows a view that is. */
+export function resolveViews(own: Map<string, { state: boolean; calls: string[] }>): Map<string, boolean> {
+  const views = new Map([...own].map(([name, v]) => [name, v.state || v.calls.some((c) => STATEFUL.test(c))]));
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const [name, v] of own) {
+      if (views.get(name) || !v.calls.some((c) => views.get(c) ?? (!STATELESS.test(c) && !own.has(c) && VIEW_NAME.test(c)))) continue;
+      views.set(name, true);
+      changed = true;
+    }
+  }
+  return views;
+}
+
 const CAMERA_FILE = /\b(videoOrientation|videoRotationAngle)\b/;
 const NOT_LAYOUT = /AVCapture|XCUI|videoOrientation|videoRotation|rawValue|imageOrientation|CGImagePropertyOrientation/;
 
@@ -177,7 +209,10 @@ export const fold = defineGroup({
     for (const b of blocks) {
       const sibling = b.parent?.children[b.parent.children.indexOf(b) + 1];
       const cond = matchBefore(m, b.open, sizeCheck);
-      if (cond !== null && sibling && headerOf(src, sibling) === 'else') report('state-reset', cond);
+      if (cond === null || !sibling || headerOf(src, sibling) !== 'else') continue;
+      // Swapping Text and Image loses nothing; only views that hold state of their own lose it.
+      const branches = m.slice(b.open, b.close) + m.slice(sibling.open, sibling.close);
+      if (keepsState(branches, facts.views)) report('state-reset', cond);
     }
     for (const hit of m.matchAll(/\.id\s*\(\s*UUID\s*\(\s*\)\s*\)/g)) {
       report('state-reset', hit.index!, '.id(UUID()) gives the view a new identity on every update, so its state never survives a fold.');

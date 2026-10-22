@@ -554,3 +554,35 @@ it('keeps every offset and line break when masking odd Objective-C', () => {
     expect([...masked].filter((c) => c === '\n').length).toBe([...text].filter((c) => c === '\n').length);
   }
 });
+
+describe('precision review', () => {
+  const swiftIds = (content: string) => ids([{ path: 'A.swift', content }]);
+  it.each([
+    ['a capped button', 'Button {\n  go()\n} label: {\n  Text("Go")\n}\n.buttonStyle(.borderedProminent)\n.frame(maxWidth: 360)'],
+    ['a capped progress bar', 'Capsule()\n  .foregroundStyle(.blue)\n  .frame(maxWidth: 400)'],
+    ['a size breakpoint', 'if view.frame.width <= 320 { compact() }'],
+    ['an icon with a template rendering mode', 'Image(Icons.cloud)\n  .renderingMode(.template)\n  .resizable()\n  .frame(width: size, height: size)'],
+    ['Face ID copy beside its Touch ID twin', 'let a = "Use Face ID to unlock"\nlet b = "Use Touch ID to unlock"'],
+    ['a Face ID check with a Touch ID branch', 'let d = ctx.biometryType == .faceID ? .faceIdDescription : .touchIdDescription'],
+  ])('ignores %s', (_, code) => {
+    expect(swiftIds(code)).toEqual([]);
+  });
+
+  it('still flags a capped content column', () => {
+    expect(swiftIds('VStack {\n  content\n}\n.frame(maxWidth: 500)')).toEqual(['centered-column']);
+  });
+});
+
+it('skips rows of equal cards and library demo apps', () => {
+  const row = 'if horizontalSizeClass == .regular {\n  HStack {\n    ForEach(items) { Card(item: $0) }\n  }\n}';
+  expect(ids([{ path: 'A.swift', content: row }])).not.toContain('manual-two-pane');
+  expect(ids([{ path: 'Lib/Example/App.swift', content: 'let s = UIScreen.main.bounds' }])).toEqual([]);
+  expect(ids([{ path: 'Demo/App.swift', content: 'let s = UIScreen.main.bounds' }])).toEqual([]);
+});
+
+it('treats content passed into a size-class swap as stateful', () => {
+  const swap = (a: string, b: string) => ids([{ path: 'A.swift', content: `if verticalSizeClass == .regular {\n  ${a}\n} else {\n  ${b}\n}` }]);
+  expect(swap('VStack(spacing: 24, content: content)', 'HStack(spacing: 24, content: content)')).toContain('state-reset');
+  expect(swap('VStack { imageContent() }', 'HStack { imageContent() }')).toContain('state-reset');
+  expect(swap('VStack { Image("a"); Text(title) }', 'HStack { Image("a"); Text(title) }')).not.toContain('state-reset');
+});

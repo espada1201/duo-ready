@@ -1,6 +1,7 @@
 // The rule registry. Rules live with the reviewer pain point they prevent; this file
 // parses each file once, learns project-wide facts, then hands every file to every group.
 
+import { callsIn, resolveViews } from './fold';
 import { parseObjC } from '../objc';
 import { parsePlist } from '../plist';
 import { blockAt, declaredTypes, parseSwift, walk, type Block, type SwiftSource } from '../swift';
@@ -104,6 +105,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
     otherPlatforms: false,
     idiomWrappers: [],
     squareModifiers: [],
+    views: new Map(),
     ownVideoPlayer: false,
     upgradeCheck: null,
     hasProjectFiles: false,
@@ -111,6 +113,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
   const lower = (target: number | null) => {
     if (target !== null && (facts.deploymentTarget === null || target < facts.deploymentTarget)) facts.deploymentTarget = target;
   };
+  const views = new Map<string, { state: boolean; calls: string[] }>();
   for (const p of parsed) {
     if (p.kind === 'swift') {
       const m = p.src.masked;
@@ -120,6 +123,12 @@ function learn(parsed: Parsed[]): ProjectFacts {
       if (appDelegate && !facts.appDelegate) facts.appDelegate = { file: p.file, offset: appDelegate.index };
       if (/\b(?:struct|class|enum|actor)\s+VideoPlayer\b/.test(m)) facts.ownVideoPlayer = true;
       for (const hit of m.matchAll(IDIOM_WRAPPER)) if (!facts.idiomWrappers.includes(hit[1])) facts.idiomWrappers.push(hit[1]);
+      for (const t of declaredTypes(p.src)) {
+        if (!t.block || !t.inherits.includes('View')) continue;
+        const body = m.slice(t.block.open, t.block.close);
+        const seen = views.get(t.name);
+        views.set(t.name, { state: !!seen?.state || /@(?:State|StateObject|FocusState)\b/.test(body), calls: [...(seen?.calls ?? []), ...callsIn(body)] });
+      }
       for (const hit of m.matchAll(SQUARE_MODIFIER)) if (!facts.squareModifiers.includes(hit[1])) facts.squareModifiers.push(hit[1]);
     } else if (p.kind === 'objc') {
       const m = p.src.masked;
@@ -141,6 +150,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
       lower(configDeploymentTarget(config));
     }
   }
+  facts.views = resolveViews(views);
   return facts;
 }
 

@@ -78,7 +78,9 @@ export const hinge = defineGroup({
     const regular = new RegExp(`\\b${sizeClassPattern(m)}\\s*(?:==\\s*\\.regular|!=\\s*\\.compact)\\s*$`);
     for (const b of blocks) {
       const sizeCheck = matchBefore(m, b.open, regular);
-      if (sizeCheck !== null && b.children.some((c) => c.label === 'HStack')) report('manual-two-pane', sizeCheck);
+      // A row of equal cards (ForEach, or every child at maxWidth: .infinity) isn't a primary and a secondary pane.
+      const panes = b.children.find((c) => c.label === 'HStack' && !/\bForEach\b/.test(m.slice(c.open, c.close)) && (m.slice(c.open, c.close).match(/maxWidth\s*:\s*\.infinity/g) ?? []).length < 2);
+      if (sizeCheck !== null && panes) report('manual-two-pane', sizeCheck);
 
       if (b.argument) continue;
       if (b.label === 'ArrangementView') {
