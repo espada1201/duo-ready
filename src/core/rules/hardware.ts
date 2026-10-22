@@ -28,7 +28,8 @@ export const hardware = defineGroup({
   ],
 
   objc({ file, masked: m, strings, report }) {
-    if (!TOUCH_ID_CODE.test(m)) {
+    // Touch ID named anywhere, even only in its label (`NSLocalizedString(@"touch_id_name", …)`), means the file handles it.
+    if (!TOUCH_ID_CODE.test(file.content)) {
       for (const hit of m.matchAll(/\bLABiometryTypeFaceID\b/g)) report('biometry-faceid', hit.index!);
     }
     for (const i of faceIdCopy(file.content, strings, /\bcomment\s*:\s*@?"[^"\n]*$|NSLocalizedString\s*\(\s*@"[^"\n]*"\s*,\s*@"[^"\n]*$/)) report('biometry-faceid', i, FACE_ID_COPY);
@@ -38,7 +39,8 @@ export const hardware = defineGroup({
   },
 
   swift({ file, src, masked: m, report }) {
-    if (!TOUCH_ID_CODE.test(m)) {
+    // Touch ID named anywhere, even only in its label (`NSLocalizedString(@"touch_id_name", …)`), means the file handles it.
+    if (!TOUCH_ID_CODE.test(file.content)) {
       for (const hit of m.matchAll(/\.faceID\b/g)) report('biometry-faceid', hit.index!);
     }
     for (const i of faceIdCopy(file.content, src.strings, /\bcomment\s*:\s*"[^"\n]*$/)) report('biometry-faceid', i, FACE_ID_COPY);

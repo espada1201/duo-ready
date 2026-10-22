@@ -231,6 +231,7 @@ export const fold = defineGroup({
       if ((member === 'scale' || member === 'nativeScale') && /\b1(?:\.0)?\s*\/\s*\(?\s*$/.test(m.slice(Math.max(0, hit.index! - 20), hit.index))) {
         message = 'A hairline width from UIScreen.main.scale: low impact, but it is a pixel off if Duo’s two displays differ in scale.';
       }
+      if (notLayout(m, hit.index!)) continue;
       report('uiscreen-main', hit.index!, message ?? (member ? `UIScreen.main.${member} is ambiguous on a two-display phone.` : undefined), fix);
     }
 
@@ -313,7 +314,9 @@ export const fold = defineGroup({
   },
 
   objc({ masked: m, facts, report }) {
-    for (const hit of m.matchAll(/\[\s*UIScreen\s+mainScreen\s*\]|\bUIScreen\s*\.\s*mainScreen\b/g)) report('uiscreen-main', hit.index!, '[UIScreen mainScreen] is ambiguous on a two-display phone.');
+    for (const hit of m.matchAll(/\[\s*UIScreen\s+mainScreen\s*\]|\bUIScreen\s*\.\s*mainScreen\b/g)) {
+      if (!notLayout(m, hit.index!)) report('uiscreen-main', hit.index!, '[UIScreen mainScreen] is ambiguous on a two-display phone.');
+    }
     for (const hit of m.matchAll(/\bsharedApplication\s*\]?\s*(?:\.\s*|\s+)(?:keyWindow|windows|delegate\s*\]?\s*(?:\.\s*|\s+)window)\b/g)) report('key-window', hit.index!, oneWindow(facts) ? ONE_WINDOW : undefined);
     const camera = CAMERA_FILE.test(m);
     for (const hit of m.matchAll(/\bstatusBarOrientation\b|\[\s*\[\s*UIDevice\s+currentDevice\s*\]\s+orientation\s*\]|\bUIDevice\s*\.\s*currentDevice\s*\.\s*orientation\b|\bUI(?:Interface|Device)OrientationIs(?:Landscape|Portrait)\b|\binterfaceOrientation\b/g)) {
@@ -361,4 +364,10 @@ function inInitializer(src: SwiftSource, at: number): boolean {
     if (/(?:^|\s)init\s*[?!]?\s*\(/.test(head)) return true;
   }
   return false;
+}
+
+/** A log line only prints the screen, and an image context's scale matches on both of Duo's displays. */
+function notLayout(m: string, at: number): boolean {
+  const line = lineAround(m, at);
+  return /^\s*(?:NSLog|print|debugPrint|os_log|DDLog\w*|\w*[lL]og(?:ger)?\s*\.\s*\w+)\s*\(/.test(line) || /\bUIGraphicsBeginImageContextWithOptions\b/.test(line);
 }

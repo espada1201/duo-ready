@@ -1090,3 +1090,18 @@ describe('eleventh held-out review', () => {
     expect(ids([{ path: 'A.m', content: 'self.label.font = [UIFont italicSystemFontOfSize:self.label.font.pointSize];' }])).toEqual([]);
   });
 });
+
+describe('presentation, logging and labels', () => {
+  it('ignores an idiom check that only anchors a popover', () => {
+    expect(ids([{ path: 'A.m', content: 'if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {\n  activity.modalPresentationStyle = UIModalPresentationPopover;\n  activity.popoverPresentationController.barButtonItem = button;\n}' }])).toEqual([]);
+    expect(ids([{ path: 'A.swift', content: 'if UIDevice.current.userInterfaceIdiom == .pad {\n  vc.popoverPresentationController?.sourceView = view\n}' }])).toEqual([]);
+    expect(ids([{ path: 'A.swift', content: 'if UIDevice.current.userInterfaceIdiom == .pad {\n  width = 600\n}' }])).toContain('idiom-layout');
+  });
+  it('ignores the screen in a log line or an image context scale', () => {
+    expect(ids([{ path: 'A.swift', content: 'NSLog("screen: \\(UIScreen.main.bounds.height)")' }])).toEqual([]);
+    expect(ids([{ path: 'A.m', content: 'UIGraphicsBeginImageContextWithOptions(itemSize, NO, UIScreen.mainScreen.scale);' }])).toEqual([]);
+  });
+  it('ignores a Face ID check whose default label is Touch ID', () => {
+    expect(ids([{ path: 'A.m', content: 'NSString *name = NSLocalizedString(@"settings_touch_id_name", @"Touch ID");\nif (ctx.biometryType == LABiometryTypeFaceID) { name = @"x"; }' }])).not.toContain('biometry-faceid');
+  });
+});

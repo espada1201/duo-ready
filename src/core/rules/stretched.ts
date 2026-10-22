@@ -127,7 +127,7 @@ export const stretched = defineGroup({
       if (declaredAt(m, hit.index!) || /^userInterfaceIdiom\s*:\s*UIUserInterfaceIdiom\b/.test(m.slice(hit.index!, hit.index! + 60)) || /\bkeyboardType\b|\bpreferredStyle\b/.test(line) || /^userInterfaceIdiom\s*[!=]=\s*\.(?:tv|mac|carPlay|vision)\b/.test(m.slice(hit.index!, hit.index! + 60))) continue;
       if (facts.idiomWrappers.some((w) => new RegExp(`\\bvar\\s+${w}\\s*:\\s*Bool\\s*\\{[^{}]*$`).test(m.slice(Math.max(0, hit.index! - 120), hit.index)))) continue;
       // A function that returns a name or an icon picks wording for the device, not a layout.
-      if (returnsCopy(m, blockAt(src.root, hit.index!))) continue;
+      if (returnsCopy(m, blockAt(src.root, hit.index!)) || anchorsPopover(m, hit.index!)) continue;
       report('idiom-layout', hit.index!);
     }
 
@@ -211,7 +211,7 @@ export const stretched = defineGroup({
     for (const hit of m.matchAll(/\buserInterfaceIdiom\b|\bUI_USER_INTERFACE_IDIOM\s*\(\s*\)/g)) {
       // A tvOS, Mac or CarPlay check is false on Duo either way; a keyboard type is about input.
       const after = m.slice(hit.index! + hit[0].length, hit.index! + hit[0].length + 60);
-      if (/^\s*\]?\s*[!=]=\s*UIUserInterfaceIdiom(?:TV|Mac|CarPlay|Vision)\b/.test(after) || /\bkeyboardType\b|\bpreferredStyle\b/.test(lineAround(m, hit.index!))) continue;
+      if (/^\s*\]?\s*[!=]=\s*UIUserInterfaceIdiom(?:TV|Mac|CarPlay|Vision)\b/.test(after) || /\bkeyboardType\b|\bpreferredStyle\b/.test(lineAround(m, hit.index!)) || anchorsPopover(m, hit.index!)) continue;
       report('idiom-layout', hit.index!);
     }
     for (const hit of m.matchAll(/\b(?:systemFontOfSize|boldSystemFontOfSize|italicSystemFontOfSize|monospacedSystemFontOfSize|fontWithName)\s*:/g)) {
@@ -238,3 +238,12 @@ export const stretched = defineGroup({
     }
   },
 });
+
+/** Whether the idiom check at `at` only anchors a popover (`if pad { activity.popoverPresentationController.barButtonItem = button }`): presentation, not layout. */
+function anchorsPopover(m: string, at: number): boolean {
+  const open = m.indexOf('{', at);
+  if (open < 0 || /[;}]/.test(m.slice(at, open)) || open - at > 200) return false;
+  const close = closeOf(m, open);
+  const statements = close < 0 ? [] : m.slice(open + 1, close - 1).split(/[;\n]/).map((l) => l.trim()).filter(Boolean);
+  return statements.length > 0 && statements.every((l) => /popoverPresentationController|UIModalPresentationPopover|\.popover\b/.test(l));
+}
