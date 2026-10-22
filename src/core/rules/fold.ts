@@ -253,8 +253,8 @@ export const fold = defineGroup({
       const at = labelOffset(src, b);
       const target = facts.deploymentTarget;
       const edits = [{ start: at, end: at + 'NavigationView'.length, text: 'NavigationStack' }];
-      // `.navigationViewStyle(.stack)` already behaves as one NavigationStack column.
-      if (chainHas(m, b.close + 1, /^navigationViewStyle$/, /^\s*(?:\.stack\b|StackNavigationViewStyle\b)/)) continue;
+      // `.navigationViewStyle(.stack)`, on the NavigationView or on its content, already behaves as one NavigationStack column.
+      if (chainHas(m, b.close + 1, /^navigationViewStyle$/, /^\s*(?:\.stack\b|StackNavigationViewStyle\b)/) || /\.navigationViewStyle\s*\(\s*(?:\.stack\b|StackNavigationViewStyle\b)/.test(m.slice(b.open, b.close))) continue;
       const columns = chainHas(m, b.close + 1, /^navigationViewStyle$/, /^\s*(?:\.columns|DoubleColumn)/);
       if (columns || countStatements(m.slice(b.open + 1, b.close)) !== 1) report('navigation-view', at);
       else if (target !== null && target < 16) {

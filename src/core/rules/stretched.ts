@@ -31,7 +31,7 @@ function callText(masked: string, from: number): string {
 }
 
 /** `width: 40, height: 40` or `width: Layout.icon, height: Layout.icon`: both set, neither read from a window, geometry or container. */
-const FIXED_FRAME = /^\s*width\s*:\s*(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+,\s*height\s*:\s*(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+(?:,|$)/i;
+const FIXED_FRAME = /^\s*width\s*:\s*(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))(?:[^,()]|\([^()]*\))+,\s*height\s*:\s*(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))(?:[^,()]|\([^()]*\))+(?:,|$)/i;
 
 /** Whether the function holding `scope` returns text or an icon (`-> String`, `-> SymbolName`, `-> UIImage?`). */
 function returnsCopy(m: string, scope: Block | null): boolean {

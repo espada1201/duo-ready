@@ -864,3 +864,17 @@ describe('screen-level columns', () => {
     expect(ids([{ path: 'A.swift', content: screen }])).toContain('centered-column');
   });
 });
+
+describe('fourth held-out review', () => {
+  const swiftIds = (content: string, path = 'A.swift') => ids([{ path, content }]);
+  it.each([
+    ['a stack style set on the content', 'var body: some View {\n  NavigationView {\n    ScrollView {}\n      .navigationViewStyle(.stack)\n  }\n}'],
+    ['a fixed frame computed with a call', 'Image(systemName: "circle.fill")\n  .resizable()\n  .frame(width: d * min(scale, 1.5), height: d * min(scale, 1.5))'],
+    ['an iPad sheet size', 'static let sizeOniPad: CGSize = CGSize(width: 375, height: 667)'],
+  ])('ignores %s', (_, code) => {
+    expect(swiftIds(code)).toEqual([]);
+  });
+  it('still flags a phone screen size', () => {
+    expect(swiftIds('let size = CGSize(width: 375, height: 667)')).toContain('fixed-device-size');
+  });
+});

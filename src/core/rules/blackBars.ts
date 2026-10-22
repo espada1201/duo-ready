@@ -5,7 +5,7 @@ import { blockAt, headerOf, type SwiftSource } from '../swift';
 import { chainHas, chainRoot, defineGroup, PREPARE, POSE } from './engine';
 
 // iPhone point sizes from the iPhone SE through the 17 Pro Max.
-const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize|estimated\w*|snapshot\w*|drawHierarchy|render\w*|\w*Preview|GADAdSize\w*|adSize|bannerSize|video\w*Size|export\w*|canvas\w*|renderSize|outputSize)\b/i;
+const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize|estimated\w*|snapshot\w*|drawHierarchy|render\w*|\w*Preview|GADAdSize\w*|adSize|bannerSize|video\w*Size|export\w*|canvas\w*|renderSize|outputSize|\w*OniPad|\w*ForPad)\b/i;
 /** A few lines either side, where a size's purpose is named: `func preferredContentSize`, `renderAsImage()` on the next line. */
 function around(m: string, at: number): string {
   let from = at;
