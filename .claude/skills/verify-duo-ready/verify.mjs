@@ -129,9 +129,9 @@ const FEATURES = {
     mkdirSync(dir, { recursive: true });
     const report = cli(['sample', '--no-color']);
     writeFileSync(join(dir, 'report.txt'), `${report.out}\n--- stderr\n${report.err}\nexit ${report.code}`);
-    assert(report.code === 1 && report.out.includes('Fix these screens first'), 'text report exits 1 with errors and ranks screens');
+    assert(report.code === 1 && report.out.includes('Fix these first'), 'text report exits 1 with errors and ranks screens');
     const dry = cli(['sample', '--dry-run', '--format', 'json', '--fail-on', 'never']);
-    assert(JSON.parse(dry.out).findings.length === 31 && dry.err.includes('+++ Encore/Encore/LibraryView.swift'), 'dry run keeps JSON on stdout, diff on stderr');
+    assert(JSON.parse(dry.out).findings.length === 31 && dry.err.includes('+++ b/Encore/Encore/LibraryView.swift'), 'dry run keeps JSON on stdout, diff on stderr');
     const copy = mkdtempSync(join(tmpdir(), 'duo-verify-'));
     cpSync(join(ROOT, 'sample'), copy, { recursive: true });
     const fixed = cli([copy, '--fix', '--no-color', '--fail-on', 'never']);

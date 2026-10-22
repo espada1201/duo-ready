@@ -5,7 +5,7 @@ The Audit tab scores a project, ranks the screens to fix first, groups findings 
 ## Sub-features
 
 - `audit-score` shows the score, grade and counts.
-- `audit-screens` lists the worst screens first.
+- `audit-screens` lists the screens and files whose fixes gain the most points first.
 - `audit-fixes` selects safe fixes by default and lets you add review fixes.
 - `audit-zip` downloads only the changed files, fixed.
 - `audit-filter` narrows the list by severity, pain point or fixability.

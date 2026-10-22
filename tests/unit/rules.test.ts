@@ -187,7 +187,7 @@ describe('sample project (Encore)', () => {
   it('names the screen each finding is in and ranks the worst screens first', () => {
     expect(result.findings.find((f) => f.ruleId === 'state-reset')?.screen).toBe('AlbumGrid');
     expect(result.findings.find((f) => f.ruleId === 'old-sdk')?.screen).toBeUndefined();
-    expect(screensFirst(result.findings).map((s) => s.screen).slice(0, 3)).toEqual(['PlayerViewController', 'NowPlayingView', 'AlbumGrid']);
+    expect(screensFirst(result.findings).map((s) => [s.screen, s.gain]).slice(0, 3)).toEqual([['NowPlayingView', 16], ['PlayerViewController', 11], ['AppDelegate.swift', 8]]);
   });
 
   it('safe fixes remove their findings, leave the rest, and are idempotent', () => {

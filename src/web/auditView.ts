@@ -1,7 +1,7 @@
 import { strToU8, zipSync } from 'fflate';
 import { applyFixes, isRelevant, isRelevantDir, MAX_BYTES } from '../core/audit';
 import type { Hunk } from '../core/diff';
-import { describeCounts, PARTIAL_NOTE, plural, screensFirst, severityLabel, summaryLine, unreadableNote } from '../core/findings';
+import { describeCounts, gainLabel, GRADE_LEGEND, PARTIAL_NOTE, plural, screensFirst, severityLabel, summaryLine, unreadableNote } from '../core/findings';
 import { PAIN_POINTS, RULE_BY_ID } from '../core/rules';
 import { tierLabel } from '../core/sdk';
 import { groupBy } from '../core/text';
@@ -317,6 +317,7 @@ function results(state: AuditState, set: (s: AuditState) => void, openPreview: (
       { class: 'summary-text' },
       h('p', { class: 'eyebrow' }, state.source),
       h('h3', { 'data-testid': 'grade' }, r.grade),
+      h('p', { class: 'hint' }, GRADE_LEGEND),
       h('p', {}, summaryLine(r)),
       r.partial ? h('p', { class: 'partial', 'data-testid': 'partial' }, PARTIAL_NOTE) : null,
       r.unreadable.length ? h('p', { class: 'partial', 'data-testid': 'unreadable' }, unreadableNote(r.unreadable)) : null,
@@ -325,8 +326,9 @@ function results(state: AuditState, set: (s: AuditState) => void, openPreview: (
         'div',
         { class: 'summary-actions' },
         downloadButton,
-        h('button', { type: 'button', class: 'button', onclick: () => openPreview(r.tier?.value ?? null) }, 'Preview on Duo', icon('arrow', 16)),
+        h('button', { type: 'button', class: 'button', onclick: () => openPreview(r.tier?.value ?? null) }, 'Preview on Duo (sample app)', icon('arrow', 16)),
       ),
+      fixable ? h('p', { class: 'hint' }, 'The zip holds just the changed files at their paths in your project. Unzip it over your project folder, then review the changes with git diff.') : null,
       h(
         'ul',
         { class: 'pain-chips', 'aria-label': 'Findings by reviewer pain point' },
@@ -409,13 +411,14 @@ function results(state: AuditState, set: (s: AuditState) => void, openPreview: (
   const first = screens.length
     ? h(
         'section',
-        { class: 'screens-first', 'aria-label': 'Fix these screens first', 'data-testid': 'screens' },
-        h('h3', {}, 'Fix these screens first'),
+        { class: 'screens-first', 'aria-label': 'Fix these first', 'data-testid': 'screens' },
+        h('h3', {}, 'Fix these first'),
         h(
           'ol',
           {},
-          screens.map((s) => h('li', {}, h('strong', {}, s.screen), ' ', h('span', { class: 'hint' }, `${describeCounts(s.findings)} · ${s.path}`))),
+          screens.map((s) => h('li', {}, h('strong', {}, s.screen), ' ', h('span', { class: 'hint' }, `${gainLabel(s)} · ${describeCounts(s.findings)} · ${s.path}`))),
         ),
+        h('p', { class: 'hint' }, 'Each rule costs points once however often it fires, so a rule that also fires elsewhere pays off only once every instance is fixed.'),
       )
     : null;
 
@@ -459,7 +462,7 @@ function finding(state: AuditState, f: Finding, i: number, toggleFix: (i: number
             'label',
             { class: 'fix-toggle' },
             h('input', { type: 'checkbox', checked: state.selected.has(i), onchange: (e: Event) => toggleFix(i, (e.target as HTMLInputElement).checked) }),
-            h('span', {}, f.fix.description, ' ', h('em', {}, f.fix.confidence === 'safe' ? 'Safe' : 'Review first')),
+            h('span', {}, f.fix.description, ' ', h('em', {}, f.fix.confidence === 'safe' ? 'Safe fix' : 'Review fix')),
           ),
           h(
             'pre',

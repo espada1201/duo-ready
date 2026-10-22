@@ -2,7 +2,7 @@ import { severityLabel } from '../core/findings';
 import { PAIN_POINTS, RULE_BY_ID, RULES } from '../core/rules';
 import { h } from './dom';
 
-const CLI = `# In your app's folder, with this repo cloned next to it
+const CLI = `# In the duo-ready folder, with your app's folder next to it
 npm run audit -- ../MyApp              # report
 npm run audit -- ../MyApp --dry-run    # show the fixes as a diff
 npm run audit -- ../MyApp --fix        # apply the safe fixes`;

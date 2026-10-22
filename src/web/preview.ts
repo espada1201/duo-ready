@@ -191,7 +191,7 @@ function readout(layout: EncoreLayout, state: PreviewState): HTMLElement {
       h('dt', {}, 'Bars'),
       h('dd', {}, p.bars),
       h('dt', {}, 'Reserved regions'),
-      h('dd', {}, h('ul', { class: 'plain' }, regions)),
+      h('dd', {}, h('ul', { class: 'plain' }, regions), h('p', { class: 'hint' }, 'Parts of the display iOS asks apps to keep content clear of, such as the hinge and the camera.')),
     ),
     h('h3', {}, problems.length ? `Problems in this pose (${problems.length})` : 'Problems in this pose'),
     problems.length

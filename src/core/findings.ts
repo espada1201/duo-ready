@@ -14,13 +14,16 @@ export function countBySeverity(findings: Finding[]): Record<Severity, number> {
   return out;
 }
 
+/** What each grade means, for readers who see one without the scale. */
+export const GRADE_LEGEND = '(Duo-ready 90+ with no errors, Close 70+, Needs work 40+, Not ready below)';
+
 export const PARTIAL_NOTE = 'Partial audit: no Info.plist or Xcode project, so orientation, full-screen and SDK checks did not run. The grade is capped at Close.';
 
 /** What to tell the reader about files that were found but couldn't be read. */
 export const unreadableNote = (paths: string[]) =>
   `${joinEnglish(paths)} ${paths.length === 1 ? 'is a binary plist' : 'are binary plists'}, which duo-ready can't read. Convert with \`plutil -convert xml1 <file>\` to include ${paths.length === 1 ? 'it' : 'them'}.`;
 
-export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+export const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 
 export function summaryLine(r: AuditResult): string {
   const n = countBySeverity(r.findings);
@@ -37,25 +40,37 @@ export function cost(findings: Finding[]): number {
 }
 
 export interface ScreenSummary {
+  /** The view or view controller, or the file name for findings outside any screen. */
   screen: string;
   path: string;
   findings: Finding[];
   cost: number;
+  /** Points the score rises by once every finding here is fixed. A rule that also fires elsewhere adds nothing until it is fixed there too. */
+  gain: number;
 }
 
-/** Screens ranked by how much fixing them would raise the score, worst first. */
+/** Screens, and files with findings outside any screen, ranked by the points fixing them gains. */
 export function screensFirst(findings: Finding[]): ScreenSummary[] {
   const by = new Map<string, ScreenSummary>();
   for (const f of findings) {
-    if (!f.screen) continue;
-    const s = by.get(f.screen) ?? { screen: f.screen, path: f.path, findings: [], cost: 0 };
+    const screen = f.screen ?? f.path.slice(f.path.lastIndexOf('/') + 1);
+    const key = f.screen ? `screen:${screen}` : `file:${f.path}`;
+    const s = by.get(key) ?? { screen, path: f.path, findings: [], cost: 0, gain: 0 };
     s.findings.push(f);
-    by.set(f.screen, s);
+    by.set(key, s);
   }
+  const total = cost(findings);
   const out = [...by.values()];
-  for (const s of out) s.cost = cost(s.findings);
-  return out.sort((a, b) => b.cost - a.cost || b.findings.length - a.findings.length || a.screen.localeCompare(b.screen));
+  for (const s of out) {
+    const mine = new Set(s.findings);
+    s.cost = cost(s.findings);
+    s.gain = total - cost(findings.filter((f) => !mine.has(f)));
+  }
+  return out.sort((a, b) => b.gain - a.gain || b.cost - a.cost || b.findings.length - a.findings.length || a.screen.localeCompare(b.screen));
 }
+
+/** "+5 points", or why fixing this alone doesn't move the score. */
+export const gainLabel = (s: ScreenSummary) => (s.gain ? `+${plural(s.gain, 'point')}` : 'same rules fire elsewhere');
 
 export function describeCounts(findings: Finding[]): string {
   const n = countBySeverity(findings);

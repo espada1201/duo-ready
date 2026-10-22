@@ -32,9 +32,49 @@ export function hunks(content: string, edits: Edit[]): Hunk[] {
   });
 }
 
-export function unifiedDiff(path: string, content: string, edits: Edit[]): string {
+const CONTEXT = 3;
+const NO_NEWLINE = '\\ No newline at end of file';
+
+const range = (start: number, length: number) => (length === 1 ? `${start}` : `${length ? start : start - 1},${length}`);
+
+/**
+ * A unified diff with three lines of context that `git apply` and `patch -p1` accept.
+ * `notes` go above the file header, where both tools ignore them.
+ */
+export function unifiedDiff(path: string, content: string, edits: Edit[], notes: string[] = []): string {
   if (!edits.length) return '';
-  const lines = [`--- ${path}`, `+++ ${path}`];
-  for (const h of hunks(content, edits)) lines.push(`@@ line ${h.line} @@`, ...h.removed.map((l) => `-${l}`), ...h.added.map((l) => `+${l}`));
-  return lines.join('\n');
+  const lines = content.split('\n');
+  const newlineAtEnd = content.endsWith('\n');
+  if (newlineAtEnd) lines.pop();
+  const out = [...notes, `--- a/${path}`, `+++ b/${path}`];
+  // Hunks whose context would touch merge into one, as diff does.
+  const groups: Hunk[][] = [];
+  for (const h of hunks(content, edits)) {
+    const prev = groups[groups.length - 1]?.at(-1);
+    if (prev && h.line - (prev.line + prev.removed.length) <= 2 * CONTEXT) groups[groups.length - 1].push(h);
+    else groups.push([h]);
+  }
+  let shift = 0;
+  for (const group of groups) {
+    const last = group[group.length - 1];
+    const from = Math.max(0, group[0].line - 1 - CONTEXT);
+    const to = Math.min(lines.length, last.line - 1 + last.removed.length + CONTEXT);
+    const body: string[] = [];
+    let at = from;
+    let added = 0;
+    for (const h of group) {
+      body.push(...lines.slice(at, h.line - 1).map((l) => ` ${l}`), ...h.removed.map((l) => `-${l}`));
+      // The file's last line has no newline: say so after it on each side it appears.
+      if (!newlineAtEnd && h.line - 1 + h.removed.length === lines.length) body.push(NO_NEWLINE);
+      body.push(...h.added.map((l) => `+${l}`));
+      if (!newlineAtEnd && h.line - 1 + h.removed.length === lines.length) body.push(NO_NEWLINE);
+      added += h.added.length - h.removed.length;
+      at = h.line - 1 + h.removed.length;
+    }
+    body.push(...lines.slice(at, to).map((l) => ` ${l}`));
+    if (!newlineAtEnd && at < to && to === lines.length) body.push(NO_NEWLINE);
+    out.push(`@@ -${range(from + 1, to - from)} +${range(from + 1 + shift, to - from + added)} @@`, ...body);
+    shift += added;
+  }
+  return out.join('\n');
 }

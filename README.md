@@ -8,7 +8,7 @@ iOS doesn't let anyone reshape someone else's app, so this kit is for the people
 
 1. Install Homebrew from https://brew.sh if you don't have it.
 2. In Terminal, run `brew install node`.
-3. Download this repo, then `cd` into its folder in Terminal.
+3. Run `git clone https://github.com/espada1201/duo-ready.git && cd duo-ready`.
 4. Run `npm install && npm start`.
 5. Your browser opens the Duo Lab at http://localhost:4178.
 
@@ -23,20 +23,21 @@ iOS doesn't let anyone reshape someone else's app, so this kit is for the people
   ```
   `--format json` or `sarif` (for GitHub code scanning) keeps stdout machine-readable; add `-s`
   (`npm run -s audit -- ...`) so npm's own banner stays off it, or use `--out report.json`.
-  Try it on the bundled legacy app: `npm run audit -- sample`.
+  Paths are relative to where you run the command. Exit codes: 0 clean, 1 findings at `--fail-on`
+  (error by default; warning or note are stricter), 2 bad input. Try it on the bundled legacy app: `npm run audit -- sample`.
 
 ## The rules
 
-28 checks traced to Apple's iPhone Duo guidance, grouped by what reviewers saw (`npm run audit -- rules` lists them):
+28 checks, each traced to Apple's guidance (Duo Tech Talks, the HIG, framework docs), grouped by what reviewers saw. `npm run audit -- rules` lists them, and the Lab's *Why it breaks* tab explains each:
 
 - **Black bars:** pre-27.1 Xcode, `UIRequiresFullScreen`, hard-coded iPhone sizes, centered columns.
-- **Misplaced bars:** hand-built bars, symmetric safe-area math, missing tab sidebar, screen-edge swipes.
-- **Small or stretched:** idiom checks, fixed font sizes, images without an aspect ratio, web viewports pinned to a phone width, SpriteKit scenes that stretch or letterbox.
-- **Breaks on fold:** views swapped on size class, `UIScreen.main`, key-window assumptions, orientation checks, portrait lock, missing scene lifecycle, `NavigationView`.
+- **Misplaced buttons and bars:** hand-built bars, symmetric safe-area math, missing tab sidebar, screen-edge swipes.
+- **Small or stretched elements:** idiom checks, fixed font sizes, images without an aspect ratio, web viewports pinned to a phone width, SpriteKit scenes that stretch or letterbox.
+- **Breaks when you fold or unfold:** views swapped on size class, `UIScreen.main`, key-window assumptions, orientation checks, portrait lock, missing scene lifecycle, `NavigationView`.
 - **Ignores the hinge:** full-screen media, keyboard frame math, hand-rolled two-pane layouts, `ArrangementView` misuse, React Native / Flutter.
 - **Assumes iPhone hardware:** Face ID only, force-unwrapped or TrueDepth cameras.
 
-Fixes come in two kinds. *Safe* ones are Apple's own before/after rewrites, offered only where the scanner can prove they compile (safe-area insets; single-column `NavigationView` to `NavigationStack` when the project deploys to iOS 16+). *Review* ones (`UIScreen.main` replacements, the tab sidebar, `.scaledToFit()`) need a human look and are never applied without `--fix all` or a tick.
+Fixes come in two kinds. *Safe fixes* are Apple's own before/after rewrites, offered only where the scanner can prove they compile (safe-area insets; single-column `NavigationView` to `NavigationStack` when the project deploys to iOS 16+). *Review fixes* (`UIScreen.main` replacements, the tab sidebar, `.scaledToFit()`) need a human look and are never applied without `--fix all` or a tick.
 
 ## Limits
 
