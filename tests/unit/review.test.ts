@@ -1077,3 +1077,16 @@ describe('tenth held-out review', () => {
     expect(swiftIds('struct A: View {\n  @State var t = ""\n  var body: some View {\n    TextField("", text: $t).id(UUID())\n  }\n}')).toContain('state-reset');
   });
 });
+
+describe('eleventh held-out review', () => {
+  it('skips Mac folders named MacBox or ending in Mac, and macOS-prefixed files', () => {
+    for (const path of ['macbox/MacBox/DocumentController.m', 'macbox/MBProgressHUDMac/MBProgressHUD.m', 'model/cross-platform/macOSSpinnerUI.m']) {
+      expect(ids([{ path, content: 'UIWindow *w = [UIApplication sharedApplication].keyWindow;' }])).toEqual([]);
+    }
+    expect(ids([{ path: 'App/Machine/A.m', content: 'UIWindow *w = [UIApplication sharedApplication].keyWindow;' }])).toContain('key-window');
+  });
+  it('ignores an Objective-C keyboard toolbar and fonts that reuse the label size', () => {
+    expect(ids([{ path: 'A.m', content: '- (UIToolbar *)keyboardToolbar {\n  _keyboardToolbar = [[UIToolbar alloc] init];\n  return _keyboardToolbar;\n}' }])).toEqual([]);
+    expect(ids([{ path: 'A.m', content: 'self.label.font = [UIFont italicSystemFontOfSize:self.label.font.pointSize];' }])).toEqual([]);
+  });
+});

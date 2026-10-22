@@ -61,6 +61,8 @@ export const misplaced = defineGroup({
       // `self.doneToolbar = [UIToolbar new]` later set as a field's `inputAccessoryView` sits above the keyboard.
       const name = /([\w.]+)\s*=\s*$/.exec(m.slice(Math.max(0, hit.index! - 60), hit.index))?.[1];
       if (name && new RegExp(`inputAccessoryView\\s*=\\s*${name.replace(/\./g, '\\.')}\\s*;`).test(m)) continue;
+      // `_keyboardToolbar = [[UIToolbar alloc] init]` is named for the keyboard it rides on.
+      if (name && ACCESSORY_NAME.test(name)) continue;
       report('hand-built-bar', hit.index!, `${hit[1] ?? hit[2]} created by hand won’t get Duo’s vertical bar layout.`);
     }
     for (const hit of m.matchAll(/safeAreaInsets\s*\.\s*(left|right|top|bottom)\s*\*\s*2(?![.\w])/g)) report('symmetric-safe-area', hit.index!);
@@ -150,4 +152,5 @@ function leftEdgeOnly(m: string, at: number): boolean {
 }
 
 const TRANSITION_TYPE = /Segue|Transition|Animator/;
+const ACCESSORY_NAME = /keyboard|accessory/i;
 const ACCESSORY_TYPE = /Accessory|Keyboard|Input|Picker|Composer|Formatting/;

@@ -51,7 +51,7 @@ const WATCH_DIR = /(^|\/)[^/]*Watch[^/]*(?:App|Kit|Extension|OS)\//;
 const OTHER_PLATFORM = /\b(?:WATCHOS|MACOSX|TVOS|XROS)_DEPLOYMENT_TARGET\b|SDKROOT\s*=\s*(?:watchos|macosx|appletvos|xros)\b|SUPPORTED_PLATFORMS\s*[=:][^\n]*\b(?:watchos|macosx|appletvos|xros)\b|\b(?:platform|supportedDestinations):[^\n]*\b(?:watchOS|tvOS|macOS|visionOS)\b|^[ \t]+(?:watchOS|tvOS|macOS|visionOS):[ \t]*["']?\d/m;
 
 /** Mac, TV and Vision targets beside the iPhone app: `Pocket Casts TV App/`, `App_macOS.swift`. */
-const OTHER_PLATFORM_PATH = /(^|\/)(?:[^/]*(?:tvOS|watchOS|macOS|visionOS)|tvos|watchos|macos|visionos)\/|(^|\/)[^/]*(?:[ _-]TV(?:[ _-](?:App|Extension|Top ?Shelf))?|[ _-]Mac(?:[ _-]App)?)\/|[_+-](?:tvOS|watchOS|macOS|visionOS|TV|Mac)\.swift$/;
+const OTHER_PLATFORM_PATH = /(^|\/)(?:[^/]*(?:tvOS|watchOS|macOS|visionOS)|tvos|watchos|macos|visionos)\/|(^|\/)[^/]*(?:[ _-]TV(?:[ _-](?:App|Extension|Top ?Shelf))?|[ _-]Mac(?:[ _-]App)?)\/|(^|\/)(?:[Mm]ac[Bb]ox|[^/]*[a-z]Mac)\/|[_+-](?:tvOS|watchOS|macOS|visionOS|TV|Mac)\.swift$|(^|\/)macOS\w*\.(?:swift|mm?|h)$/;
 
 /**
  * Code for another platform's target: a watch app, or a Mac or TV app that imports AppKit or TVUIKit.
