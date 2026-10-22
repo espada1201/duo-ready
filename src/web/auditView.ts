@@ -71,7 +71,8 @@ async function filesFromDrop(data: DataTransfer): Promise<SourceFile[]> {
   const entries = [...data.items].map((i) => i.webkitGetAsEntry?.()).filter(Boolean) as FileSystemEntry[];
   // Without the entries API (or for files a page hands over itself) only loose files can be read.
   if (!entries.length) return filesFromInput(data.files);
-  await Promise.all(entries.map((e) => readEntries(e, '', out, e.isDirectory)));
+  // One dropped folder is the project root; several keep their names so their paths can't collide.
+  await Promise.all(entries.map((e) => readEntries(e, '', out, e.isDirectory && entries.length === 1)));
   // Reads finish in any order; sort so findings come out the same on every run.
   return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
@@ -230,7 +231,7 @@ function results(state: AuditState, openPreview: (tier: SdkTier | null) => void)
 
   const summary = h(
     'section',
-    { class: 'summary', 'aria-label': 'Audit summary' },
+    { class: 'summary', id: 'audit-summary', tabindex: '-1', 'aria-label': 'Audit summary' },
     h('div', { class: 'score', 'data-grade': r.grade }, scoreRing(r.score), h('div', { class: 'score-num' }, h('strong', { 'data-testid': 'score' }, String(r.score)), h('span', {}, '/100'))),
     h(
       'div',

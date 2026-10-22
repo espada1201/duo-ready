@@ -29,6 +29,8 @@ export interface ProjectFacts {
   appDelegate: { file: SourceFile; offset: number } | null;
   /** Lowest IPHONEOS_DEPLOYMENT_TARGET, when an Xcode project was given. */
   deploymentTarget: number | null;
+  /** The project also builds for watchOS, macOS, tvOS or visionOS, whose SwiftUI versions lag iOS. */
+  otherPlatforms: boolean;
   /** LastUpgradeCheck, e.g. "2600". */
   upgradeCheck: string | null;
   /** An Info.plist or project.pbxproj was given. */
@@ -78,14 +80,42 @@ export interface RuleGroup {
   project?: (c: ProjectContext) => void;
 }
 
-/** End offset of a chain of `.modifier(...)` calls starting at `from`. */
+/** Offset just past the bracket that closes the one at `open`, or -1. Strings are already masked. */
+function closeOf(masked: string, open: number): number {
+  const pair = masked[open] === '(' ? ')' : '}';
+  let depth = 0;
+  for (let i = open; i < masked.length; i++) {
+    if (masked[i] === masked[open]) depth++;
+    else if (masked[i] === pair && --depth === 0) return i + 1;
+  }
+  return -1;
+}
+
+/** End offset of a chain of `.modifier(...) { ... }` calls starting at `from`, trailing closures included. */
 export function afterModifiers(masked: string, from: number): number {
-  const re = /^\s*\.\w+\s*(\((?:[^()]|\([^()]*\))*\))?/;
+  const name = /^\s*\.\w+\s*/y;
+  const closure = /\s*(?:\w+\s*:\s*)?(?=\{)/y;
   let at = from;
   for (;;) {
-    const hit = re.exec(masked.slice(at));
+    name.lastIndex = 0;
+    const hit = name.exec(masked.slice(at));
     if (!hit) return at;
-    at += hit[0].length;
+    let end = at + hit[0].length;
+    if (masked[end] === '(') {
+      const close = closeOf(masked, end);
+      if (close < 0) return at;
+      end = close;
+    }
+    for (let closures = 0; ; closures++) {
+      closure.lastIndex = end;
+      const c = closure.exec(masked);
+      // Only the first trailing closure is unlabelled; `label: {` before it is a new statement.
+      if (!c || (closures === 0 && c[0].includes(':'))) break;
+      const close = closeOf(masked, end + c[0].length);
+      if (close < 0) break;
+      end = close;
+    }
+    at = end;
   }
 }
 

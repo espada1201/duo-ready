@@ -42,8 +42,11 @@ function render() {
         ? renderAudit(
             auditState,
             (s) => {
+              const finished = s.status === 'done' && s.result !== auditState.result;
               auditState = s;
               render();
+              // Land on the new results so keyboard and screen reader users hear the grade.
+              if (finished) document.getElementById('audit-summary')?.focus();
             },
             (tier) => {
               const build = BUILDS.find((b) => b.id !== 'ready' && b.tier === tier);
@@ -53,8 +56,9 @@ function render() {
           )
         : renderRules(focus);
 
-  const active = document.activeElement;
-  const activeKey = active instanceof HTMLInputElement ? `${active.name}|${active.value}|${active.type}` : null;
+  const keyOf = (el: Element) =>
+    el instanceof HTMLInputElement ? `${el.name}|${el.value}|${el.type}` : el instanceof HTMLButtonElement ? `button|${el.textContent}` : null;
+  const activeKey = document.activeElement ? keyOf(document.activeElement) : null;
 
   root.replaceChildren(
     h(
@@ -86,9 +90,9 @@ function render() {
 
   // Keep keyboard focus on the control that triggered a re-render.
   if (activeKey) {
-    for (const input of root.querySelectorAll('input')) {
-      if (`${input.name}|${input.value}|${input.type}` === activeKey) {
-        input.focus();
+    for (const el of root.querySelectorAll<HTMLElement>('input, button')) {
+      if (keyOf(el) === activeKey) {
+        el.focus();
         break;
       }
     }

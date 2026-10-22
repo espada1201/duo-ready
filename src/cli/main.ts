@@ -48,6 +48,7 @@ const oneOf = <T extends string>(flag: string, v: string, allowed: readonly T[])
 function parseArgs(argv: string[]): Command {
   const o: AuditOptions = { kind: 'audit', path: '.', fix: null, dryRun: false, format: 'text', out: null, failOn: 'error', color: !process.env.NO_COLOR && !!process.stdout.isTTY };
   let rules = false;
+  let path: string | null = null;
   try {
     for (let i = 0; i < argv.length; i++) {
       const a = argv[i];
@@ -70,12 +71,13 @@ function parseArgs(argv: string[]): Command {
       else if (a.startsWith('-')) return { kind: 'error', message: `Unknown option ${a}` };
       // `rules` is the subcommand unless there is a folder of that name to audit.
       else if (a === 'rules' && !existsSync(a)) rules = true;
-      else o.path = a;
+      else if (path !== null) return { kind: 'error', message: `One project at a time: got "${path}" and "${a}"` };
+      else path = a;
     }
   } catch (e) {
     return { kind: 'error', message: (e as Error).message };
   }
-  return rules ? { kind: 'rules' } : o;
+  return rules ? { kind: 'rules' } : { ...o, path: path ?? '.' };
 }
 
 function readProject(root: string): SourceFile[] {
@@ -183,9 +185,14 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
       if (cmd.format === 'text' && !cmd.out) return exitCode(result, cmd.failOn);
     } else {
       const base = statSync(root).isDirectory() ? root : dirname(root);
-      fixed.forEach((file, i) => {
-        if (file.content !== files[i].content) writeFileSync(join(base, file.path), file.content);
-      });
+      try {
+        fixed.forEach((file, i) => {
+          if (file.content !== files[i].content) writeFileSync(join(base, file.path), file.content);
+        });
+      } catch (e) {
+        err(`Could not write fixes: ${(e as Error).message}`);
+        return 2;
+      }
       status(c.green(`Applied ${applied.length} fixes.`));
       result = audit(fixed);
     }
@@ -198,7 +205,12 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
         ? JSON.stringify(toSarif(result, __VERSION__, repoPrefix(root)), null, 2)
         : textReport(result, cmd.out ? paint(false) : c);
   if (cmd.out) {
-    writeFileSync(cmd.out, body + '\n');
+    try {
+      writeFileSync(cmd.out, body + '\n');
+    } catch (e) {
+      err(`Could not write the report: ${(e as Error).message}`);
+      return 2;
+    }
     status(`Report written to ${cmd.out}`);
   } else log(body);
 

@@ -21,7 +21,8 @@ iOS doesn't let anyone reshape someone else's app, so this kit is for the people
   npm run audit -- ../MyApp --dry-run    # preview fixes as a diff
   npm run audit -- ../MyApp --fix        # apply safe fixes (--fix all for the rest)
   ```
-  `--format json` or `sarif` (for GitHub code scanning) keeps stdout machine-readable.
+  `--format json` or `sarif` (for GitHub code scanning) keeps stdout machine-readable; add `-s`
+  (`npm run -s audit -- ...`) so npm's own banner stays off it, or use `--out report.json`.
   Try it on the bundled legacy app: `npm run audit -- sample`.
 
 ## The rules

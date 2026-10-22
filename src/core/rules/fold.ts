@@ -1,7 +1,7 @@
 import { blockAt, declaredTypes, headerOf, labelOffset, type Block, type SwiftSource } from '../swift';
 import type { Fix } from '../types';
 import { lineAround } from '../text';
-import { declaredAt, matchBefore, PREPARE, type RuleGroup } from './engine';
+import { afterModifiers, declaredAt, matchBefore, PREPARE, type RuleGroup } from './engine';
 
 const SCENES = 'Apple, WWDC25 “Make your UIKit app more flexible” (UIScene required after iOS 26)';
 
@@ -137,13 +137,14 @@ export const fold: RuleGroup = {
         fix = {
           confidence: 'review',
           description: 'Use the trait collection’s display scale. Read it once the view is in a window.',
-          edits: [{ ...span, text: 'traitCollection.displayScale' }],
+          edits: [{ ...span, text: 'self.traitCollection.displayScale' }],
         };
       } else if (member === 'bounds' && ctx) {
         fix = {
           confidence: 'review',
           description: ctx === 'controller' ? 'Size from the view controller’s view.' : 'Size from this view’s bounds.',
-          edits: [{ ...span, text: ctx === 'controller' ? 'view.bounds' : 'bounds' }],
+          // Explicit self, so a parameter or local named `view` or `bounds` can't capture it.
+          edits: [{ ...span, text: ctx === 'controller' ? 'self.view.bounds' : 'self.bounds' }],
         };
       }
       report('uiscreen-main', hit.index!, member ? `UIScreen.main.${member} is ambiguous on a two-display phone.` : undefined, fix);
@@ -176,7 +177,8 @@ export const fold: RuleGroup = {
       const at = labelOffset(src, b);
       const target = facts.deploymentTarget;
       const edits = [{ start: at, end: at + 'NavigationView'.length, text: 'NavigationStack' }];
-      if (countStatements(m.slice(b.open + 1, b.close)) !== 1) report('navigation-view', at);
+      const columns = /\.navigationViewStyle\s*\(\s*(?:\.columns|DoubleColumn)/.test(m.slice(b.close + 1, afterModifiers(m, b.close + 1)));
+      if (columns || countStatements(m.slice(b.open + 1, b.close)) !== 1) report('navigation-view', at);
       else if (target !== null && target < 16) {
         report('navigation-view', at, `NavigationStack needs iOS 16 and this project deploys to iOS ${target}. Switch when you raise the deployment target.`);
       } else {
@@ -186,7 +188,9 @@ export const fold: RuleGroup = {
           undefined,
           target === null
             ? { confidence: 'review', description: 'Replace with NavigationStack. Needs iOS 16 or later; no Xcode project was given to check.', edits }
-            : { confidence: 'safe', description: 'Replace with NavigationStack.', edits },
+            : facts.otherPlatforms
+              ? { confidence: 'review', description: 'Replace with NavigationStack. This project also builds for another platform; check this file’s targets (watchOS 9, macOS 13).', edits }
+              : { confidence: 'safe', description: 'Replace with NavigationStack.', edits },
         );
       }
     }

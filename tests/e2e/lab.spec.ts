@@ -118,7 +118,7 @@ test('auditing a chosen folder, pasted code, and a folder with nothing to audit'
   await page.getByLabel('Swift source').fill('final class A: UIViewController {\n  func f() { let s = UIScreen.main.scale }\n}');
   await page.getByRole('button', { name: 'Audit', exact: true }).click();
   await expect(page.locator('.finding')).toHaveCount(1);
-  await expect(page.locator('.diff')).toContainText('  func f() { let s = traitCollection.displayScale }');
+  await expect(page.locator('.diff')).toContainText('  func f() { let s = self.traitCollection.displayScale }');
   await expect(page.getByTestId('partial')).toBeVisible();
   await expect(page.getByRole('list', { name: 'Findings by reviewer pain point' })).toContainText('Black barsnot checked');
 
@@ -130,6 +130,18 @@ test('auditing a chosen folder, pasted code, and a folder with nothing to audit'
 
   await page.getByTestId('folder-input').setInputFiles('tests/e2e');
   await expect(page.getByRole('alert')).toContainText('No Swift files');
+});
+
+test('audit controls keep keyboard focus and results take it', async ({ page }) => {
+  await page.goto('./#audit');
+  const paste = page.getByRole('button', { name: 'Paste Swift' });
+  await paste.focus();
+  await page.keyboard.press('Enter');
+  await expect(paste).toBeFocused();
+  await expect(paste).toHaveAttribute('aria-expanded', 'true');
+  await page.getByRole('button', { name: 'Try the sample app' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('region', { name: 'Audit summary' })).toBeFocused();
 });
 
 test('dropping loose Swift files audits them', async ({ page }) => {

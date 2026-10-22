@@ -214,10 +214,13 @@ export function position(src: { lineStarts: number[] }, offset: number): { line:
   return { line: lo + 1, column: offset - src.lineStarts[lo] + 1 };
 }
 
+/** Every block under `block`, parents before children. Iterative, so deep nesting can't overflow the stack. */
 export function* walk(block: Block): Generator<Block> {
-  for (const child of block.children) {
-    yield child;
-    yield* walk(child);
+  const stack = [...block.children].reverse();
+  while (stack.length) {
+    const b = stack.pop()!;
+    yield b;
+    for (let i = b.children.length - 1; i >= 0; i--) stack.push(b.children[i]);
   }
 }
 
@@ -229,10 +232,11 @@ export function ancestors(block: Block): Block[] {
 
 /** Innermost block containing `offset`. */
 export function blockAt(root: Block, offset: number): Block {
-  for (const child of root.children) {
-    if (offset > child.open && offset < child.close) return blockAt(child, offset);
+  for (let b = root; ; ) {
+    const child = b.children.find((c) => offset > c.open && offset < c.close);
+    if (!child) return b;
+    b = child;
   }
-  return root;
 }
 
 /** Offset of the call that owns `block`, e.g. the `N` of `NavigationView {`. */

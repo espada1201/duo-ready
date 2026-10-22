@@ -6,7 +6,7 @@ import type { AuditResult, Finding, SourceFile } from './types';
 const SKIP_DIR = /(^|\/)(Pods|Carthage|DerivedData|node_modules|build|SourcePackages|fastlane|\.[^/]+|\w*Tests)\//;
 /** Test code and build scripts run on a Mac or in CI; they aren't what Duo users see. */
 const TEST_FILE = /((Tests|\.test)\.swift|(^|\/)(Dangerfile|Package)\.swift)$/;
-const RELEVANT = /(\.swift|\.plist|\.html?|\/project\.pbxproj|(^|\/)package\.json|(^|\/)pubspec\.yaml)$/;
+const RELEVANT = /(\.swift|\.plist|\.html?|(^|\/)project\.pbxproj|(^|\/)package\.json|(^|\/)pubspec\.yaml)$/;
 
 /** Files larger than this are skipped: generated code, not something to audit. */
 export const MAX_BYTES = 2_000_000;

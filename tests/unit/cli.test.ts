@@ -18,6 +18,20 @@ describe('duo-ready CLI', () => {
     dir = null;
   });
 
+  it('exits 2 on an unwritable report and on a second path', () => {
+    expect(capture(['sample', '--out', '/nonexistent/r.txt'])).toMatchObject({ code: 2, err: expect.stringContaining('Could not write the report') });
+    expect(capture(['sample', 'tests'])).toMatchObject({ code: 2, err: expect.stringContaining('One project at a time') });
+  });
+
+  it('audits an .xcodeproj folder or its project.pbxproj on its own', () => {
+    dir = mkdtempSync(join(tmpdir(), 'duo-'));
+    const proj = join(dir, 'App.xcodeproj');
+    mkdirSync(proj);
+    writeFileSync(join(proj, 'project.pbxproj'), 'buildSettings = {\nINFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;\n};');
+    expect(capture([proj, '--no-color']).out).toContain('Portrait-only app');
+    expect(capture([join(proj, 'project.pbxproj'), '--no-color']).out).toContain('Portrait-only app');
+  });
+
   it('prints a readable report and exits 1 when errors remain', () => {
     const { code, out } = capture(['sample', '--no-color']);
     expect(code).toBe(1);

@@ -73,7 +73,8 @@ export const misplaced: RuleGroup = {
     for (const b of blocks) {
       if (b.label !== 'TabView' || b.argument) continue;
       const modifiers = m.slice(b.close + 1, afterModifiers(m, b.close + 1));
-      if (/\.defaultTabBarPlacement\b|\.sidebarAdaptable\b/.test(modifiers)) continue;
+      // A paged TabView is a carousel, not tabs.
+      if (/\.defaultTabBarPlacement\b|\.sidebarAdaptable\b|\.tabViewStyle\s*\(\s*(?:\.page|PageTabViewStyle)\b/.test(modifiers)) continue;
       report('tab-sidebar', labelOffset(src, b), undefined, {
         confidence: 'review',
         description: 'Show tabs as a sidebar on the inner display. Needs the iOS 27.1 SDK; behind an availability check if you deploy to earlier iOS.',

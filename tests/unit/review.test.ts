@@ -27,12 +27,16 @@ describe('UIScreen.main fixes only where traitCollection/view/bounds resolve', (
     const code = 'class C: UIViewController {\n  func f() {\n    if ok { for x in y { let s = UIScreen.main.scale } }\n  }\n}';
     const [f] = fixes(code);
     expect(f.fix!.confidence).toBe('review');
-    expect(fixed(code)).toContain('let s = traitCollection.displayScale');
+    expect(fixed(code)).toContain('let s = self.traitCollection.displayScale');
   });
 
   it('uses the innermost UIKit type', () => {
     const code = 'class C: UIViewController {\n  final class Cell: UITableViewCell {\n    func f() { let b = UIScreen.main.bounds }\n  }\n}';
-    expect(fixed(code)).toContain('let b = bounds');
+    expect(fixed(code)).toContain('let b = self.bounds');
+  });
+
+  it('binds to self, not to a parameter named view', () => {
+    expect(fixed('class C: UIViewController {\n  func layout(view: UIView) { view.frame.size.width = UIScreen.main.bounds.width - 32 }\n}')).toContain('= self.view.bounds.width - 32');
   });
 
   it('does not rewrite nativeScale', () => {
@@ -111,11 +115,44 @@ describe('scanner', () => {
     expect(maskSwift('let half = a / 2 / b')).toBe('let half = a / 2 / b');
   });
 
+  it('survives very deep nesting', () => {
+    expect(() => audit(swift(`${'{'.repeat(20000)}let s = UIScreen.main.scale${'}'.repeat(20000)}`))).not.toThrow();
+  });
+
   it('scans large files quickly', () => {
     const body = Array.from({ length: 3000 }, (_, i) => `  func f${i}() { let s = UIScreen.main.scale; run(x: { y }) }`).join('\n');
     const start = performance.now();
     const found = audit(swift(`class V: UIView {\n${body}\n}`)).findings;
     expect(found).toHaveLength(3000);
     expect(performance.now() - start).toBeLessThan(1500);
+  });
+});
+
+describe('second review', () => {
+  const ids = (files: SourceFile[]) => audit(files).findings.map((f) => f.ruleId);
+  const pbx = (settings: string) => ({ path: 'A.xcodeproj/project.pbxproj', content: `buildSettings = {\n${settings}\n};` });
+
+  it('recognises a SwiftUI App with attributes or access modifiers after @main', () => {
+    const app = (head: string) => [{ path: 'App.swift', content: `${head} struct MyApp: App { var body: some Scene { WindowGroup {} } }\nclass D: UIResponder, UIApplicationDelegate {}` }];
+    expect(ids(app('@main\n@MainActor'))).toEqual([]);
+    expect(ids(app('@main public'))).toEqual([]);
+  });
+
+  it('leaves paged TabViews alone and reads modifiers past trailing closures', () => {
+    expect(fixes('TabView {\n  A()\n}\n.tabViewStyle(.page)')).toEqual([]);
+    expect(fixes('TabView(selection: $t) {\n  A()\n}\n.onChange(of: t) { _, n in log(n) }\n.tabViewStyle(.sidebarAdaptable)')).toEqual([]);
+    expect(fixes('Image("a")\n  .resizable()\n  .overlay(alignment: .top) { Badge() }\n  .aspectRatio(1, contentMode: .fit)')).toEqual([]);
+    expect(fixes('Image("a")\n  .resizable()\n  .frame(width: min(300, max(100, (200))))\n  .scaledToFill()')).toEqual([]);
+  });
+
+  it('keeps an explicit column NavigationView and asks for review when other platforms build', () => {
+    expect(fixes('NavigationView {\n  Sidebar()\n}\n.navigationViewStyle(.columns)')).toEqual([]);
+    const shared = [pbx('IPHONEOS_DEPLOYMENT_TARGET = 17.0;\nWATCHOS_DEPLOYMENT_TARGET = 8.0;'), { path: 'V.swift', content: 'NavigationView {\n  List {}\n}' }];
+    expect(audit(shared).findings.find((f) => f.ruleId === 'navigation-view')!.fix!.confidence).toBe('review');
+  });
+
+  it('a plist without app keys does not count as the app’s Info.plist', () => {
+    const files = [{ path: 'GoogleService-Info.plist', content: '<plist><dict><key>API_KEY</key><string>x</string></dict></plist>' }, { path: 'A.swift', content: 'let a = 1' }];
+    expect(audit(files).partial).toBe(true);
   });
 });

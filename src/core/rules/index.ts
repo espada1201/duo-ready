@@ -42,8 +42,10 @@ function parse(file: SourceFile): Parsed | null {
   if (name.endsWith('.plist')) {
     const plist = parsePlist(file.content);
     // Watch apps and extensions have their own Info.plist; only the iPhone app's matters here.
-    const app = plist && ![...plist.keys.keys()].some((k) => k === 'NSExtension' || k.startsWith('WK'));
-    return app ? { kind: 'plist', file, plist } : null;
+    // Other plists (GoogleService-Info, settings bundles) carry no app keys and say nothing about the app.
+    const keys = plist ? [...plist.keys.keys()] : [];
+    const app = keys.some((k) => /^(CF|UI|LS)/.test(k)) && !keys.some((k) => k === 'NSExtension' || k.startsWith('WK'));
+    return app ? { kind: 'plist', file, plist: plist! } : null;
   }
   if (name === 'project.pbxproj') return { kind: 'pbxproj', file };
   if (name === 'package.json' || name === 'pubspec.yaml') return { kind: 'manifest', file };
@@ -58,13 +60,14 @@ function learn(parsed: Parsed[]): ProjectFacts {
     sceneManifest: false,
     appDelegate: null,
     deploymentTarget: null,
+    otherPlatforms: false,
     upgradeCheck: null,
     hasProjectFiles: false,
   };
   for (const p of parsed) {
     if (p.kind === 'swift') {
       const m = p.src.masked;
-      if (/@main\s+struct\s+\w+\s*:\s*[^{]*\bApp\b/.test(m)) facts.swiftUIApp = true;
+      if (/@main(?:\s+@\w+(?:\([^)]*\))?|\s+(?:public|internal|final|nonisolated))*\s+struct\s+\w+\s*:\s*[^{]*\bApp\b/.test(m)) facts.swiftUIApp = true;
       if (/\bUIWindowSceneDelegate\b/.test(m)) facts.sceneDelegate = true;
       const appDelegate = /\bclass\s+\w+\s*:\s*[^{]*\bUIApplicationDelegate\b/.exec(m);
       if (appDelegate && !facts.appDelegate) facts.appDelegate = { file: p.file, offset: appDelegate.index };
@@ -75,6 +78,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
       facts.hasProjectFiles = true;
       if (/INFOPLIST_KEY_UIApplicationSceneManifest_Generation\s*=\s*YES/.test(p.file.content)) facts.sceneManifest = true;
       facts.upgradeCheck ??= upgradeCheck(p.file.content)?.value ?? null;
+      if (/\b(?:WATCHOS|MACOSX|TVOS|XROS)_DEPLOYMENT_TARGET\b|SDKROOT = (?:watchos|macosx|appletvos|xros)\b/.test(p.file.content)) facts.otherPlatforms = true;
       const target = deploymentTarget(p.file.content);
       if (target !== null && (facts.deploymentTarget === null || target < facts.deploymentTarget)) facts.deploymentTarget = target;
     }

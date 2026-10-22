@@ -29,16 +29,16 @@ describe('rules', () => {
     const files = swift('final class A: UIViewController {\n  func f() { let s = UIScreen.main.scale }\n}');
     expect(ids(files)).toEqual(['uiscreen-main']);
     expect(fixAll(files, 'safe')).toContain('UIScreen.main.scale');
-    expect(fixAll(files, 'all')).toContain('let s = traitCollection.displayScale');
+    expect(fixAll(files, 'all')).toContain('let s = self.traitCollection.displayScale');
   });
 
   it('UIScreen.main.bounds gets a review-only fix and none outside UIKit views', () => {
     const vc = swift('class A: UIViewController {\n  func f() { let b = UIScreen.main.bounds }\n}');
     expect(audit(vc).findings[0].fix?.confidence).toBe('review');
     expect(fixAll(vc, 'safe')).toContain('UIScreen.main.bounds');
-    expect(fixAll(vc, 'all')).toContain('let b = view.bounds');
+    expect(fixAll(vc, 'all')).toContain('let b = self.view.bounds');
     const view = swift('class Cell: UICollectionViewCell {\n  func f() { let b = UIScreen.main.bounds }\n}');
-    expect(fixAll(view)).toContain('let b = bounds');
+    expect(fixAll(view)).toContain('let b = self.bounds');
     const free = swift('func f() { let b = UIScreen.main.bounds }');
     expect(audit(free).findings[0].fix).toBeUndefined();
   });
