@@ -519,3 +519,25 @@ it('reports a rule once per line, and skips lowercase test folders', () => {
   expect(ids([{ path: 'app/focus-ios-tests/XCUITest/Base.swift', content: line }])).toEqual([]);
   expect(ids([{ path: 'app/tests/Base.swift', content: line }])).toEqual([]);
 });
+
+describe('eighth review: offsets and C++ literals', () => {
+  it.each([
+    ['a prefixed raw string', 'const char *t = uR"(\n[UIFont systemFontOfSize:12];)";\nx = 1;', []],
+    ['a digit separator', 'if (n > 1\'000) { [UIFont systemFontOfSize:12]; }', ['fixed-font']],
+    ['a wide character literal', "wchar_t c = L'['; [UIFont systemFontOfSize:12];", ['fixed-font']],
+    ['a CRLF line continuation', 'NSString *s = @"a\\\r\nb"; [UIFont systemFontOfSize:12];', ['fixed-font']],
+  ])('reads %s in Objective-C++', (_, content, expected) => {
+    expect(ids([{ path: 'A.mm', content }])).toEqual(expected);
+  });
+
+  it('keeps offsets right after a byte-order mark', () => {
+    const content = '﻿struct A: View {\n  var body: some View { Image("logo").resizable() }\n}';
+    const fixed = applyFixes([{ path: 'A.swift', content }], audit([{ path: 'A.swift', content }]).findings, 'all').files[0].content;
+    expect(fixed).toContain('.resizable().scaledToFit()');
+  });
+
+  it('keeps same-line findings that say different things', () => {
+    const r = audit([{ path: 'A.m', content: 'UIToolbar *a = [UIToolbar new]; UITabBar *b = [UITabBar new];' }]);
+    expect(r.findings.filter((f) => f.ruleId === 'hand-built-bar')).toHaveLength(2);
+  });
+});

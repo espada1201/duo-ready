@@ -3,7 +3,7 @@
 
 import { type SwiftSource, withBlocks } from './swift';
 
-const UTF16 = new TextDecoder('utf-16le');
+const UTF16 = new TextDecoder('utf-16le', { ignoreBOM: true });
 
 function maskC(text: string): { masked: string; strings: Uint8Array } {
   const out = new Uint16Array(text.length);
@@ -19,7 +19,7 @@ function maskC(text: string): { masked: string; strings: Uint8Array } {
   // A quoted run from `i`, which holds the quote; returns where it ends. Strings stop at a line end.
   const quoted = (i: number, quote: string) => {
     let j = i + 1;
-    while (j < n && text[j] !== quote && text[j] !== '\n') j += text[j] === '\\' ? 2 : 1;
+    while (j < n && text[j] !== quote && text[j] !== '\n') j += text[j] !== '\\' ? 1 : text.startsWith('\r\n', j + 1) ? 3 : 2;
     return Math.min(j, n);
   };
   let lineStart = true;
@@ -62,8 +62,9 @@ function maskC(text: string): { masked: string; strings: Uint8Array } {
       const to = end < 0 ? n : end + 2;
       blank(i, to);
       i = to;
-    } else if (c === 'R' && text[i + 1] === '"' && !/[\w]/.test(text[i - 1] ?? '')) {
-      const open = /^R"([^\s()\\]{0,16})\(/.exec(text.slice(i, i + 20));
+    } else if (/[RuUL]/.test(c) && !/\w/.test(text[i - 1] ?? '') && /^(?:u8|[uUL])?R"/.test(text.slice(i, i + 4))) {
+      // C++ raw strings, with or without an encoding prefix (u8R, uR, UR, LR).
+      const open = /^(?:u8|[uUL])?R"([^\s()\\]{0,16})\(/.exec(text.slice(i, i + 24));
       if (!open) {
         i++;
         continue;
@@ -72,6 +73,9 @@ function maskC(text: string): { masked: string; strings: Uint8Array } {
       const to = close < 0 ? n : close;
       blank(i + open[0].length, to, true);
       i = close < 0 ? n : close + open[1].length + 2;
+    } else if (c === "'" && /\w/.test(text[i + 1] ?? '') && /(?:^|[^\w.])\d[\w']*$/.test(text.slice(Math.max(0, i - 40), i))) {
+      // A C++14 digit separator, as in 1'000'000, not a character literal.
+      i++;
     } else if (c === '"' || c === "'") {
       const end = quoted(i, c);
       blank(i + 1, end, c === '"');

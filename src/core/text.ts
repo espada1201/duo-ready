@@ -22,7 +22,7 @@ export function lineAround(text: string, offset: number): string {
   const before = text.slice(from, offset).lastIndexOf('\n');
   const after = text.slice(offset, offset + 1000);
   const end = after.indexOf('\n');
-  return text.slice(before < 0 ? from : from + before + 1, offset) + (end < 0 ? after : after.slice(0, end)).replace(/\r$/, '');
+  return (text.slice(before < 0 ? from : from + before + 1, offset) + (end < 0 ? after : after.slice(0, end))).replace(/\r$/, '');
 }
 
 export function lineIndent(text: string, offset: number): string {

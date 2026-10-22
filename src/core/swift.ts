@@ -27,7 +27,7 @@ export function maskSwift(text: string): string {
   return maskParts(text).masked;
 }
 
-const UTF16 = new TextDecoder('utf-16le');
+const UTF16 = new TextDecoder('utf-16le', { ignoreBOM: true });
 
 function maskParts(text: string): { masked: string; strings: Uint8Array } {
   // UTF-16 code units, so blanking is a store and the result decodes in one call.
