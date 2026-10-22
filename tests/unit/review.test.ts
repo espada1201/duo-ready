@@ -658,3 +658,22 @@ describe('third precision review', () => {
     expect(ids([{ path: 'A.swift', content: app }, { path: 'S.swift', content: 'class SceneDelegate: NSObject, UIWindowSceneDelegate {}' }])).not.toContain('no-scene-lifecycle');
   });
 });
+
+describe('fourth precision review', () => {
+  const swiftIds = (content: string, path = 'A.swift') => ids([{ path, content }]);
+  it.each([
+    ['a size rendered to an image on the next line', 'view.frame.size = CGSize(width: 375, height: 666)\nview.layoutIfNeeded()\nlet image = view.renderAsImage()'],
+    ['a popover content size', 'static func preferredContentSize(for model: M) -> CGSize {\n  CGSize(width: 375, height: 520)\n}'],
+    ['an estimated size property', 'static var estimatedSize: CGSize {\n  return CGSize(width: 320, height: 63)\n}'],
+    ['a preview helper', 'private func makeLoadingPreview() -> UIViewController {\n  let v = UIView()\n  v.frame = CGRect(x: 0, y: 0, width: 402, height: 874)\n  return UIViewController()\n}'],
+  ])('ignores %s', (_, code) => {
+    expect(swiftIds(code)).toEqual([]);
+  });
+  it('treats a project square modifier as a fixed frame for any image', () => {
+    const square = { path: 'V.swift', content: 'extension View {\n  func square(size: CGFloat) -> some View {\n    frame(width: size, height: size)\n  }\n}' };
+    expect(ids([square, { path: 'A.swift', content: 'image\n  .resizable()\n  .square(size: 20)' }])).not.toContain('stretched-image');
+  });
+  it('skips sample and demo apps in a repo', () => {
+    for (const path of ['SampleBrowser/App.swift', 'JSQMessagesDemo/App.swift', 'SwiftExample/App.swift']) expect(swiftIds('let s = UIScreen.main.bounds', path)).toEqual([]);
+  });
+});

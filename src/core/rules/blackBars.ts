@@ -5,7 +5,16 @@ import { blockAt } from '../swift';
 import { chainHas, chainRoot, defineGroup, PREPARE, POSE } from './engine';
 
 // iPhone point sizes from the iPhone SE through the 17 Pro Max.
-const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize|estimated\w*|snapshot\w*|drawHierarchy|render\w*|GADAdSize\w*|adSize|bannerSize)\b/i;
+const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize|estimated\w*|snapshot\w*|drawHierarchy|render\w*|\w*Preview|GADAdSize\w*|adSize|bannerSize)\b/i;
+/** A few lines either side, where a size's purpose is named: `func preferredContentSize`, `renderAsImage()` on the next line. */
+function around(m: string, at: number): string {
+  let from = at;
+  let to = at;
+  for (let i = 0; i < 3 && from > 0; i++) from = m.lastIndexOf('\n', from - 1);
+  for (let i = 0; i < 3 && to !== -1; i++) to = m.indexOf('\n', to + 1);
+  return m.slice(Math.max(0, from), to === -1 ? m.length : to);
+}
+
 const PHONE_WIDTHS = new Set([320, 375, 390, 393, 402, 414, 428, 430, 440]);
 const PHONE_HEIGHTS = new Set([568, 667, 736, 812, 844, 852, 874, 896, 926, 932, 956]);
 
@@ -65,7 +74,7 @@ export const blackBars = defineGroup({
       // 320 × 50 is the standard ad banner, not a screen.
       // A context-menu preview or popover has its own size.
       if (blockAt(src.root, hit.index!).argument === 'preview' || /presentationCompactAdaptation|popover/.test(m.slice(hit.index!, hit.index! + 120))) continue;
-      if (NOT_SCREEN.test(lineAround(m, hit.index!)) || (n === 320 && /\bheight\s*:\s*50\b/.test(lineAround(m, hit.index!)))) continue;
+      if (NOT_SCREEN.test(around(m, hit.index!)) || (n === 320 && /\bheight\s*:\s*50\b/.test(lineAround(m, hit.index!)))) continue;
       const line = m.lastIndexOf('\n', hit.index!);
       if (((isWidth && PHONE_WIDTHS.has(n)) || (!isWidth && PHONE_HEIGHTS.has(n))) && !lines.has(line)) {
         lines.add(line);

@@ -118,21 +118,13 @@ export const stretched = defineGroup({
     for (const hit of m.matchAll(/\.resizable\s*\(\s*\)/g)) {
       const end = hit.index! + hit[0].length;
       if (chainHas(m, end, /^(aspectRatio|scaledToFit|scaledToFill)$/)) continue;
-      // A blur-hash placeholder is meant to stretch; an image handed to a caller's closure gets its aspect there.
       const before = m.slice(Math.max(0, hit.index! - 300), hit.index);
       // A placeholder handed to a sized view (`AvatarView(diameter: 72, placeholderImage: Image("g").resizable())`) takes its frame there.
       if (/\b\w+\s*:\s*Image\s*\((?:[^()]|\([^()]*\))*\)\s*$/.test(before) && /^\s*[,)]/.test(m.slice(end, end + 5))) continue;
+      // A blur-hash placeholder is meant to stretch; an image handed to a caller's closure gets its aspect there.
       if (matchBefore(m, hit.index!, /(?:\bImage\s*\(\s*blurHash\s*:[^()]*(?:\([^()]*\)[^()]*)*\)\??|(?:^|[^.\w])\w+\s*\(\s*Image\s*\((?:[^()]|\([^()]*\))*\))\s*$/) !== null) continue;
-      // A symbol or bundled asset (Image(name), Image(.resource), SwiftGen's .swiftUIImage) in a fixed square frame is an icon:
-      // it neither distorts nor follows the window. Photos and avatars (uiImage:, AsyncImage) can be
-      // any shape, so they still count.
-      // A template rendering mode or an image drawn from an icon set is an icon too.
-      const icon =
-        matchBefore(m, hit.index!, /(?:\bImage\s*\(\s*(?:(?:systemName|decorative)\s*:[^()]*|"[^"]*"|\.?[A-Za-z_][\w.]*)\s*\)|\.swiftUIImage)\s*$/) !== null ||
-        /(?:\bImage\s*\((?!\s*(?:uiImage|nsImage|cgImage)\s*:)(?:[^()]|\([^()]*\))*\)|\.swiftUIImage\s*,?\s*\)|\.renderingMode\s*\(\s*\.template\s*\)|\bImage\s*\(\s*uiImage\s*:\s*\w*[iI]con\w*(?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))\s*$/.test(before) ||
-        chainHas(m, end, /^renderingMode$/, /^\s*\.template\s*$/);
-      if (icon && square && chainHas(m, end, square)) continue;
-      // A fixed width and height never follow the window, so Duo can't stretch the image any more than an iPhone does.
+      // A fixed width and height (or the project's square(size:)) never follow the window, so Duo can't stretch the image any more than an iPhone does.
+      if (square && chainHas(m, end, square, /^\s*(?:size\s*:\s*)?(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+(?:,|$)/)) continue;
       if (chainHas(m, end, /^frame$/, FIXED_FRAME)) continue;
       const indent = /\n([ \t]*)\.resizable/.exec(file.content.slice(Math.max(0, hit.index! - 200), end));
       // A full-bleed background should keep filling the window, not letterbox inside it.
