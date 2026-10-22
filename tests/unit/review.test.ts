@@ -170,6 +170,7 @@ describe('second review', () => {
   });
 
   it('skips scaled fonts, keyboard toolbars and popover sizes, but not the real thing', () => {
+    expect(ids(swift('label.font = UIFont.systemFont(ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize, weight: .bold)'))).toEqual([]);
     expect(ids(swift('func f() {\n  guard let f = UIFont(name: "Avenir", size: 17) else { return }\n  label.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: f)\n}'))).toEqual([]);
     expect(ids(swift('let f = UIFont(name: "Avenir", size: 17)'))).toEqual(['fixed-font']);
     expect(ids(swift('let bar = UIToolbar()\nfield.inputAccessoryView = bar'))).toEqual([]);
@@ -432,6 +433,7 @@ describe('sixth review: games, web views, media and cross-platform apps', () => 
   it.each([
     ['a tvOS idiom check', 'if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomTV) {}'],
     ['scaled fonts', 'label.font = [[UIFontMetrics defaultMetrics] scaledFontForFont:[UIFont systemFontOfSize:17]];'],
+    ['a size read from a text style', 'f.font = [UIFont systemFontOfSize:[Style fontSizeForTextStyle:UIFontTextStyleTitle1]\n    weight:UIFontWeightBold];'],
     ['TrueDepth among lenses', 'NSArray *t = @[AVCaptureDeviceTypeBuiltInWideAngleCamera, AVCaptureDeviceTypeBuiltInTrueDepthCamera];'],
     ['code in comments', '// [UIScreen mainScreen]\n/* UIKeyboardFrameEndUserInfoKey */'],
   ])('ignores %s in Objective-C', (_, code) => {

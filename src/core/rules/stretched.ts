@@ -95,7 +95,8 @@ export const stretched = defineGroup({
 
     const scaled = m.includes('scaledFont');
     for (const hit of m.matchAll(/\.system\s*\(\s*size\s*:|\bUIFont\s*\.\s*(?:systemFont|boldSystemFont|italicSystemFont|monospacedSystemFont)\s*\(\s*ofSize\s*:|\bUIFont\s*\(\s*name\s*:[^)]*size\s*:|\.custom\s*\([^)]*size\s*:/g)) {
-      if (/relativeTo\s*:|UIFontMetrics|scaledFont/.test(lineAround(m, hit.index!) + callText(m, hit.index!))) continue;
+      // A size read from a text style follows the reader's text size when the font is made.
+      if (/relativeTo\s*:|UIFontMetrics|scaledFont|forTextStyle/.test(lineAround(m, hit.index!) + callText(m, hit.index!))) continue;
       // A point size on an SF Symbol sizes an icon; PDF and draw(_:) output has no Dynamic Type to follow.
       if (/\bImage\s*\(\s*system(?:Name|Symbol)\s*:[^()]*\)(?:\s*\.\w+\s*\((?:[^()]|\([^()]*\))*\))*\s*\.font\s*\(\s*$/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
       if (inDrawing(m, blockAt(src.root, hit.index!))) continue;
@@ -151,7 +152,9 @@ export const stretched = defineGroup({
       if (!/UIUserInterfaceIdiom(?:TV|Mac|CarPlay|Vision)\b/.test(lineAround(m, hit.index!))) report('idiom-layout', hit.index!);
     }
     for (const hit of m.matchAll(/\b(?:systemFontOfSize|boldSystemFontOfSize|italicSystemFontOfSize|monospacedSystemFontOfSize|fontWithName\s*:[^\]\n]*\bsize)\s*:/g)) {
-      if (!/preferredFontForTextStyle|UIFontMetrics|scaledFontForFont/.test(lineAround(m, hit.index!))) report('fixed-font', hit.index!);
+      const end = m.indexOf(';', hit.index!);
+      const statement = m.slice(hit.index!, end < 0 ? undefined : end);
+      if (!/UIFontTextStyle|ForTextStyle|UIFontMetrics|scaledFontForFont/.test(lineAround(m, hit.index!) + statement)) report('fixed-font', hit.index!);
     }
     for (const hit of m.matchAll(/\bUIViewContentModeScaleToFill\b/g)) report('stretched-image', hit.index!);
     for (const hit of m.matchAll(/\bSKSceneScaleMode(Fill|AspectFit)\b/g)) {
