@@ -27,11 +27,15 @@ export function maskSwift(text: string): string {
   return maskParts(text).masked;
 }
 
+const UTF16 = new TextDecoder('utf-16le');
+
 function maskParts(text: string): { masked: string; strings: Uint8Array } {
-  const out = text.split('');
+  // UTF-16 code units, so blanking is a store and the result decodes in one call.
+  const out = new Uint16Array(text.length);
+  for (let k = 0; k < text.length; k++) out[k] = text.charCodeAt(k);
   const strings = new Uint8Array(text.length);
   const blank = (i: number) => {
-    if (out[i] !== '\n') out[i] = ' ';
+    if (out[i] !== 10) out[i] = 32;
   };
   const blankString = (from: number, to: number) => {
     for (let m = from; m < to; m++) {
@@ -50,6 +54,13 @@ function maskParts(text: string): { masked: string; strings: Uint8Array } {
     const escape = '\\' + '#'.repeat(hashes);
     let j = from;
     while (j < n) {
+      const code = text.charCodeAt(j);
+      // Only a backslash or quote can start an escape or the closer; skip the rest cheaply.
+      if (code !== 92 && code !== 34) {
+        if (code === 10 && !multiline) break;
+        j++;
+        continue;
+      }
       if (text.startsWith(escape, j)) {
         const k = j + escape.length;
         if (text[k] === '(') {
@@ -72,6 +83,12 @@ function maskParts(text: string): { masked: string; strings: Uint8Array } {
   };
 
   while (i < n) {
+    const code = text.charCodeAt(i);
+    // Nothing below starts with a letter, digit or space: the common case moves on at once.
+    if (code !== 47 && code !== 40 && code !== 41 && code !== 35 && code !== 34) {
+      i++;
+      continue;
+    }
     const c = text[i];
     if (c === '/' && text[i + 1] === '/') {
       while (i < n && text[i] !== '\n') blank(i++);
@@ -126,7 +143,7 @@ function maskParts(text: string): { masked: string; strings: Uint8Array } {
     }
     i++;
   }
-  return { masked: out.join(''), strings };
+  return { masked: UTF16.decode(out), strings };
 
   // `/…/` is a regex literal where an expression starts, never after an operand.
   function isRegexStart(at: number): boolean {
