@@ -14,7 +14,7 @@ iOS doesn't let anyone reshape someone else's app, so this kit is for the people
 
 ## What's inside
 
-- **Duo Lab (browser).** *Audit* takes your Xcode project folder (it never leaves your Mac), scores it, names the screens to fix first, explains each problem with Apple's guidance, and gives you a zip of fixed files. *Preview* shows a typical app in every Duo pose, Split View included, for each SDK build, and whether it keeps your place when you fold.
+- **Duo Lab (browser).** *Audit* takes your Xcode project folder (it never leaves your Mac), scores it, names the screens to fix first, filters findings by severity or pain point, explains each problem with Apple's guidance, and gives you a zip of fixed files. *Preview* shows a typical app in every Duo pose, Split View included, for each SDK build, and whether it keeps your place when you fold.
 - **CLI.** The same engine for terminals and CI:
   ```sh
   npm run audit -- ../MyApp              # report
@@ -43,6 +43,7 @@ Fixes come in two kinds. *Safe* ones are Apple's own before/after rewrites, offe
 - The scanner is pattern- and structure-based, not a Swift compiler. It skips comments and strings, but unusual code can slip past or trip it.
 - Duo panel sizes come from Apple's specs; hinge, camera and status bar geometry are approximations. Check in the Xcode 27.1 simulator.
 - The SDK tier is estimated from the project's `LastUpgradeCheck`.
+- Tests, Xcode previews, widgets, watch and extension targets, build scripts and vendored folders (Pods, Carthage, build) are skipped: Duo users never see them.
 - Pasted code or a lone Swift file gets a partial audit: project-level checks can't run, so the grade stops at Close.
 
 ## Develop

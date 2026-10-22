@@ -89,6 +89,11 @@ const FEATURES = {
     const zip = unzipSync(new Uint8Array(readFileSync(zipPath)));
     assert(strFromU8(zip['Encore/Encore/LibraryView.swift']).includes('.defaultTabBarPlacement(.sidebar)'), 'zip holds the fixed Swift');
     await proof(page, dir, 'results');
+    await page.getByRole('button', { name: '8 errors' }).click();
+    assert((await findings(page)) === 8 && (await page.locator('.finding.sev-error').count()) === 8, 'severity filter shows only errors');
+    assert((await text(page, 'download')).startsWith('Download 3 fixes ('), 'download notes fixes hidden by the filter');
+    await proof(page, dir, 'filtered');
+    await page.getByRole('button', { name: 'Show all' }).click();
     await page.getByRole('link', { name: 'Breaks when you fold or unfold' }).click();
     await page.waitForFunction(() => document.activeElement?.id === 'pain-fold');
     assert(page.url().endsWith('#rules/pain-fold'), 'pain chip opens its section');
