@@ -934,3 +934,10 @@ describe('fifth held-out review', () => {
     expect(swiftIds(code)).toEqual([]);
   });
 });
+
+describe('small UIKit images', () => {
+  it('ignores scale-to-fill on an avatar, not on a hero image', () => {
+    expect(ids([{ path: 'A.swift', content: 'avatarView.contentMode = .scaleToFill' }])).toEqual([]);
+    expect(ids([{ path: 'A.swift', content: 'heroView.contentMode = .scaleToFill' }])).toEqual(['stretched-image']);
+  });
+});

@@ -37,6 +37,7 @@ const FIXED_FRAME = new RegExp(String.raw`^\s*width\s*:\s*${NOT_DYNAMIC}(?:[^,()
 /** Modifiers that keep an image to its aspect ratio. */
 /** `size: 20` for the project's own square(size:) modifiers. */
 const FIXED_SIZE = new RegExp(String.raw`^\s*(?:size\s*:\s*)?${NOT_DYNAMIC}[^,]+(?:,|$)`);
+const SMALL_IMAGE = /avatar|icon|thumb|badge|logo/i;
 const KEEPS_ASPECT = /^(?:aspectRatio|scaledToFit|scaledToFill)$/;
 
 /** Whether the function holding `scope` returns text or an icon (`-> String`, `-> SymbolName`, `-> UIImage?`). */
@@ -172,7 +173,10 @@ export const stretched = defineGroup({
         edits: [{ start: end, end, text: indent ? `${eolOf(file.content)}${indent[1]}${scale}` : scale }],
       });
     }
-    for (const hit of m.matchAll(/\.contentMode\s*=\s*\.scaleToFill\b/g)) report('stretched-image', hit.index!);
+    for (const hit of m.matchAll(/\.contentMode\s*=\s*\.scaleToFill\b/g)) {
+      // Avatars, icons and thumbnails sit in fixed square frames.
+      if (!SMALL_IMAGE.test(lineAround(m, hit.index!))) report('stretched-image', hit.index!);
+    }
 
     // HTML in string literals: the mask blanks it, so read the raw text inside strings.
     for (const hit of file.content.matchAll(VIEWPORT_WIDTH)) {
