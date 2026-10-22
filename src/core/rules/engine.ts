@@ -28,6 +28,8 @@ export interface ProjectFacts {
   sceneManifest: boolean;
   /** UIApplicationSupportsMultipleScenes is on, so several of the app's scenes can be in the foreground at once. */
   multipleScenes: boolean;
+  /** UIApplicationSupportsMultipleScenes is explicitly off, so the app has one scene. */
+  singleScene: boolean;
   appDelegate: { file: SourceFile; offset: number } | null;
   /** Lowest iOS deployment target from the Xcode project, .xcconfig files or an XcodeGen spec. */
   deploymentTarget: number | null;

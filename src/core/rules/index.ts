@@ -71,7 +71,7 @@ function isOtherPlatformCode(masked: string): boolean {
 const stripConfigComments = (text: string) => text.replace(/(^|[ \t])(?:\/\/|#).*$/gm, '$1');
 /** `func square(size: CGFloat) -> some View { frame(width: size, height: size) }`. */
 const SQUARE_MODIFIER = /\bfunc\s+(\w+)\s*\(\s*(?:_\s+)?(\w+)\s*:\s*CGFloat\b[^)]*\)\s*->\s*some\s+View\s*\{\s*(?:return\s+)?(?:self\s*\.\s*)?frame\s*\(\s*width\s*:\s*\2\s*,\s*height\s*:\s*\2\b/g;
-const MULTIPLE_SCENES = /<key>UIApplicationSupportsMultipleScenes<\/key>\s*<true\s*\/>|INFOPLIST_KEY_UIApplicationSupportsMultipleScenes\s*=\s*YES\b/;
+const MULTIPLE_SCENES = /INFOPLIST_KEY_UIApplicationSupportsMultipleScenes\s*=\s*YES\b/;
 /** `ImageView(url: u).scaledToFit()`: a view the caller keeps to its aspect ratio. */
 const ASPECT_CALL = /\b([A-Z]\w*)\s*\((?:[^()]|\([^()]*\))*\)\s*\.(?:scaledToFit|scaledToFill|aspectRatio)\s*\(/g;
 /** `var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }`, with nothing else in the body. */
@@ -111,6 +111,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
     sceneDelegate: false,
     sceneManifest: false,
     multipleScenes: false,
+    singleScene: false,
     hasAppProject: false,
     appDelegate: null,
     deploymentTarget: null,
@@ -153,12 +154,17 @@ function learn(parsed: Parsed[]): ProjectFacts {
       if (appDelegate && !facts.appDelegate) facts.appDelegate = { file: p.file, offset: appDelegate.index };
     } else if (p.kind === 'plist') {
       facts.hasProjectFiles = true;
-      if (p.plist.keys.has('UIApplicationSceneManifest')) facts.sceneManifest = true;
-      if (MULTIPLE_SCENES.test(p.file.content)) facts.multipleScenes = true;
+      const manifest = p.plist.keys.get('UIApplicationSceneManifest');
+      if (manifest) facts.sceneManifest = true;
+      // The iOS manifest only: Catalyst's `UIApplicationSceneManifest-macos` doesn't apply on a phone.
+      const multiple = (manifest?.value as Record<string, unknown> | undefined)?.UIApplicationSupportsMultipleScenes;
+      if (multiple === true) facts.multipleScenes = true;
+      if (multiple === false) facts.singleScene = true;
     } else if (p.kind === 'pbxproj') {
       facts.hasProjectFiles = true;
       if (/INFOPLIST_KEY_UIApplicationSceneManifest_Generation\s*=\s*YES/.test(p.file.content)) facts.sceneManifest = true;
       if (MULTIPLE_SCENES.test(p.file.content)) facts.multipleScenes = true;
+      if (/INFOPLIST_KEY_UIApplicationSupportsMultipleScenes\s*=\s*NO\b/.test(p.file.content)) facts.singleScene = true;
       // The app's own project says which SDK it ships with; framework projects follow the app's.
       const check = upgradeCheck(p.file.content)?.value ?? null;
       if (!APP_TARGET.test(p.file.content)) facts.upgradeCheck ??= check;

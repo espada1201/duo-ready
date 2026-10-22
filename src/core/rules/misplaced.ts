@@ -1,6 +1,6 @@
 import { eolOf, lineAround, lineIndent } from '../text';
 import { blockAt, headerOf, labelOffset, type Block } from '../swift';
-import { defineGroup, chainHas, enclosingType, PREPARE } from './engine';
+import { defineGroup, chainHas, closeOf, enclosingType, PREPARE } from './engine';
 
 /** The sidebar modifier, kept to iOS when the project also builds for platforms that lack it. */
 function sidebar(eol: string, indent: string, otherPlatforms: boolean, lineEnds: boolean): string {
@@ -88,6 +88,10 @@ export const misplaced = defineGroup({
       // An onboarding pager's footer is shown once, under one flow, not the app's chrome; a composer or
       // formatting strip rides on the keyboard.
       if (/Onboarding|Welcome|Intro|Tutorial|Walkthrough|Composer|Formatting|Keyboard|Accessory|Input/.test(hit[1])) continue;
+      // A `TabBarView` that wraps the system TabView gets Duo's tab layout already.
+      const open = m.indexOf('{', hit.index! + hit[0].length - 1);
+      const close = open < 0 ? -1 : closeOf(m, open);
+      if (close > 0 && /\bTabView\s*[({]/.test(m.slice(open, close))) continue;
       report('hand-built-bar', hit.index!, `${hit[1]} is a custom bar; it will stay horizontal while system bars go vertical.`);
     }
 

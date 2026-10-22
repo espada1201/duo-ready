@@ -261,6 +261,8 @@ export const fold = defineGroup({
     for (const hit of m.matchAll(/\bUIApplication\s*\.\s*shared\s*\.\s*(windows|keyWindow|connectedScenes\s*\.\s*first(?!\s*\??\s*\.\s*delegate)|delegate\s*\??\s*\.\s*window)\b/g)) {
       // In a single-scene app `connectedScenes.first(where: { $0.activationState == .foregroundActive })` picks
       // the scene in use; with multiple scenes, two can be in the foreground side by side. A UI-test hook never runs for users.
+      // With one scene, `connectedScenes.first` is that scene.
+      if (facts.singleScene && !facts.multipleScenes && hit[1].startsWith('connectedScenes')) continue;
       if ((!facts.multipleScenes && /activationState\s*==\s*\.foregroundActive/.test(m.slice(hit.index!, hit.index! + 200))) || /UITest|uiTest/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
       report('key-window', hit.index!);
     }

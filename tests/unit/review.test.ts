@@ -915,3 +915,22 @@ describe('scene loops', () => {
     expect(ids([{ path: 'A.swift', content: code }])).toEqual([]);
   });
 });
+
+describe('fifth held-out review', () => {
+  const swiftIds = (content: string, path = 'A.swift') => ids([{ path, content }]);
+  const plist = { path: 'Info.plist', content: '<plist><dict><key>CFBundleName</key><string>A</string><key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict><key>UIApplicationSceneManifest-macos</key><dict><key>UIApplicationSupportsMultipleScenes</key><true/></dict></dict></plist>' };
+  it('leaves a TabView wrapper to the tab rule', () => {
+    expect(swiftIds('struct TabBarView: View {\n  var body: some View {\n    TabView {}\n  }\n}')).toEqual(['tab-sidebar']);
+  });
+  it('takes connectedScenes.first in a single-scene app', () => {
+    const code = 'guard let s = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }';
+    expect(ids([plist, { path: 'A.swift', content: code }])).not.toContain('key-window');
+    expect(swiftIds(code)).toContain('key-window');
+  });
+  it.each([
+    ['a keyboard accessory toolbar frame', 'let toolBar = UIToolbar(frame: .init(x: 0, y: 0, width: 320, height: h))\nself.inputAccessoryView = toolBar'],
+    ['the Face ID permission prompt', 'static let nsFaceIDUsageDescription = L10n.tr("InfoPlist", "NSFaceIDUsageDescription", fallback: "Use Face ID to unlock.")'],
+  ])('ignores %s', (_, code) => {
+    expect(swiftIds(code)).toEqual([]);
+  });
+});

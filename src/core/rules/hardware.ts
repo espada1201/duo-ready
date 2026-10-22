@@ -61,14 +61,14 @@ const TRUE_DEPTH = 'The TrueDepth camera comes with Face ID; iPhone Duo has neit
 /**
  * Offsets of "Face ID" in user-facing strings. Copy lives in strings, which the mask blanks, so this reads
  * the raw text. A line that also offers Touch ID or a passcode reads fine on Duo (the line, not the literal,
- * so interpolation can't hide the alternative), and a translator `note` is never shown.
+ * so interpolation can't hide the alternative), and a translator `note` is never shown. The NSFaceIDUsageDescription prompt only appears on Face ID devices.
  */
 function faceIdCopy(content: string, strings: Uint8Array, note: RegExp): number[] {
   // Copy kept beside its Touch ID twin (a strings file or a picker) is one half of a choice the app already makes.
   if (/Touch ID/.test(content)) return [];
   return [...content.matchAll(/Face ID/g)]
     .map((hit) => hit.index!)
-    .filter((i) => strings[i] && strings[i + 6] && !note.test(content.slice(Math.max(0, i - 200), i)) && !/Touch ID|fingerprint|passcode/i.test(lineAround(content, i)));
+    .filter((i) => strings[i] && strings[i + 6] && !note.test(content.slice(Math.max(0, i - 200), i)) && !/Touch ID|fingerprint|passcode|NSFaceIDUsageDescription/i.test(lineAround(content, i)));
 }
 
 /** Whether the lens at `at` is one of several in a discovery list opened by `open`, the pattern camera-hardware recommends. */
