@@ -1,21 +1,21 @@
 import { blockAt, type Block } from '../swift';
 import { eolOf, lineAround } from '../text';
-import { defineGroup, chainHas, closeOf, declaredAt, matchBefore, PREPARE } from './engine';
+import { defineGroup, chainHas, closeOf, declaredAt, enclosingType, matchBefore, PREPARE } from './engine';
 
 const VIEWPORT_WIDTH = /viewport[^\n>]{0,160}?\bwidth\s*=\s*(\d{3,4})\b/g;
 const viewportMessage = (width: string) => `The web viewport is fixed at ${width} px instead of device-width.`;
 /** Callbacks that run when the window changes size. */
 const ON_RESIZE = /\bfunc\s+(viewWillTransition|traitCollectionDidChange|viewWillLayoutSubviews|viewDidLayoutSubviews)\b|\.onChange\s*\(\s*of\s*:\s*\w*[sS]izeClass\b/g;
 
-const PDF = /\bUIGraphicsPDFRenderer\b|\bUIGraphicsBeginPDFContext|\bUIGraphicsImageRenderer\b|\bUIGraphicsBeginImageContext/;
+const PDF = /\bUIPrint(?:PageRenderer|Formatter)\b|\bUIMarkupTextPrintFormatter\b|\bUIGraphicsPDFRenderer\b|\bUIGraphicsBeginPDFContext|\bUIGraphicsImageRenderer\b|\bUIGraphicsBeginImageContext/;
 
-/** Inside draw(_:), a function or closure that renders a PDF or an image, or a type made for PDF output. */
+/** Inside draw(_:), a function or closure that renders a PDF or an image, or a type made for PDF or print output. */
 function inDrawing(m: string, scope: Block | null): boolean {
   for (let b = scope; b?.parent; b = b.parent) {
     const head = m.slice(Math.max(0, b.open - 120), b.open);
     if (/\bfunc\s+draw\s*\([^{]*$/.test(head)) return true;
     const type = /\b(?:class|struct|enum|actor|extension)\s+(\w+)[^{}]*$/.exec(head);
-    if (type ? /PDF|Pdf/.test(type[1]) : PDF.test(m.slice(b.open, b.close)) || /\bUIGraphicsImageRenderer\b[^{}]*$/.test(head)) return true;
+    if (type ? /PDF|Pdf|UIPrint/.test(type[0]) : PDF.test(m.slice(b.open, b.close)) || /\bUIGraphicsImageRenderer\b[^{}]*$/.test(head)) return true;
   }
   return false;
 }
@@ -142,6 +142,8 @@ export const stretched = defineGroup({
       // A fixed width and height (or the project's square(size:)) never follow the window, so Duo can't stretch the image any more than an iPhone does.
       if (square && chainHas(m, end, square, /^\s*(?:size\s*:\s*)?(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+(?:,|$)/)) continue;
       if (chainHas(m, end, /^frame$/, FIXED_FRAME) || sizedOutside(m, blockAt(src.root, hit.index!))) continue;
+      // A view its callers keep to an aspect ratio (`ImageView(url: u).scaledToFit()`) can't stretch.
+      if (facts.aspectViews.has(enclosingType(m, blockAt(src.root, hit.index!)) ?? '')) continue;
       // `.modifier(IconFrame(size: 24))`: a frame modifier the project wrote.
       if (chainHas(m, end, /^modifier$/, /^\s*\w*Frame\b/)) continue;
       const indent = /\n([ \t]*)\.resizable/.exec(file.content.slice(Math.max(0, hit.index! - 200), end));

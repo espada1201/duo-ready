@@ -205,7 +205,8 @@ export const fold = defineGroup({
     const cameraFile = CAMERA_FILE.test(m);
     for (const hit of m.matchAll(/\bUIDevice\s*\.\s*current\s*\.\s*orientation(?:\s*\.\s*is(?:Landscape|Portrait))?\b|\binterfaceOrientation\b|\bstatusBarOrientation\b|\b\w*[oO]rientation\s*\.\s*is(?:Landscape|Portrait)\b/g)) {
       if (cameraFile || NOT_LAYOUT.test(withLineBefore(m, hit.index!))) continue;
-      if (declaredAt(m, hit.index!)) continue;
+      // `interfaceOrientation previous: UIInterfaceOrientation` in a delegate signature is a parameter.
+      if (declaredAt(m, hit.index!) || /^\w+(?:\s+\w+)?\s*:\s*UIInterfaceOrientation\b/.test(m.slice(hit.index!, hit.index! + 80))) continue;
       report('orientation-layout', hit.index!);
     }
 
@@ -233,15 +234,16 @@ export const fold = defineGroup({
     }
 
     for (const hit of m.matchAll(/\bUIApplication\s*\.\s*shared\s*\.\s*(windows|keyWindow|connectedScenes\s*\.\s*first(?!\s*\??\s*\.\s*delegate)|delegate\s*\??\s*\.\s*window)\b/g)) {
-      // `connectedScenes.first(where: { $0.activationState == .foregroundActive })` picks the scene in use;
+      // In a single-scene app `connectedScenes.first(where: { $0.activationState == .foregroundActive })` picks
+      // the scene in use; with multiple scenes, two can be in the foreground side by side.
       // a UI-test speed-up never runs for users.
-      if (/activationState\s*==\s*\.foregroundActive/.test(m.slice(hit.index!, hit.index! + 200)) || /UITest|uiTest/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
+      if ((!facts.multipleScenes && /activationState\s*==\s*\.foregroundActive/.test(m.slice(hit.index!, hit.index! + 200))) || /UITest|uiTest/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
       report('key-window', hit.index!);
     }
     // `connectedScenes.flatMap { ... }.first { $0.isKeyWindow }`, often split over lines.
     for (const hit of m.matchAll(/\bUIApplication\s*\.\s*shared\s*\.\s*connectedScenes\b(?!\s*\.\s*first\b)/g)) {
       const statement = /^[^;]*?(?=\n[ \t]*\n|;|$)/.exec(m.slice(hit.index!, hit.index! + 400))![0];
-      if (/\.windows\b|isKeyWindow/.test(statement)) report('key-window', hit.index!);
+      if (/\.windows\b|isKeyWindow/.test(statement) && (facts.multipleScenes || !/activationState\s*==\s*\.foregroundActive/.test(statement))) report('key-window', hit.index!);
     }
 
     for (const b of blocks) {

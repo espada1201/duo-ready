@@ -71,6 +71,9 @@ function isOtherPlatformCode(masked: string): boolean {
 const stripConfigComments = (text: string) => text.replace(/(^|[ \t])(?:\/\/|#).*$/gm, '$1');
 /** `func square(size: CGFloat) -> some View { frame(width: size, height: size) }`. */
 const SQUARE_MODIFIER = /\bfunc\s+(\w+)\s*\(\s*(?:_\s+)?(\w+)\s*:\s*CGFloat\b[^)]*\)\s*->\s*some\s+View\s*\{\s*(?:return\s+)?(?:self\s*\.\s*)?frame\s*\(\s*width\s*:\s*\2\s*,\s*height\s*:\s*\2\b/g;
+const MULTIPLE_SCENES = /<key>UIApplicationSupportsMultipleScenes<\/key>\s*<true\s*\/>|INFOPLIST_KEY_UIApplicationSupportsMultipleScenes\s*=\s*YES\b/;
+/** `ImageView(url: u).scaledToFit()`: a view the caller keeps to its aspect ratio. */
+const ASPECT_CALL = /\b([A-Z]\w*)\s*\((?:[^()]|\([^()]*\))*\)\s*\.(?:scaledToFit|scaledToFill|aspectRatio)\s*\(/g;
 /** `var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }`, with nothing else in the body. */
 const IDIOM_WRAPPER = /\bvar\s+(\w+)\s*:\s*Bool\s*\{\s*(?:return\s+)?(?:[\w.]+\.)?userInterfaceIdiom\s*==\s*\.(?:pad|phone)\s*\}/g;
 const WIDGET = /\b(?:TimelineProvider|TimelineEntry|WidgetConfiguration|WidgetBundle|widgetAccentedRenderingMode)\b|@Environment\s*\(\s*\\\.(?:widgetFamily|widgetRenderingMode|showsWidgetContainerBackground)\s*\)/;
@@ -107,11 +110,13 @@ function learn(parsed: Parsed[]): ProjectFacts {
     swiftUIApp: false,
     sceneDelegate: false,
     sceneManifest: false,
+    multipleScenes: false,
     appDelegate: null,
     deploymentTarget: null,
     otherPlatforms: false,
     idiomWrappers: [],
     squareModifiers: [],
+    aspectViews: new Set(),
     views: new Map(),
     ownVideoPlayer: false,
     upgradeCheck: null,
@@ -139,6 +144,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
         views.set(t.name, { state: !!seen?.state || /@(?:State|StateObject|FocusState)\b/.test(body), calls: [...(seen?.calls ?? []), ...callsIn(body)] });
       }
       for (const hit of m.matchAll(SQUARE_MODIFIER)) if (!facts.squareModifiers.includes(hit[1])) facts.squareModifiers.push(hit[1]);
+      for (const hit of m.matchAll(ASPECT_CALL)) if (hit[1] !== 'Image') facts.aspectViews.add(hit[1]);
     } else if (p.kind === 'objc') {
       const m = p.src.masked;
       if (/\bUIWindowSceneDelegate\b/.test(m)) facts.sceneDelegate = true;
@@ -147,9 +153,11 @@ function learn(parsed: Parsed[]): ProjectFacts {
     } else if (p.kind === 'plist') {
       facts.hasProjectFiles = true;
       if (p.plist.keys.has('UIApplicationSceneManifest')) facts.sceneManifest = true;
+      if (MULTIPLE_SCENES.test(p.file.content)) facts.multipleScenes = true;
     } else if (p.kind === 'pbxproj') {
       facts.hasProjectFiles = true;
       if (/INFOPLIST_KEY_UIApplicationSceneManifest_Generation\s*=\s*YES/.test(p.file.content)) facts.sceneManifest = true;
+      if (MULTIPLE_SCENES.test(p.file.content)) facts.multipleScenes = true;
       facts.upgradeCheck ??= upgradeCheck(p.file.content)?.value ?? null;
       if (OTHER_PLATFORM.test(p.file.content)) facts.otherPlatforms = true;
       lower(deploymentTarget(p.file.content));

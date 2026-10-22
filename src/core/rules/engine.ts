@@ -26,6 +26,8 @@ export interface ProjectFacts {
   swiftUIApp: boolean;
   sceneDelegate: boolean;
   sceneManifest: boolean;
+  /** UIApplicationSupportsMultipleScenes is on, so several of the app's scenes can be in the foreground at once. */
+  multipleScenes: boolean;
   appDelegate: { file: SourceFile; offset: number } | null;
   /** Lowest iOS deployment target from the Xcode project, .xcconfig files or an XcodeGen spec. */
   deploymentTarget: number | null;
@@ -37,6 +39,8 @@ export interface ProjectFacts {
   idiomWrappers: string[];
   /** View modifiers like `square(size:)` whose whole body is `frame(width: size, height: size)`. */
   squareModifiers: string[];
+  /** Views the project always shows with an aspect ratio: `ImageView(url: u).scaledToFit()`. */
+  aspectViews: Set<string>;
   /** The project's SwiftUI views, true where one keeps state a rebuild throws away (@State, a ScrollView, a TextField…). */
   views: Map<string, boolean>;
   /** LastUpgradeCheck, e.g. "2600". */
@@ -212,6 +216,15 @@ export function chainRoot(src: SwiftSource, at: number): { name: string | null; 
     while (k >= 0 && /\s/.test(m[k])) k--;
     if (m[k] !== '.') return { name: name[1] };
     i = k;
+  }
+  return null;
+}
+
+/** Name of the class, struct or extension whose body holds `scope`. */
+export function enclosingType(m: string, scope: Block | null): string | null {
+  for (let b = scope; b?.parent; b = b.parent) {
+    const type = /\b(?:class|struct|extension)\s+(\w+)[^{}]*$/.exec(m.slice(Math.max(0, b.open - 200), b.open));
+    if (type) return type[1];
   }
   return null;
 }

@@ -1,6 +1,6 @@
 import { eolOf, lineAround, lineIndent } from '../text';
 import { blockAt, headerOf, labelOffset, type Block } from '../swift';
-import { defineGroup, chainHas, PREPARE } from './engine';
+import { defineGroup, chainHas, enclosingType, PREPARE } from './engine';
 
 /** The sidebar modifier, kept to iOS when the project also builds for platforms that lack it. */
 function sidebar(eol: string, indent: string, otherPlatforms: boolean, lineEnds: boolean): string {
@@ -75,6 +75,9 @@ export const misplaced = defineGroup({
       if (/inputAccessoryView\s*=\s*$/.test(m.slice(Math.max(0, hit.index! - 40), hit.index))) continue;
       const scope = blockAt(src.root, hit.index!);
       if (name && new RegExp(`inputAccessoryView\\s*=\\s*${name}\\b`).test(m.slice(scope.open + 1, scope.close))) continue;
+      // `lazy var inputToolbar: UIToolbar = { … }()` later set as a field's `inputAccessoryView`.
+      const lazy = /\blazy\s+var\s+(\w+)\s*:\s*\w+\s*=\s*$/.exec(m.slice(Math.max(0, scope.open - 80), scope.open))?.[1];
+      if (lazy && new RegExp(`inputAccessoryView\\s*=\\s*(?:self\\.)?${lazy}\\b`).test(m)) continue;
       // A factory in `extension UIToolbar` makes bars for its callers, which decide where they go.
       if (insideExtensionOf(m, scope, hit[1])) continue;
       // A toolbar inside a picker or keyboard accessory type is built to sit above the keyboard.
@@ -139,12 +142,3 @@ function leftEdgeOnly(m: string, at: number): boolean {
 }
 
 const ACCESSORY_TYPE = /Accessory|Keyboard|Input|Picker|Composer|Formatting/;
-
-/** Name of the class or struct whose body holds `scope`. */
-function enclosingType(m: string, scope: Block | null): string | null {
-  for (let b = scope; b?.parent; b = b.parent) {
-    const type = /\b(?:class|struct|extension)\s+(\w+)[^{}]*$/.exec(m.slice(Math.max(0, b.open - 200), b.open));
-    if (type) return type[1];
-  }
-  return null;
-}

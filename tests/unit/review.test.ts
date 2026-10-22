@@ -800,3 +800,29 @@ describe('held-out review', () => {
     expect(swiftIds('final class PlayerViewController: UIViewController {\n  let bar = UIToolbar()\n}')).toContain('hand-built-bar');
   });
 });
+
+describe('second held-out review', () => {
+  const swiftIds = (content: string, path = 'A.swift') => ids([{ path, content }]);
+  it('trusts callers that keep a view to its aspect ratio', () => {
+    const view = { path: 'ImageView.swift', content: 'struct ImageView: View {\n  var body: some View {\n    KFImage(url)\n      .resizable()\n  }\n}' };
+    expect(ids([view, { path: 'Menu.swift', content: 'let icon = AnyView(ImageView(url: u).scaledToFit())' }])).toEqual([]);
+    expect(ids([view])).toContain('stretched-image');
+  });
+  it.each([
+    ['an orientation parameter in a delegate signature', 'func windowScene(_ s: UIWindowScene, didUpdate c: any UICoordinateSpace, interfaceOrientation previous: UIInterfaceOrientation, traitCollection t: UITraitCollection) {}'],
+    ['a font in a print renderer', 'final class Renderer: UIPrintPageRenderer {\n  override func drawHeaderForPage(at i: Int, in r: CGRect) {\n    let f = UIFont.systemFont(ofSize: 10)\n  }\n}'],
+    ['a key window from the foreground-active scene', 'guard let w = UIApplication.shared.connectedScenes\n  .compactMap({ $0 as? UIWindowScene })\n  .first(where: { $0.activationState == .foregroundActive })?\n  .windows\n  .first(where: { $0.isKeyWindow }) else { return }'],
+    ['a lazy accessory toolbar', 'final class VC: UIViewController {\n  lazy var inputToolbar: UIToolbar = {\n    var toolbar = UIToolbar()\n    return toolbar\n  }()\n  func setUp() { field.inputAccessoryView = inputToolbar }\n}'],
+  ])('ignores %s', (_, code) => {
+    expect(swiftIds(code)).toEqual([]);
+  });
+});
+
+describe('foreground scenes', () => {
+  const code = 'let w = UIApplication.shared.connectedScenes\n  .compactMap { $0 as? UIWindowScene }\n  .filter { $0.activationState == .foregroundActive }\n  .flatMap(\\.windows)\n  .first { $0.isKeyWindow }';
+  it('flags a foreground-active key window only when the app shows several scenes', () => {
+    const plist = { path: 'Info.plist', content: '<plist><dict><key>CFBundleName</key><string>A</string><key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><true/></dict></dict></plist>' };
+    expect(ids([{ path: 'A.swift', content: code }])).not.toContain('key-window');
+    expect(ids([plist, { path: 'A.swift', content: code }])).toContain('key-window');
+  });
+});
