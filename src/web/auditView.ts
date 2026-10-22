@@ -61,7 +61,7 @@ async function readEntries(entry: FileSystemEntry, prefix: string, out: SourceFi
     for (;;) {
       const batch = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej));
       if (!batch.length) break;
-      for (const child of batch) await readEntries(child, path, out);
+      await Promise.all(batch.map((child) => readEntries(child, path, out)));
     }
   }
 }
@@ -69,17 +69,16 @@ async function readEntries(entry: FileSystemEntry, prefix: string, out: SourceFi
 async function filesFromDrop(items: DataTransferItemList): Promise<SourceFile[]> {
   const out: SourceFile[] = [];
   const entries = [...items].map((i) => i.webkitGetAsEntry?.()).filter(Boolean) as FileSystemEntry[];
-  for (const e of entries) await readEntries(e, '', out, e.isDirectory);
-  return out;
+  await Promise.all(entries.map((e) => readEntries(e, '', out, e.isDirectory)));
+  // Reads finish in any order; sort so findings come out the same on every run.
+  return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
 async function filesFromInput(list: FileList): Promise<SourceFile[]> {
-  const out: SourceFile[] = [];
-  for (const f of [...list]) {
-    const path = f.webkitRelativePath ? f.webkitRelativePath.slice(f.webkitRelativePath.indexOf('/') + 1) : f.name;
-    if (isRelevant(path) && f.size <= MAX_BYTES) out.push({ path, content: await f.text() });
-  }
-  return out;
+  const picked = [...list]
+    .map((f) => ({ f, path: f.webkitRelativePath ? f.webkitRelativePath.slice(f.webkitRelativePath.indexOf('/') + 1) : f.name }))
+    .filter(({ f, path }) => isRelevant(path) && f.size <= MAX_BYTES);
+  return Promise.all(picked.map(async ({ f, path }) => ({ path, content: await f.text() })));
 }
 
 function scoreRing(score: number): SVGSVGElement {
