@@ -2,7 +2,7 @@
 // what the first pass learned about the whole project.
 
 import type { parsePlist } from '../plist';
-import type { Block, SwiftSource } from '../swift';
+import { blockAt, type Block, type SwiftSource } from '../swift';
 import type { Fix, Severity, SourceFile } from '../types';
 
 export interface Rule<Id extends string = string> {
@@ -180,4 +180,29 @@ export const declaredAt = (masked: string, at: number): boolean => matchBefore(m
 export function sizeClassPattern(masked: string): string {
   const names = [...masked.matchAll(/@Environment\s*\(\s*\\\.(?:horizontal|vertical)SizeClass\s*\)\s*(?:(?:private|fileprivate)\s+)?var\s+(\w+)/g)].map((h) => h[1]);
   return `(?:\\w*[sS]izeClass\\w*${names.map((n) => `|${n}`).join('')})`;
+}
+
+/** The view a modifier chain starts from: `Button` for `Button { } label: { }.buttonStyle(…).frame(…)`. */
+export function chainRoot(src: SwiftSource, at: number): string | null {
+  const m = src.masked;
+  for (let i = at, guard = 0; guard < 30; guard++) {
+    let j = i - 1;
+    while (j >= 0 && /\s/.test(m[j])) j--;
+    if (m[j] === '}') return blockAt(src.root, j - 1).label;
+    let start = j + 1;
+    if (m[j] === ')') {
+      for (let depth = 0; j >= 0; j--) {
+        if (m[j] === ')') depth++;
+        else if (m[j] === '(' && --depth === 0) break;
+      }
+      start = j;
+    }
+    const name = /([A-Za-z_]\w*)\s*$/.exec(m.slice(Math.max(0, start - 80), start));
+    if (!name) return null;
+    let k = start - (m.slice(Math.max(0, start - 80), start).length - name.index) - 1;
+    while (k >= 0 && /\s/.test(m[k])) k--;
+    if (m[k] !== '.') return name[1];
+    i = k;
+  }
+  return null;
 }

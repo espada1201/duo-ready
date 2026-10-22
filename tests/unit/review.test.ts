@@ -184,8 +184,9 @@ describe('second review', () => {
 describe('third review', () => {
   const ids = (files: SourceFile[]) => audit(files).findings.map((f) => f.ruleId);
 
-  it('still flags photos and avatars in square frames; only symbols and assets are icons', () => {
-    expect(ids(swift('Image(uiImage: photo)\n  .resizable()\n  .frame(width: 60, height: 60)'))).toEqual(['stretched-image']);
+  it('flags a photo the window can stretch, not one in a fixed frame', () => {
+    expect(ids(swift('Image(uiImage: photo)\n  .resizable()\n  .frame(width: 60, height: 60)'))).toEqual([]);
+    expect(ids(swift('Image(uiImage: photo)\n  .resizable()\n  .frame(maxWidth: .infinity)'))).toEqual(['stretched-image']);
     expect(ids(swift('Image("logo")\n  .resizable()\n  .frame(width: 60, height: 60)'))).toEqual([]);
     expect(ids(swift('Image(systemName: "star")\n  .resizable()\n  .frame(width: 20, height: 20)'))).toEqual([]);
     expect(ids(swift('Image(iconName)\n  .resizable()\n  .frame(width: Size.icon, height: Size.icon)'))).toEqual([]);
@@ -605,5 +606,21 @@ describe('code that never ships to Duo', () => {
     ['the release side of #if DEBUG', '#if DEBUG\nlet a = 1\n#else\nlet s = UIScreen.main.bounds\n#endif'],
   ])('keeps %s', (_, code) => {
     expect(swiftIds(code)).toContain('uiscreen-main');
+  });
+});
+
+describe('second precision review', () => {
+  const swiftIds = (content: string, path = 'A.swift') => ids([{ path, content }]);
+  it.each([
+    ['a spinner given a fresh identity', 'ProgressView()\n  .progressViewStyle(.circular)\n  .id(UUID())'],
+    ['an estimated cell size', 'layout.estimatedItemSize = CGSize(width: 375, height: 80)'],
+    ['a standard ad banner', 'banner.frame = CGRect(x: 0, y: 0, width: 320, height: 50)'],
+    ['a view rendered to an image', 'let image = view.renderAsImage(size: CGSize(width: 375, height: 666))'],
+  ])('ignores %s', (_, code) => {
+    expect(swiftIds(code)).toEqual([]);
+  });
+  it('skips test spies and testing modules', () => {
+    expect(swiftIds('let s = UIScreen.main.bounds', 'Inbox/LAContextSpy.swift')).toEqual([]);
+    expect(swiftIds('let s = UIScreen.main.bounds', 'InboxTesting/Helpers.swift')).toEqual([]);
   });
 });

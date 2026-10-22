@@ -30,6 +30,9 @@ function callText(masked: string, from: number): string {
   return masked.slice(from);
 }
 
+/** `width: 40, height: 40` or `width: Layout.icon, height: Layout.icon`: both set, neither read from a window, geometry or container. */
+const FIXED_FRAME = /^\s*width\s*:\s*(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+,\s*height\s*:\s*(?![^,]*(?:infinity|proxy|geo\w*|bounds|\.frame\b|container\w*|window\w*))[^,]+(?:,|$)/i;
+
 export const stretched = defineGroup({
   id: 'stretched',
   title: 'Small or stretched elements',
@@ -126,7 +129,9 @@ export const stretched = defineGroup({
         matchBefore(m, hit.index!, /(?:\bImage\s*\(\s*(?:(?:systemName|decorative)\s*:[^()]*|"[^"]*"|\.?[A-Za-z_][\w.]*)\s*\)|\.swiftUIImage)\s*$/) !== null ||
         /(?:\.swiftUIImage\s*,?\s*\)|\.renderingMode\s*\(\s*\.template\s*\)|\bImage\s*\(\s*uiImage\s*:\s*\w*[iI]con\w*(?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))\s*$/.test(before) ||
         chainHas(m, end, /^renderingMode$/, /^\s*\.template\s*$/);
-      if (icon && (chainHas(m, end, /^frame$/, /^\s*width\s*:\s*([^,]+?)\s*,\s*height\s*:\s*\1\s*(?:,|$)/) || (square && chainHas(m, end, square)))) continue;
+      if (icon && square && chainHas(m, end, square)) continue;
+      // A fixed width and height never follow the window, so Duo can't stretch the image any more than an iPhone does.
+      if (chainHas(m, end, /^frame$/, FIXED_FRAME)) continue;
       const indent = /\n([ \t]*)\.resizable/.exec(file.content.slice(Math.max(0, hit.index! - 200), end));
       // A full-bleed background should keep filling the window, not letterbox inside it.
       const scale = chainHas(m, end, /^(ignoresSafeArea|edgesIgnoringSafeArea)$/) ? '.scaledToFill()' : '.scaledToFit()';

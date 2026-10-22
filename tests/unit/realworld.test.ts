@@ -43,10 +43,11 @@ describe('orientation', () => {
     expect(swift('let t = "Use Face ID to unlock app"')).toEqual(['biometry-faceid']);
   });
 
-  it('treats a resizable image in a fixed square frame as an icon', () => {
+  it('leaves resizable images in a fixed frame alone: the window never changes their size', () => {
     expect(swift('Image("a")\n  .resizable()\n  .frame(width: 24, height: 24)')).toEqual([]);
     expect(swift('Image("a")\n  .resizable()\n  .frame(width: Size.icon, height: Size.icon, alignment: .center)')).toEqual([]);
-    expect(swift('Image("a")\n  .resizable()\n  .frame(width: 220, height: 160)')).toEqual(['stretched-image']);
+    expect(swift('Image("a")\n  .resizable()\n  .frame(width: 220, height: 160)')).toEqual([]);
+    expect(swift('Image("a")\n  .resizable()\n  .frame(width: proxy.size.width, height: 160)')).toEqual(['stretched-image']);
     expect(swift('Image("a")\n  .resizable()\n  .frame(maxWidth: 128, maxHeight: 128)')).toEqual(['stretched-image']);
     expect(swift('Image("a")\n  .resizable()\n  .frame(height: 200)')).toEqual(['stretched-image']);
   });

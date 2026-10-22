@@ -1,7 +1,7 @@
 import { blockAt, declaredTypes, headerOf, labelOffset, type Block, type SwiftSource } from '../swift';
 import type { Fix } from '../types';
 import { lineAround } from '../text';
-import { defineGroup, chainHas, declaredAt, matchBefore, PREPARE, sizeClassPattern } from './engine';
+import { chainRoot, defineGroup, chainHas, declaredAt, matchBefore, PREPARE, sizeClassPattern } from './engine';
 
 const SCENES = 'Apple, WWDC25 “Make your UIKit app more flexible” (UIScene required after iOS 26)';
 
@@ -215,6 +215,8 @@ export const fold = defineGroup({
       if (keepsState(branches, facts.views)) report('state-reset', cond);
     }
     for (const hit of m.matchAll(/\.id\s*\(\s*UUID\s*\(\s*\)\s*\)/g)) {
+      // A spinner or a label has nothing to lose; a fresh identity just restarts it.
+      if (STATELESS.test(chainRoot(src, hit.index!) ?? '')) continue;
       report('state-reset', hit.index!, '.id(UUID()) gives the view a new identity on every update, so its state never survives a fold.');
     }
 

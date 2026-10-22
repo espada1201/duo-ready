@@ -8,7 +8,7 @@ struct UnlockView: View {
         VStack(spacing: 16) {
             Image("Cover")
                 .resizable()
-                .frame(width: 220, height: 160)
+                .frame(maxWidth: .infinity, maxHeight: 160)
             Text("Your library is locked")
                 .font(.system(size: 22, weight: .semibold))
             if canUseBiometrics {

@@ -1,40 +1,14 @@
 import { INNER } from '../duo';
 import { tierFromUpgradeCheck, tierLabel, upgradeCheck, xcodeVersion } from '../sdk';
-import { blockAt, type SwiftSource } from '../swift';
 import { lineAround } from '../text';
-import { defineGroup, PREPARE, POSE } from './engine';
+import { chainRoot, defineGroup, PREPARE, POSE } from './engine';
 
 // iPhone point sizes from the iPhone SE through the 17 Pro Max.
-const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize|GADAdSize\w*|adSize|bannerSize)\b/i;
+const NOT_SCREEN = /\b(?:preferredContentSize|UIGraphicsImageRenderer|thumbnail\w*|targetSize|imageSize|estimated\w*|snapshot\w*|drawHierarchy|render\w*|GADAdSize\w*|adSize|bannerSize)\b/i;
 const PHONE_WIDTHS = new Set([320, 375, 390, 393, 402, 414, 428, 430, 440]);
 const PHONE_HEIGHTS = new Set([568, 667, 736, 812, 844, 852, 874, 896, 926, 932, 956]);
 
 const CONTROL = /^(?:Button|Link|Menu|NavigationLink|ShareLink|PasteButton|Toggle|Picker|TextField|SecureField|Label|ProgressView|Capsule|Rectangle|RoundedRectangle|Circle)$/;
-
-/** The view a modifier chain starts from: `Button` for `Button { } label: { }.buttonStyle(…).frame(…)`. */
-function chainRoot(src: SwiftSource, at: number): string | null {
-  const m = src.masked;
-  for (let i = at, guard = 0; guard < 30; guard++) {
-    let j = i - 1;
-    while (j >= 0 && /\s/.test(m[j])) j--;
-    if (m[j] === '}') return blockAt(src.root, j - 1).label;
-    let start = j + 1;
-    if (m[j] === ')') {
-      for (let depth = 0; j >= 0; j--) {
-        if (m[j] === ')') depth++;
-        else if (m[j] === '(' && --depth === 0) break;
-      }
-      start = j;
-    }
-    const name = /([A-Za-z_]\w*)\s*$/.exec(m.slice(Math.max(0, start - 80), start));
-    if (!name) return null;
-    let k = start - (m.slice(Math.max(0, start - 80), start).length - name.index) - 1;
-    while (k >= 0 && /\s/.test(m[k])) k--;
-    if (m[k] !== '.') return name[1];
-    i = k;
-  }
-  return null;
-}
 
 export const blackBars = defineGroup({
   id: 'black-bars',
@@ -86,7 +60,8 @@ export const blackBars = defineGroup({
       const n = Number(hit[2]);
       const isWidth = /width/i.test(hit[1]);
       // Popovers, rendered images and thumbnails have their own sizes, not the screen's.
-      if (NOT_SCREEN.test(lineAround(m, hit.index!))) continue;
+      // 320 × 50 is the standard ad banner, not a screen.
+      if (NOT_SCREEN.test(lineAround(m, hit.index!)) || (n === 320 && /\bheight\s*:\s*50\b/.test(lineAround(m, hit.index!)))) continue;
       const line = m.lastIndexOf('\n', hit.index!);
       if (((isWidth && PHONE_WIDTHS.has(n)) || (!isWidth && PHONE_HEIGHTS.has(n))) && !lines.has(line)) {
         lines.add(line);
