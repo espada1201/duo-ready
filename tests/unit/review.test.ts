@@ -178,3 +178,38 @@ describe('second review', () => {
     expect(ids(swift('view.frame = CGRect(x: 0, y: 0, width: 390, height: 10)'))).toEqual(['fixed-device-size']);
   });
 });
+
+describe('third review', () => {
+  const ids = (files: SourceFile[]) => audit(files).findings.map((f) => f.ruleId);
+
+  it('still flags photos and avatars in square frames; only symbols and assets are icons', () => {
+    expect(ids(swift('Image(uiImage: photo)\n  .resizable()\n  .frame(width: 60, height: 60)'))).toEqual(['stretched-image']);
+    expect(ids(swift('Image("logo")\n  .resizable()\n  .frame(width: 60, height: 60)'))).toEqual([]);
+    expect(ids(swift('Image(systemName: "star")\n  .resizable()\n  .frame(width: 20, height: 20)'))).toEqual([]);
+  });
+
+  it('only exempts a keyboard toolbar in the scope that assigns it', () => {
+    const code = 'class C: UIViewController {\n  func a() { let toolbar = UIToolbar(); view.addSubview(toolbar) }\n  func b() { let toolbar = UIToolbar(); field.inputAccessoryView = toolbar }\n}';
+    expect(ids(swift(code))).toEqual(['hand-built-bar']);
+  });
+
+  it('offers no bounds fix in loadView, where self.view would recurse', () => {
+    const found = audit(swift('class C: UIViewController {\n  override func loadView() { view = UIView(frame: UIScreen.main.bounds) }\n}')).findings;
+    expect(found.map((f) => [f.ruleId, !!f.fix])).toEqual([['uiscreen-main', false]]);
+  });
+
+  it('sees a passcode alternative past string interpolation', () => {
+    expect(ids(swift('let t = "Unlock with Face ID \\(name) or use your passcode"'))).toEqual([]);
+  });
+
+  it('keeps an iPhone Info.plist that has WKAppBoundDomains', () => {
+    const plist = '<plist><dict><key>WKAppBoundDomains</key><array/><key>UIRequiresFullScreen</key><true/></dict></plist>';
+    expect(ids([{ path: 'Info.plist', content: plist }])).toEqual(['requires-full-screen']);
+  });
+
+  it('stays fast on unbalanced parentheses', () => {
+    const start = performance.now();
+    audit(swift(`TabView {}\n${'.a(('.repeat(40000)}`));
+    expect(performance.now() - start).toBeLessThan(3000);
+  });
+});

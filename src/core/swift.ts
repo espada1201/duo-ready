@@ -199,16 +199,6 @@ export function parseSwift(text: string): SwiftSource {
   return { masked, strings, root, lineStarts: lineStarts(text) };
 }
 
-/** The contents of the string literal around `at` in `text`, or null when `at` is not inside one. */
-export function stringLiteralAt(src: SwiftSource, text: string, at: number): string | null {
-  if (!src.strings[at]) return null;
-  let from = at;
-  let to = at;
-  while (from > 0 && src.strings[from - 1]) from--;
-  while (to < text.length && src.strings[to]) to++;
-  return text.slice(from, to);
-}
-
 /** Every block under `block`, parents before children. Iterative, so deep nesting can't overflow the stack. */
 export function* walk(block: Block): Generator<Block> {
   const stack = [...block.children].reverse();

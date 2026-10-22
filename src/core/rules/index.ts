@@ -39,6 +39,8 @@ type Parsed =
   | { kind: 'plist'; file: SourceFile; plist: PlistContext['plist'] }
   | { kind: 'pbxproj' | 'manifest' | 'html'; file: SourceFile };
 
+/** Keys only a watch app's Info.plist has; WKAppBoundDomains and friends belong to iPhone apps too. */
+const WATCH_KEY = /^WK(WatchKitApp|CompanionAppBundleIdentifier|ApplicationType|Application|WatchOnly|RunsIndependentlyOfCompanionApp)$/;
 const WIDGET = /\b(?:TimelineProvider|TimelineEntry|WidgetConfiguration|WidgetBundle|widgetAccentedRenderingMode)\b|@Environment\s*\(\s*\\\.widgetFamily\s*\)/;
 
 function parse(file: SourceFile): Parsed | null {
@@ -53,7 +55,7 @@ function parse(file: SourceFile): Parsed | null {
     // Watch apps and extensions have their own Info.plist; only the iPhone app's matters here.
     // Other plists (GoogleService-Info, settings bundles) carry no app keys and say nothing about the app.
     const keys = plist ? [...plist.keys.keys()] : [];
-    const app = keys.some((k) => /^(CF|UI|LS)/.test(k)) && !keys.some((k) => k === 'NSExtension' || k.startsWith('WK'));
+    const app = keys.some((k) => /^(CF|UI|LS)/.test(k)) && !keys.some((k) => k === 'NSExtension' || WATCH_KEY.test(k));
     return app ? { kind: 'plist', file, plist: plist! } : null;
   }
   if (name === 'project.pbxproj') return { kind: 'pbxproj', file };

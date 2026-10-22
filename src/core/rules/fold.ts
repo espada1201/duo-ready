@@ -141,6 +141,9 @@ export const fold = defineGroup({
           description: 'Use the trait collection’s display scale. Read it once the view is in a window.',
           edits: [{ ...span, text: 'self.traitCollection.displayScale' }],
         };
+      } else if (member === 'bounds' && ctx && /\bloadView\s*\(/.test(ctx.func)) {
+        // `self.view` inside loadView calls loadView again.
+        message = 'UIScreen.main.bounds is ambiguous on a two-display phone. In loadView the view doesn’t exist yet: create it with any frame and let Auto Layout or viewDidLayoutSubviews size it.';
       } else if (member === 'bounds' && ctx && /\bviewWillTransition\s*\(/.test(ctx.func)) {
         // Mid-transition the view still has its old bounds: the new size is the parameter.
         message = 'UIScreen.main.bounds is ambiguous on a two-display phone. In viewWillTransition(to:with:), use the size parameter.';

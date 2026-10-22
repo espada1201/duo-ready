@@ -204,6 +204,28 @@ test('findings filter by severity, pain point and fixability', async ({ page }) 
   await expect(findings).toHaveCount(n);
   await chip.click();
   await expect(findings).toHaveCount(31);
+
+  // Chips share numbers; focus must stay on the one pressed, and Show all lands on All.
+  const hinge = page.getByRole('button', { name: /^Show only the \d+ .*hinge/i });
+  await hinge.focus();
+  await page.keyboard.press('Enter');
+  await expect(hinge).toBeFocused();
+  await expect(hinge).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Show all' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /^All 31$/ })).toBeFocused();
+});
+
+test('a newer audit wins over a slow one still running', async ({ page }) => {
+  await page.goto('./#audit');
+  const dir = mkdtempSync(join(tmpdir(), 'duo-'));
+  writeFileSync(join(dir, 'Fonts.swift'), Array.from({ length: 25000 }, (_, i) => `let f${i} = UIFont.systemFont(ofSize: 12)`).join('\n'));
+  await page.getByTestId('folder-input').setInputFiles(dir);
+  await page.getByRole('button', { name: 'Try the sample app' }).click();
+  await expect(page.locator('.finding')).toHaveCount(31);
+  await page.waitForTimeout(3000);
+  await expect(page.locator('.eyebrow')).toHaveText('Sample app: Encore');
+  await expect(page.locator('.finding')).toHaveCount(31);
 });
 
 test('dropping loose Swift files audits them', async ({ page }) => {

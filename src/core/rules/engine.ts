@@ -83,15 +83,27 @@ export interface RuleGroup<Id extends string = string> {
 /** Declares a group so that `report` only accepts the ids of the group's own rules. */
 export const defineGroup = <const Id extends string>(group: RuleGroup<Id>): RuleGroup<Id> => group;
 
+let pairsFor = '';
+let pairs = new Int32Array(0);
+
 /** Offset just past the bracket that closes the one at `open`, or -1. Strings are already masked. */
 function closeOf(masked: string, open: number): number {
-  const pair = masked[open] === '(' ? ')' : '}';
-  let depth = 0;
-  for (let i = open; i < masked.length; i++) {
-    if (masked[i] === masked[open]) depth++;
-    else if (masked[i] === pair && --depth === 0) return i + 1;
+  // One pass per file pairs every ( and {, so walking many chains stays linear even in broken code.
+  if (masked !== pairsFor) {
+    pairs = new Int32Array(masked.length).fill(-1);
+    const stacks: Record<string, number[]> = { '(': [], '{': [] };
+    const opener: Record<string, string> = { ')': '(', '}': '{' };
+    for (let i = 0; i < masked.length; i++) {
+      const c = masked[i];
+      if (c === '(' || c === '{') stacks[c].push(i);
+      else if (c === ')' || c === '}') {
+        const at = stacks[opener[c]].pop();
+        if (at !== undefined) pairs[at] = i + 1;
+      }
+    }
+    pairsFor = masked;
   }
-  return -1;
+  return pairs[open];
 }
 
 export interface ModifierCall {

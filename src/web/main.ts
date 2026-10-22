@@ -56,8 +56,15 @@ function render() {
           )
         : renderRules(focus);
 
+  // A control's data-key names it across re-renders; otherwise inputs by name and value, buttons by text.
   const keyOf = (el: Element) =>
-    el instanceof HTMLInputElement ? `${el.name}|${el.value}|${el.type}` : el instanceof HTMLButtonElement ? `button|${el.textContent}` : null;
+    el instanceof HTMLElement && el.dataset.key
+      ? `key|${el.dataset.key}`
+      : el instanceof HTMLInputElement
+        ? `${el.name}|${el.value}|${el.type}`
+        : el instanceof HTMLButtonElement
+          ? `button|${el.textContent}`
+          : null;
   const activeKey = document.activeElement ? keyOf(document.activeElement) : null;
 
   root.replaceChildren(

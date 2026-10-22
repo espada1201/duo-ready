@@ -56,23 +56,39 @@ function runAudit(files: SourceFile[], source: string): AuditState {
   return relevant.length ? stateFrom(relevant, analyse(relevant), source) : { ...initialAudit(), status: 'error', error: NOTHING };
 }
 
+/** Counts audits started, so a slow one that finishes late can't replace a newer one. */
+let generation = 0;
+let running: Worker | null = null;
+
 /** Audits in a worker so a large project doesn't freeze the page; falls back to the main thread. */
 function analyseOffThread(files: SourceFile[]): Promise<Analysis> {
-  return new Promise((resolve) => {
+  running?.terminate();
+  return new Promise((resolve, reject) => {
+    const inPlace = () => {
+      try {
+        resolve(analyse(files));
+      } catch (e) {
+        reject(e);
+      }
+    };
     let worker: Worker;
     try {
-      worker = new Worker(new URL('./auditWorker.ts', import.meta.url), { type: 'module' });
+      worker = running = new Worker(new URL('./auditWorker.ts', import.meta.url), { type: 'module' });
     } catch {
-      resolve(analyse(files));
+      inPlace();
       return;
     }
-    worker.onmessage = (e: MessageEvent<Analysis>) => {
+    const done = () => {
       worker.terminate();
+      if (running === worker) running = null;
+    };
+    worker.onmessage = (e: MessageEvent<Analysis>) => {
+      done();
       resolve(e.data);
     };
-    worker.onerror = () => {
-      worker.terminate();
-      resolve(analyse(files));
+    worker.onerror = worker.onmessageerror = () => {
+      done();
+      inPlace();
     };
     worker.postMessage(files);
   });
@@ -147,13 +163,23 @@ function fixedZip(state: AuditState): Uint8Array {
 
 export function renderAudit(state: AuditState, set: (s: AuditState) => void, openPreview: (tier: SdkTier | null) => void): HTMLElement {
   const load = async (get: () => Promise<SourceFile[]>, source: string) => {
+    const mine = ++generation;
     set({ ...state, status: 'loading', error: null });
+    let next: AuditState;
     try {
       const relevant = (await get()).filter((f) => isRelevant(f.path));
-      set(relevant.length ? stateFrom(relevant, await analyseOffThread(relevant), source) : { ...initialAudit(), status: 'error', error: NOTHING });
+      next = relevant.length ? stateFrom(relevant, await analyseOffThread(relevant), source) : { ...initialAudit(), status: 'error', error: NOTHING };
     } catch (e) {
-      set({ ...initialAudit(), status: 'error', error: `Could not read those files: ${(e as Error).message}` });
+      next = { ...initialAudit(), status: 'error', error: `Could not read those files: ${(e as Error).message}` };
     }
+    if (mine === generation) set(next);
+  };
+  // The sample and pasted code finish at once; they still supersede any audit in flight.
+  const now = (next: AuditState) => {
+    generation++;
+    running?.terminate();
+    running = null;
+    set(next);
   };
 
   const drop = h(
@@ -195,7 +221,7 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
           },
         }),
       ),
-      h('button', { type: 'button', class: 'button', onclick: () => set(runAudit(sampleFiles(), 'Sample app: Encore')) }, 'Try the sample app'),
+      h('button', { type: 'button', class: 'button', onclick: () => now(runAudit(sampleFiles(), 'Sample app: Encore')) }, 'Try the sample app'),
       h('button', { type: 'button', class: 'button ghost', onclick: () => set({ ...state, paste: !state.paste }), 'aria-expanded': String(state.paste) }, 'Paste Swift'),
     ),
   );
@@ -208,7 +234,7 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
           onsubmit: (e: Event) => {
             e.preventDefault();
             const text = ((e.currentTarget as HTMLFormElement).elements.namedItem('code') as HTMLTextAreaElement).value;
-            if (text.trim()) set(runAudit([{ path: 'Pasted.swift', content: text }], 'Pasted code'));
+            if (text.trim()) now(runAudit([{ path: 'Pasted.swift', content: text }], 'Pasted code'));
           },
         },
         h('label', { for: 'paste-code' }, 'Swift source'),
@@ -247,10 +273,18 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
 function results(state: AuditState, set: (s: AuditState) => void, openPreview: (tier: SdkTier | null) => void): HTMLElement {
   const r = state.result!;
   const fixable = r.findings.filter((f) => f.fix).length;
+  const { severity, pain, fixable: onlyFixable } = state.filter;
+  const painRules = pain ? PAIN_POINTS.find((p) => p.id === pain)!.rules : null;
+  const shown = r.findings
+    .map((f, i) => [f, i] as [Finding, number])
+    .filter(([f]) => (!severity || f.severity === severity) && (!painRules || painRules.includes(f.ruleId)) && (!onlyFixable || f.fix));
+  const visible = new Set(shown.map(([, i]) => i));
   const label = () => {
     const n = chosenFixes(state).applied.length;
     const skipped = state.selected.size - n;
-    return `Download ${n} ${n === 1 ? 'fix' : 'fixes'}${skipped ? ` (${skipped} overlap${skipped === 1 ? 's' : ''} another)` : ''}`;
+    const hidden = [...state.selected].filter((i) => !visible.has(i)).length;
+    const notes = [skipped ? `${skipped} overlap${skipped === 1 ? 's' : ''} another` : '', hidden ? `${hidden} hidden by the filter` : ''].filter(Boolean);
+    return `Download ${n} ${n === 1 ? 'fix' : 'fixes'}${notes.length ? ` (${notes.join(', ')})` : ''}`;
   };
   const downloadLabel = h('span', {}, label());
   const downloadButton = h(
@@ -305,6 +339,7 @@ function results(state: AuditState, set: (s: AuditState) => void, openPreview: (
                 {
                   type: 'button',
                   class: 'count',
+                  'data-key': `pain-${p.id}`,
                   'aria-pressed': String(on),
                   'aria-label': `Show only the ${n} ${p.title.toLowerCase()} findings`,
                   onclick: () => filterBy({ pain: on ? null : p.id }),
@@ -321,11 +356,6 @@ function results(state: AuditState, set: (s: AuditState) => void, openPreview: (
     ),
   );
 
-  const { severity, pain, fixable: onlyFixable } = state.filter;
-  const painRules = pain ? PAIN_POINTS.find((p) => p.id === pain)!.rules : null;
-  const shown = r.findings
-    .map((f, i) => [f, i] as [Finding, number])
-    .filter(([f]) => (!severity || f.severity === severity) && (!painRules || painRules.includes(f.ruleId)) && (!onlyFixable || f.fix));
   const byFile = groupBy(shown, ([f]) => f.path);
 
   const severities: [Severity | null, string][] = [
@@ -337,7 +367,11 @@ function results(state: AuditState, set: (s: AuditState) => void, openPreview: (
         'div',
         { class: 'filters', role: 'group', 'aria-label': 'Filter findings' },
         severities.map(([sev, text]) =>
-          h('button', { type: 'button', class: 'button ghost', 'aria-pressed': String(severity === sev), onclick: () => filterBy({ severity: sev }) }, text),
+          h(
+            'button',
+            { type: 'button', class: 'button ghost', 'data-key': `severity-${sev ?? 'all'}`, 'aria-pressed': String(severity === sev), onclick: () => filterBy({ severity: sev }) },
+            text,
+          ),
         ),
         fixable
           ? h(
@@ -348,7 +382,7 @@ function results(state: AuditState, set: (s: AuditState) => void, openPreview: (
             )
           : null,
         shown.length < r.findings.length
-          ? h('p', { class: 'hint', 'data-testid': 'filter-count' }, `Showing ${shown.length} of ${r.findings.length}. `, h('button', { type: 'button', class: 'link', onclick: () => filterBy(NO_FILTER) }, 'Show all'))
+          ? h('p', { class: 'hint', 'data-testid': 'filter-count' }, `Showing ${shown.length} of ${r.findings.length}. `, h('button', { type: 'button', class: 'link', 'data-key': 'severity-all', onclick: () => filterBy(NO_FILTER) }, 'Show all'))
           : null,
       )
     : null;

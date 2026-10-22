@@ -1,5 +1,5 @@
 import { eolOf, lineIndent } from '../text';
-import { labelOffset } from '../swift';
+import { blockAt, labelOffset } from '../swift';
 import { defineGroup, chainHas, PREPARE } from './engine';
 
 export const misplaced = defineGroup({
@@ -48,7 +48,8 @@ export const misplaced = defineGroup({
       // A toolbar above the keyboard (inputAccessoryView) is not a screen's bar.
       const name = /\b(?:let|var)\s+(\w+)\s*(?::\s*\w+\s*)?=\s*$/.exec(m.slice(Math.max(0, hit.index! - 60), hit.index))?.[1];
       if (/inputAccessoryView\s*=\s*$/.test(m.slice(Math.max(0, hit.index! - 40), hit.index))) continue;
-      if (name && new RegExp(`inputAccessoryView\\s*=\\s*${name}\\b`).test(m)) continue;
+      const scope = blockAt(src.root, hit.index!);
+      if (name && new RegExp(`inputAccessoryView\\s*=\\s*${name}\\b`).test(m.slice(scope.open + 1, scope.close))) continue;
       report('hand-built-bar', hit.index!, `${hit[1]} created by hand won’t get Duo’s vertical bar layout.`);
     }
     for (const hit of m.matchAll(/\bstruct\s+(\w*(?:TabBar|Toolbar|NavBar|NavigationBar|BottomBar)(?:View)?)\s*:\s*[^{]*\bView\b/g)) {

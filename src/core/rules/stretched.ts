@@ -1,6 +1,6 @@
 import { blockAt } from '../swift';
 import { eolOf, lineAround } from '../text';
-import { defineGroup, chainHas, declaredAt, PREPARE } from './engine';
+import { defineGroup, chainHas, declaredAt, matchBefore, PREPARE } from './engine';
 
 const VIEWPORT_WIDTH = /viewport[^\n>]{0,160}?\bwidth\s*=\s*(\d{3,4})\b/g;
 const viewportMessage = (width: string) => `The web viewport is fixed at ${width} px instead of device-width.`;
@@ -70,10 +70,11 @@ export const stretched = defineGroup({
       if (!declaredAt(m, hit.index!)) report('idiom-layout', hit.index!);
     }
 
+    const scaled = m.includes('scaledFont');
     for (const hit of m.matchAll(/\.system\s*\(\s*size\s*:|\bUIFont\s*\.\s*(?:systemFont|boldSystemFont|italicSystemFont|monospacedSystemFont)\s*\(\s*ofSize\s*:|\bUIFont\s*\(\s*name\s*:[^)]*size\s*:|\.custom\s*\([^)]*size\s*:/g)) {
       if (/relativeTo\s*:|UIFontMetrics|scaledFont/.test(lineAround(m, hit.index!) + callText(m, hit.index!))) continue;
       // `let f = UIFont(...)` later passed to `scaledFont(for: f)` scales too.
-      const name = /\b(?:let|var)\s+(\w+)\s*(?::\s*\w+\s*)?=\s*$/.exec(m.slice(Math.max(0, hit.index! - 60), hit.index))?.[1];
+      const name = scaled && /\b(?:let|var)\s+(\w+)\s*(?::\s*\w+\s*)?=\s*$/.exec(m.slice(Math.max(0, hit.index! - 60), hit.index))?.[1];
       const scope = blockAt(src.root, hit.index!);
       if (name && new RegExp(`scaledFont\\s*\\(\\s*for\\s*:\\s*${name}\\b`).test(m.slice(scope.open + 1, scope.close))) continue;
       report('fixed-font', hit.index!);
@@ -82,8 +83,10 @@ export const stretched = defineGroup({
     for (const hit of m.matchAll(/\.resizable\s*\(\s*\)/g)) {
       const end = hit.index! + hit[0].length;
       if (chainHas(m, end, /^(aspectRatio|scaledToFit|scaledToFill)$/)) continue;
-      // A fixed square frame is an icon: it neither distorts nor changes with the window.
-      if (chainHas(m, end, /^frame$/, /^\s*width\s*:\s*([^,]+?)\s*,\s*height\s*:\s*\1\s*(?:,|$)/)) continue;
+      // A symbol or bundled asset in a fixed square frame is an icon: it neither distorts nor
+      // follows the window. Photos and avatars (uiImage:, AsyncImage) can be any shape, so they still count.
+      const icon = matchBefore(m, hit.index!, /\bImage\s*\(\s*(?:systemName\s*:[^()]*|"[^"]*"|\.\w+)\s*\)\s*$/) !== null;
+      if (icon && chainHas(m, end, /^frame$/, /^\s*width\s*:\s*([^,]+?)\s*,\s*height\s*:\s*\1\s*(?:,|$)/)) continue;
       const indent = /\n([ \t]*)\.resizable/.exec(file.content.slice(Math.max(0, hit.index! - 200), end));
       // A full-bleed background should keep filling the window, not letterbox inside it.
       const scale = chainHas(m, end, /^(ignoresSafeArea|edgesIgnoringSafeArea)$/) ? '.scaledToFill()' : '.scaledToFit()';

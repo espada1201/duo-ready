@@ -1,4 +1,3 @@
-import { stringLiteralAt } from '../swift';
 import { lineAround } from '../text';
 import { defineGroup } from './engine';
 
@@ -35,9 +34,9 @@ export const hardware = defineGroup({
     // Copy lives in strings, which the mask blanks: look at the raw text inside strings.
     for (const hit of file.content.matchAll(/Face ID/g)) {
       const i = hit.index!;
-      // Copy that already offers Touch ID or a passcode reads fine on Duo.
-      const literal = stringLiteralAt(src, file.content, i);
-      if (literal?.includes('Face ID') && !/Touch ID|fingerprint|passcode/i.test(literal)) {
+      // Copy on the same line that also offers Touch ID or a passcode reads fine on Duo; the line,
+      // not the literal, so interpolation inside the string doesn't hide the alternative.
+      if (src.strings[i] && src.strings[i + 6] && !/Touch ID|fingerprint|passcode/i.test(lineAround(file.content, i))) {
         report('biometry-faceid', i, 'User-facing text mentions Face ID, which iPhone Duo doesn’t have.');
       }
     }
