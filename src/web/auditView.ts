@@ -1,11 +1,12 @@
 import { strToU8, zipSync } from 'fflate';
-import { applyFixes, audit, isRelevant, isRelevantDir, MAX_BYTES } from '../core/audit';
-import { hunks, type Hunk } from '../core/diff';
+import { applyFixes, isRelevant, isRelevantDir, MAX_BYTES } from '../core/audit';
+import type { Hunk } from '../core/diff';
 import { describeCounts, PARTIAL_NOTE, plural, screensFirst, severityLabel, summaryLine } from '../core/findings';
 import { PAIN_POINTS, RULE_BY_ID } from '../core/rules';
 import { tierLabel } from '../core/sdk';
 import { groupBy } from '../core/text';
 import type { AuditResult, Finding, SdkTier, Severity, SourceFile } from '../core/types';
+import { analyse, type Analysis } from './analyse';
 import { h, svg } from './dom';
 import { icon } from './icons';
 
@@ -42,21 +43,39 @@ function sampleFiles(): SourceFile[] {
   return Object.entries(SAMPLE).map(([path, content]) => ({ path: path.replace('../../sample/', ''), content }));
 }
 
+const NOTHING = 'No Swift files, Info.plist or Xcode project found there. Pick the folder that contains your .xcodeproj.';
+
+function stateFrom(files: SourceFile[], { result, previews }: Analysis, source: string): AuditState {
+  const selected = new Set(result.findings.flatMap((f, i) => (f.fix?.confidence === 'safe' ? [i] : [])));
+  return { status: 'done', source, files, result, selected, previews, error: null, paste: false, draft: '', filter: NO_FILTER };
+}
+
+/** For the sample and pasted code, which are small enough to audit in place. */
 function runAudit(files: SourceFile[], source: string): AuditState {
   const relevant = files.filter((f) => isRelevant(f.path));
-  if (!relevant.length) {
-    return { ...initialAudit(), status: 'error', error: 'No Swift files, Info.plist or Xcode project found there. Pick the folder that contains your .xcodeproj.' };
-  }
-  const result = audit(relevant);
-  const selected = new Set<number>();
-  const previews = new Map<number, Hunk[]>();
-  const byPath = new Map(relevant.map((f) => [f.path, f]));
-  result.findings.forEach((f, i) => {
-    if (!f.fix) return;
-    if (f.fix.confidence === 'safe') selected.add(i);
-    previews.set(i, hunks(byPath.get(f.path)!.content, f.fix.edits));
+  return relevant.length ? stateFrom(relevant, analyse(relevant), source) : { ...initialAudit(), status: 'error', error: NOTHING };
+}
+
+/** Audits in a worker so a large project doesn't freeze the page; falls back to the main thread. */
+function analyseOffThread(files: SourceFile[]): Promise<Analysis> {
+  return new Promise((resolve) => {
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL('./auditWorker.ts', import.meta.url), { type: 'module' });
+    } catch {
+      resolve(analyse(files));
+      return;
+    }
+    worker.onmessage = (e: MessageEvent<Analysis>) => {
+      worker.terminate();
+      resolve(e.data);
+    };
+    worker.onerror = () => {
+      worker.terminate();
+      resolve(analyse(files));
+    };
+    worker.postMessage(files);
   });
-  return { status: 'done', source, files: relevant, result, selected, previews, error: null, paste: false, draft: '', filter: NO_FILTER };
 }
 
 // Paths start inside the folder the person picked, as the CLI's do, so a project kept in a
@@ -130,7 +149,8 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
   const load = async (get: () => Promise<SourceFile[]>, source: string) => {
     set({ ...state, status: 'loading', error: null });
     try {
-      set(runAudit(await get(), source));
+      const relevant = (await get()).filter((f) => isRelevant(f.path));
+      set(relevant.length ? stateFrom(relevant, await analyseOffThread(relevant), source) : { ...initialAudit(), status: 'error', error: NOTHING });
     } catch (e) {
       set({ ...initialAudit(), status: 'error', error: `Could not read those files: ${(e as Error).message}` });
     }
