@@ -34,7 +34,8 @@ export const hardware: RuleGroup = {
     // Copy lives in strings, which the mask blanks: look at the raw text inside strings.
     for (const hit of file.content.matchAll(/Face ID/g)) {
       const i = hit.index!;
-      if (src.strings[i] && src.strings[i + 6]) {
+      // Copy that already offers Touch ID or a passcode reads fine on Duo.
+      if (src.strings[i] && src.strings[i + 6] && !/Touch ID|fingerprint|passcode/i.test(stringAround(src.strings, file.content, i))) {
         report('biometry-faceid', i, 'User-facing text mentions Face ID, which iPhone Duo doesn’t have.');
       }
     }
@@ -47,3 +48,12 @@ export const hardware: RuleGroup = {
     }
   },
 };
+
+/** The whole string literal that contains `at`. */
+function stringAround(strings: Uint8Array, text: string, at: number): string {
+  let from = at;
+  let to = at;
+  while (from > 0 && strings[from - 1]) from--;
+  while (to < text.length && strings[to]) to++;
+  return text.slice(from, to);
+}

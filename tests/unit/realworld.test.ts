@@ -1,5 +1,5 @@
 // False alarms and misses found by the ponytail review and by auditing five open-source iOS apps
-// (IceCubes, NetNewsWire, Wikipedia, Mastodon, Home Assistant).
+// (IceCubes, NetNewsWire, Wikipedia, Mastodon, Home Assistant, Kickstarter, Firefox, DuckDuckGo).
 import { describe, expect, it } from 'vitest';
 import { audit, isRelevant } from '../../src/core/audit';
 import type { SourceFile } from '../../src/core/types';
@@ -25,6 +25,26 @@ describe('orientation', () => {
     expect(swift('sensor.set(UIDevice.current.orientation.rawValue)')).toEqual([]);
     expect(swift('connection.videoOrientation = .portrait\nvar o = UIDevice.current.orientation')).toEqual([]);
     expect(swift('if view.window?.windowScene?.interfaceOrientation.isLandscape == true {}')).toEqual(['orientation-layout']);
+  });
+
+  it('ignores declarations, enum cases and UI-test devices named after orientation', () => {
+    expect(swift('static var interfaceOrientation: UIInterfaceOrientation? { nil }')).toEqual([]);
+    expect(swift('switch k {\ncase .interfaceOrientation: break\n}')).toEqual([]);
+    expect(swift('let l = XCUIDevice.shared.orientation.isLandscape')).toEqual([]);
+  });
+
+  it('ignores declared idiom properties but not reads of them', () => {
+    expect(swift('protocol P { var userInterfaceIdiom: UIUserInterfaceIdiom { get } }')).toEqual([]);
+    expect(swift('let pad = UIDevice.current.userInterfaceIdiom == .pad')).toEqual(['idiom-layout']);
+  });
+
+  it('only flags Face ID copy that offers nothing else', () => {
+    expect(swift('let t = "Enable Face ID, Touch ID, or a device passcode."')).toEqual([]);
+    expect(swift('let t = "Use Face ID to unlock app"')).toEqual(['biometry-faceid']);
+  });
+
+  it('skips build scripts and fastlane helpers', () => {
+    for (const path of ['Dangerfile.swift', 'Package.swift', 'fastlane/SnapshotHelper.swift']) expect(isRelevant(path)).toBe(false);
   });
 
   it('lets the _iPhone build setting win, and skips watch and extension targets', () => {

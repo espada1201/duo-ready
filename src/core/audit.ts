@@ -3,9 +3,9 @@ import { checkFiles } from './rules';
 import { tierFromUpgradeCheck, xcodeVersion } from './sdk';
 import type { AuditResult, Finding, SourceFile } from './types';
 
-const SKIP_DIR = /(^|\/)(Pods|Carthage|DerivedData|node_modules|build|SourcePackages|\.[^/]+|\w*Tests)\//;
-/** Test code exercises the app; it isn't what Duo users see. */
-const TEST_FILE = /(Tests|\.test)\.swift$/;
+const SKIP_DIR = /(^|\/)(Pods|Carthage|DerivedData|node_modules|build|SourcePackages|fastlane|\.[^/]+|\w*Tests)\//;
+/** Test code and build scripts run on a Mac or in CI; they aren't what Duo users see. */
+const TEST_FILE = /((Tests|\.test)\.swift|(^|\/)(Dangerfile|Package)\.swift)$/;
 const RELEVANT = /(\.swift|\.plist|\.html?|\/project\.pbxproj|(^|\/)package\.json|(^|\/)pubspec\.yaml)$/;
 
 /** Files larger than this are skipped: generated code, not something to audit. */

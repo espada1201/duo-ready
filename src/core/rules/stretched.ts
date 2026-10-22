@@ -1,5 +1,5 @@
 import { eolOf, lineAround } from '../text';
-import { afterModifiers, PREPARE, type RuleGroup } from './engine';
+import { afterModifiers, declaredAt, PREPARE, type RuleGroup } from './engine';
 
 const VIEWPORT_WIDTH = /viewport[^\n>]{0,160}?\bwidth\s*=\s*(\d{3,4})\b/g;
 const viewportMessage = (width: string) => `The web viewport is fixed at ${width} px instead of device-width.`;
@@ -65,7 +65,9 @@ export const stretched: RuleGroup = {
   ],
 
   swift({ file, src, masked: m, blocks, report }) {
-    for (const hit of m.matchAll(/\buserInterfaceIdiom\b/g)) report('idiom-layout', hit.index!);
+    for (const hit of m.matchAll(/\buserInterfaceIdiom\b/g)) {
+      if (!declaredAt(m, hit.index!)) report('idiom-layout', hit.index!);
+    }
 
     for (const hit of m.matchAll(/\.system\s*\(\s*size\s*:|\bUIFont\s*\.\s*(?:systemFont|boldSystemFont|italicSystemFont|monospacedSystemFont)\s*\(\s*ofSize\s*:|\bUIFont\s*\(\s*name\s*:[^)]*size\s*:|\.custom\s*\([^)]*size\s*:/g)) {
       if (/relativeTo\s*:|UIFontMetrics|scaledFont/.test(lineAround(m, hit.index!) + callText(m, hit.index!))) continue;

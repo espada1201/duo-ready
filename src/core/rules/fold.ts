@@ -1,7 +1,7 @@
 import { blockAt, declaredTypes, headerOf, labelOffset, type Block, type SwiftSource } from '../swift';
 import type { Fix } from '../types';
 import { lineAround } from '../text';
-import { matchBefore, PREPARE, type RuleGroup } from './engine';
+import { declaredAt, matchBefore, PREPARE, type RuleGroup } from './engine';
 
 const SCENES = 'Apple, WWDC25 “Make your UIKit app more flexible” (UIScene required after iOS 26)';
 
@@ -152,7 +152,8 @@ export const fold: RuleGroup = {
     const cameraFile = /\b(videoOrientation|videoRotationAngle)\b/.test(m);
     for (const hit of m.matchAll(/\bUIDevice\s*\.\s*current\s*\.\s*orientation(?:\s*\.\s*is(?:Landscape|Portrait))?\b|\binterfaceOrientation\b|\bstatusBarOrientation\b|\b\w*[oO]rientation\s*\.\s*is(?:Landscape|Portrait)\b/g)) {
       // Rotating camera output or reporting a sensor reads orientation for a reason that isn't layout.
-      if (cameraFile || /AVCapture|videoOrientation|videoRotation|rawValue|imageOrientation|CGImagePropertyOrientation/.test(lineAround(m, hit.index!))) continue;
+      if (cameraFile || /AVCapture|XCUI|videoOrientation|videoRotation|rawValue|imageOrientation|CGImagePropertyOrientation/.test(lineAround(m, hit.index!))) continue;
+      if (declaredAt(m, hit.index!)) continue;
       report('orientation-layout', hit.index!);
     }
 

@@ -95,3 +95,6 @@ export function matchBefore(masked: string, open: number, re: RegExp): number | 
   const hit = re.exec(head);
   return hit ? open - head.length + hit.index : null;
 }
+
+/** Whether the name at `at` is being declared (a property, function or enum case) rather than read. */
+export const declaredAt = (masked: string, at: number): boolean => matchBefore(masked, at, /\b(?:case\s+\.?|var\s+|let\s+|func\s+)$/) !== null;
