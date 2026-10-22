@@ -233,5 +233,14 @@ export function checkFiles(files: SourceFile[]): { findings: Finding[]; facts: P
   }
   const swiftOf = new Map(parsed.flatMap((p) => (p.kind === 'swift' || p.kind === 'objc' ? [[p.file, p.src] as const] : [])));
   for (const g of GROUPS) g.project?.({ facts, reporterFor: (file) => reporter(file, findings, swiftOf.get(file)) });
-  return { findings, facts };
+  // `idiom == .pad && … || idiom == .phone` is one decision, so a rule reports a line once, unless each hit carries its own fix.
+  const seen = new Set<string>();
+  const once = findings.filter((f) => {
+    const key = `${f.ruleId}\0${f.path}\0${f.line}`;
+    if (f.fix) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return { findings: once, facts };
 }

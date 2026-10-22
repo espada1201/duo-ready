@@ -512,3 +512,10 @@ it('treats a project modifier that frames a square as a square frame', () => {
   expect(ids([square, icon])).not.toContain('stretched-image');
   expect(ids([icon])).toContain('stretched-image');
 });
+
+it('reports a rule once per line, and skips lowercase test folders', () => {
+  const line = 'let wide = (UIDevice.current.userInterfaceIdiom == .pad && x) || (UIDevice.current.userInterfaceIdiom == .phone && y)';
+  expect(ids([{ path: 'A.swift', content: line }]).filter((r) => r === 'idiom-layout')).toHaveLength(1);
+  expect(ids([{ path: 'app/focus-ios-tests/XCUITest/Base.swift', content: line }])).toEqual([]);
+  expect(ids([{ path: 'app/tests/Base.swift', content: line }])).toEqual([]);
+});
