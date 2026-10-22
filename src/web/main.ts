@@ -84,9 +84,14 @@ function render() {
         TABS.map((t) => h('a', { href: `#${t.id}`, 'aria-current': t.id === tab ? 'page' : null }, t.label)),
       ),
     ),
-    h('main', { id: 'main', tabindex: '-1' }, panel),
+    h('main', { id: 'main', tabindex: '-1' }, h('h1', { class: 'visually-hidden' }, 'duo-ready: get iPhone apps ready for iPhone Duo'), panel),
     h('footer', {}, 'duo-ready · an open toolkit for making existing iPhone apps ready for iPhone Duo. Not affiliated with Apple.'),
   );
+
+  // The live region sits outside the re-rendered tree, so screen readers hear each change once.
+  const announce = document.getElementById('announce');
+  const message = root.querySelector('[data-announce]')?.getAttribute('data-announce') ?? '';
+  if (announce && announce.textContent !== message) announce.textContent = message;
 
   // Keep keyboard focus on the control that triggered a re-render.
   if (activeKey) {
@@ -102,5 +107,8 @@ function render() {
 window.addEventListener('hashchange', () => {
   render();
   window.scrollTo(0, 0);
+  // The links that changed the tab were re-rendered; start keyboard users at the new panel.
+  // Rule deep links focus their rule instead.
+  if (!route().focus) document.getElementById('main')?.focus({ preventScroll: true });
 });
 render();

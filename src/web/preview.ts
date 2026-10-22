@@ -165,9 +165,17 @@ function readout(layout: EncoreLayout, state: PreviewState): HTMLElement {
   if (p.coverage < 0.98) problems.unshift(h('li', { class: 'problem' }, `${pct(1 - p.coverage)} of ${space} is left black.`));
   if (layout.contentWidth < 0.6 && p.display === 'inner') problems.push(h('li', { class: 'problem' }, `Content uses only ${pct(layout.contentWidth)} of the window’s width.`));
 
+  // One sentence for screen readers; the page announces it whenever it changes.
+  const fold = state.previous ? continuity(state.previous, state.posture, state.build) : null;
+  const announce = [
+    `${POSTURES.find((x) => x.id === state.posture)!.label}, ${BUILDS.find((b) => b.id === state.build)!.label}:`,
+    problems.length ? `${problems.length} ${problems.length === 1 ? 'problem' : 'problems'} in this pose.` : 'no collisions in this pose.',
+    fold ? (fold.lost.length ? `Fold test: lost ${joinEnglish(fold.lost)}.` : 'Fold test: Encore kept your place.') : '',
+  ].join(' ');
+
   return h(
     'section',
-    { class: 'readout', 'aria-label': 'What the app sees', 'aria-live': 'polite' },
+    { class: 'readout', 'aria-label': 'What the app sees', 'data-announce': announce.trim() },
     h('h3', {}, 'What the app sees'),
     h(
       'dl',
@@ -256,6 +264,7 @@ let observer: ResizeObserver | null = null;
 
 export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewState>) => void): HTMLElement {
   const layout = layoutEncore(state.posture, state.build, state.camera);
+  const shotShown = layout.presentation.display === 'inner' && buildTier(state.build) === '26';
   const stageHost = h('div', { class: 'stage-host' });
   const paint = () => {
     stageHost.replaceChildren(renderStage(layout, state, stageHost.clientWidth || 600));
@@ -311,6 +320,9 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
             set({ screenshot: null });
           } }, 'Remove')
         : h('span', { class: 'hint' }, 'See how your current iPhone app opens on the inner display.'),
+      state.screenshot && !shotShown
+        ? h('span', { class: 'hint', 'data-testid': 'shot-hidden' }, 'Your screenshot shows on the inner display with the iOS 26 SDK build.')
+        : null,
     ),
   );
 

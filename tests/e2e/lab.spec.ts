@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
@@ -76,6 +76,10 @@ test('a screenshot of your own app appears in the compatibility window', async (
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
   await page.getByTestId('shot-input').setInputFiles({ name: 'app.png', mimeType: 'image/png', buffer: png });
   await expect(page.getByAltText('Your app screenshot in the compatibility window')).toBeVisible();
+  await expect(page.getByTestId('shot-hidden')).toHaveCount(0);
+  await choose(page, 'Closed');
+  await expect(page.getByTestId('shot-hidden')).toBeVisible();
+  await choose(page, 'Open');
   await page.getByRole('button', { name: 'Remove' }).click();
   await expect(page.locator('.shot')).toHaveCount(0);
 });
@@ -142,6 +146,34 @@ test('audit controls keep keyboard focus and results take it', async ({ page }) 
   await page.getByRole('button', { name: 'Try the sample app' }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('region', { name: 'Audit summary' })).toBeFocused();
+});
+
+test('changing tabs moves focus to the new panel and pose changes are announced', async ({ page }) => {
+  await page.goto('./');
+  await expect(page.locator('#announce')).toHaveText(/^Open, .+: \d+ problems? in this pose\.$/);
+  await choose(page, 'Closed');
+  await expect(page.locator('#announce')).toContainText('Closed, ');
+  await expect(page.locator('#announce')).toContainText('Fold test:');
+  await page.getByRole('link', { name: 'Audit', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#main')).toBeFocused();
+});
+
+test('pasted code survives a trip to another tab, and long paths wrap on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('./#audit');
+  await page.getByRole('button', { name: 'Paste Swift' }).click();
+  await page.getByLabel('Swift source').fill('let s = UIScreen.main.scale');
+  await page.goto('./#rules');
+  await page.goBack();
+  await expect(page.getByLabel('Swift source')).toHaveValue('let s = UIScreen.main.scale');
+
+  const deep = join(mkdtempSync(join(tmpdir(), 'duo-')), 'App', 'Sources', 'Features', 'Settings', 'Notifications', 'Preferences');
+  mkdirSync(deep, { recursive: true });
+  writeFileSync(join(deep, 'NotificationPreferencesDetailViewController.swift'), 'class NotificationPreferencesDetailViewController: UIViewController { let s = UIScreen.main.scale }');
+  await page.getByTestId('folder-input').setInputFiles(join(deep, '..', '..', '..', '..', '..'));
+  await expect(page.getByTestId('screens')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
 test('dropping loose Swift files audits them', async ({ page }) => {

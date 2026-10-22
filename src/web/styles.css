@@ -7,6 +7,8 @@
   --rule: #d9d3c5;
   --signal: #c2410c;
   --signal-soft: #fbe3d3;
+  /* --signal darkened for small text on --signal-soft. */
+  --signal-ink: #9a3412;
   --ok: #0b5f58;
   --ok-soft: #d5ece8;
   --warn: #92580a;
@@ -30,6 +32,7 @@
     --rule: #34332e;
     --signal: #fb8a4c;
     --signal-soft: #3a2316;
+    --signal-ink: #fb8a4c;
     --ok: #4fd1c0;
     --ok-soft: #12302c;
     --warn: #f2b758;
@@ -1289,7 +1292,7 @@ label.button:focus-within {
   padding: 3px 7px;
   border-radius: 999px;
   background: var(--signal-soft);
-  color: var(--signal);
+  color: var(--signal-ink);
 }
 
 .pain-chips .none strong {
@@ -1340,6 +1343,7 @@ label.button:focus-within {
 
 .screens-first li {
   margin: 4px 0;
+  overflow-wrap: anywhere;
 }
 
 .changes {

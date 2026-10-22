@@ -20,9 +20,11 @@ export interface AuditState {
   previews: Map<number, Hunk[]>;
   error: string | null;
   paste: boolean;
+  /** Pasted code not yet audited, kept across tab changes. */
+  draft: string;
 }
 
-export const initialAudit = (): AuditState => ({ status: 'empty', source: '', files: [], result: null, selected: new Set(), previews: new Map(), error: null, paste: false });
+export const initialAudit = (): AuditState => ({ status: 'empty', source: '', files: [], result: null, selected: new Set(), previews: new Map(), error: null, paste: false, draft: '' });
 
 const SAMPLE = import.meta.glob('../../sample/**/*', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
@@ -44,7 +46,7 @@ function runAudit(files: SourceFile[], source: string): AuditState {
     if (f.fix.confidence === 'safe') selected.add(i);
     previews.set(i, hunks(byPath.get(f.path)!.content, f.fix.edits));
   });
-  return { status: 'done', source, files: relevant, result, selected, previews, error: null, paste: false };
+  return { status: 'done', source, files: relevant, result, selected, previews, error: null, paste: false, draft: '' };
 }
 
 // Paths start inside the folder the person picked, as the CLI's do, so a project kept in a
@@ -180,7 +182,19 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
           },
         },
         h('label', { for: 'paste-code' }, 'Swift source'),
-        h('textarea', { id: 'paste-code', name: 'code', rows: 8, spellcheck: 'false', placeholder: 'let scale = UIScreen.main.scale' }),
+        h(
+          'textarea',
+          {
+            id: 'paste-code',
+            name: 'code',
+            rows: 8,
+            spellcheck: 'false',
+            required: true,
+            placeholder: 'let scale = UIScreen.main.scale',
+            oninput: (e: Event) => (state.draft = (e.target as HTMLTextAreaElement).value),
+          },
+          state.draft,
+        ),
         h('button', { type: 'submit', class: 'button primary' }, 'Audit'),
       )
     : null;
@@ -253,11 +267,11 @@ function results(state: AuditState, openPreview: (tier: SdkTier | null) => void)
         PAIN_POINTS.map((p) => {
           const n = r.findings.filter((f) => p.rules.includes(f.ruleId)).length;
           const unchecked = !n && r.partial && p.rules.some((id) => RULE_BY_ID.get(id)!.project);
-          const mark = n ? String(n) : unchecked ? 'not checked' : '✓';
+          const mark = n ? String(n) : unchecked ? 'not checked' : h('span', { 'aria-label': 'none' }, '✓');
           return h('li', { class: n ? 'has' : unchecked ? 'unchecked' : 'none' }, h('a', { href: `#rules/pain-${p.id}` }, p.title), h('strong', {}, mark));
         }),
       ),
-      fixable ? h('p', { class: 'hint' }, `${plural(fixable, 'finding')} ${fixable === 1 ? 'has a fix' : 'have fixes'}. Safe ones are pre-selected; review the rest before you tick them.`) : null,
+      fixable ? h('p', { class: 'hint' }, fixHint(fixable, r.findings.filter((f) => f.fix?.confidence === 'safe').length)) : null,
     ),
   );
 
@@ -295,7 +309,20 @@ function results(state: AuditState, openPreview: (tier: SdkTier | null) => void)
       )
     : null;
 
-  return h('div', { class: 'results' }, summary, first, h('div', { class: 'file-list', 'data-testid': 'findings' }, list));
+  return h(
+    'div',
+    { class: 'results' },
+    summary,
+    first,
+    h('div', { class: 'file-list', 'data-testid': 'findings' }, r.findings.length ? h('h3', {}, 'Findings by file') : null, list),
+  );
+}
+
+function fixHint(fixable: number, safe: number): string {
+  const have = `${plural(fixable, 'finding')} ${fixable === 1 ? 'has a fix' : 'have fixes'}.`;
+  if (safe === fixable) return `${have} ${fixable === 1 ? 'It is safe and pre-selected' : 'All are safe and pre-selected'}.`;
+  if (safe === 0) return `${have} None are safe to apply blind; review each one before you tick it.`;
+  return `${have} The ${safe} safe ${safe === 1 ? 'one is' : 'ones are'} pre-selected; review the rest before you tick them.`;
 }
 
 function finding(state: AuditState, f: Finding, i: number, toggleFix: (i: number, on: boolean) => void): HTMLElement {
@@ -313,7 +340,7 @@ function finding(state: AuditState, f: Finding, i: number, toggleFix: (i: number
     ),
     h('pre', { class: 'excerpt' }, h('code', {}, f.excerpt)),
     h('p', {}, f.message),
-    h('p', { class: 'instead' }, h('span', {}, 'Instead: '), rule.instead, ' ', h('a', { href: `#rules/${rule.id}` }, 'Source')),
+    h('p', { class: 'instead' }, h('span', {}, 'Instead: '), rule.instead, ' ', h('a', { href: `#rules/${rule.id}`, 'aria-label': `Why: ${rule.title}` }, 'Why')),
     preview && f.fix
       ? h(
           'div',
