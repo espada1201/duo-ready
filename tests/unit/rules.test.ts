@@ -184,6 +184,12 @@ describe('sample project (Encore)', () => {
     expect(result.partial).toBe(false);
   });
 
+  it('counts only the points that lift a score off zero', () => {
+    const f = (ruleId: string, screen: string) => ({ ruleId, severity: 'error' as const, path: `${screen}.swift`, line: 1, column: 1, message: '', excerpt: '', screen });
+    const many = Array.from({ length: 14 }, (_, i) => f(`r${i}`, 'Big'));
+    expect(screensFirst([...many, f('x', 'Small')]).map((s) => [s.screen, s.gain])).toEqual([['Big', 92], ['Small', 0]]);
+  });
+
   it('names the screen each finding is in and ranks the worst screens first', () => {
     expect(result.findings.find((f) => f.ruleId === 'state-reset')?.screen).toBe('AlbumGrid');
     expect(result.findings.find((f) => f.ruleId === 'old-sdk')?.screen).toBeUndefined();

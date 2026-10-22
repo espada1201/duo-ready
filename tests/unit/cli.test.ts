@@ -187,17 +187,23 @@ describe('duo-ready CLI patches and exit codes', () => {
     expect(capture([dir, '--fail-on', 'note']).code).toBe(1);
   });
 
-  it('reads relative paths from where npm was run, not the package root', () => {
+  it('reads relative paths, --out included, from where npm was run, unless a script moved on since', () => {
     dir = mkdtempSync(join(tmpdir(), 'duo-'));
     mkdirSync(join(dir, 'MyApp'));
     writeFileSync(join(dir, 'MyApp', 'A.swift'), 'let s = UIScreen.main.scale');
-    const before = process.env.INIT_CWD;
-    process.env.INIT_CWD = dir;
+    const before = { INIT_CWD: process.env.INIT_CWD, npm_package_json: process.env.npm_package_json };
     try {
-      expect(capture(['MyApp', '--no-color']).out).toContain('UIScreen.main');
+      process.env.INIT_CWD = dir;
+      process.env.npm_package_json = join(process.cwd(), 'package.json');
+      expect(capture(['MyApp', '--no-color', '--out', 'r.txt', '--fail-on', 'never']).code).toBe(0);
+      expect(readFileSync(join(dir, 'r.txt'), 'utf8')).toContain('UIScreen.main');
+      process.env.npm_package_json = join(dir, 'elsewhere', 'package.json');
+      expect(capture(['MyApp']).err).toContain('No such file or folder');
     } finally {
-      if (before === undefined) delete process.env.INIT_CWD;
-      else process.env.INIT_CWD = before;
+      for (const [k, v] of Object.entries(before)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
     }
   });
 

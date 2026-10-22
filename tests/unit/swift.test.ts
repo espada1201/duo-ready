@@ -1,3 +1,7 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { hunks, unifiedDiff } from '../../src/core/diff';
 import { maskSwift, parseSwift, walk } from '../../src/core/swift';
@@ -85,5 +89,24 @@ describe('unifiedDiff', () => {
       { start: at(8), end: at(8) + 2, text: 'L8' },
     ]);
     expect(near.split('\n').filter((l) => l.startsWith('@@'))).toEqual(['@@ -1,11 +1,11 @@']);
+  });
+
+  it.each([
+    ['an insert at the end of a file', 'a\nb\n', { start: 4, end: 4, text: 'c\n' }],
+    ['deleting the final newline', 'a\nb\n', { start: 3, end: 4, text: '' }],
+    ['a newline added to a file without one', 'a\nb', { start: 3, end: 3, text: '\n' }],
+    ['an empty file', '', { start: 0, end: 0, text: 'hello\n' }],
+    ['joining two lines', 'a\nb\nc\n', { start: 1, end: 2, text: '' }],
+    ['a CRLF file', 'a\r\nb\r\n', { start: 3, end: 4, text: 'B' }],
+  ])('makes a patch git apply accepts for %s', (_, content, edit) => {
+    const dir = mkdtempSync(join(tmpdir(), 'duo-diff-'));
+    try {
+      writeFileSync(join(dir, 'f.swift'), content);
+      writeFileSync(join(dir, 'p.patch'), unifiedDiff('f.swift', content, [edit]) + '\n');
+      execFileSync('git', ['apply', 'p.patch'], { cwd: dir });
+      expect(readFileSync(join(dir, 'f.swift'), 'utf8')).toBe(content.slice(0, edit.start) + edit.text + content.slice(edit.end));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

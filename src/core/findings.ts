@@ -48,7 +48,7 @@ export interface ScreenSummary {
   path: string;
   findings: Finding[];
   cost: number;
-  /** Points the score rises by once every finding here is fixed. A rule that also fires elsewhere adds nothing until it is fixed there too. */
+  /** Points the score rises by once every finding here is fixed. A rule that also fires elsewhere adds nothing until it is fixed there too, and a score stuck at 0 needs more than one screen fixed. */
   gain: number;
 }
 
@@ -67,13 +67,14 @@ export function screensFirst(findings: Finding[]): ScreenSummary[] {
   for (const s of out) {
     const mine = new Set(s.findings);
     s.cost = cost(s.findings);
-    s.gain = total - cost(findings.filter((f) => !mine.has(f)));
+    // The score bottoms out at 0, so a fix only gains the points that lift it above that.
+    s.gain = Math.max(0, 100 - cost(findings.filter((f) => !mine.has(f)))) - Math.max(0, 100 - total);
   }
   return out.sort((a, b) => b.gain - a.gain || b.cost - a.cost || b.findings.length - a.findings.length || a.screen.localeCompare(b.screen));
 }
 
 /** "+5 points", or why fixing this alone doesn't move the score. */
-export const gainLabel = (s: ScreenSummary) => (s.gain ? `+${plural(s.gain, 'point')}` : 'same rules fire elsewhere');
+export const gainLabel = (s: ScreenSummary) => (s.gain ? `+${plural(s.gain, 'point')}` : 'no points on its own');
 
 export function describeCounts(findings: Finding[]): string {
   const n = countBySeverity(findings);

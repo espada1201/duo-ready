@@ -200,14 +200,19 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
 
   if (cmd.fix || cmd.dryRun) {
     const { files: fixed, applied } = applyFixes(files, result.findings, cmd.fix ?? 'safe');
+    // Review fixes left out because the level was safe; with --fix all, only overlaps are left out.
+    const held = cmd.fix === 'all' ? 0 : result.findings.filter((f) => f.fix?.confidence === 'review').length;
+    const none = held
+      ? `No safe fixes. ${plural(held, 'review fix', 'review fixes')} ${held === 1 ? 'needs' : 'need'} a human look: --dry-run --fix all shows ${held === 1 ? 'it' : 'them'}.`
+      : 'Nothing to fix.';
     if (cmd.dryRun) {
       const diff = patchFor(files, applied);
       // With --format json or sarif the diff goes to stderr so stdout stays a valid report.
-      const held = result.findings.filter((f) => f.fix?.confidence === 'review').length - applied.filter((f) => f.fix!.confidence === 'review').length;
-      if (diff) status(diff);
-      else if (held) status(`No safe fixes. ${plural(held, 'review fix', 'review fixes')} ${held === 1 ? 'needs' : 'need'} a human look: --dry-run --fix all shows ${held === 1 ? 'it' : 'them'}.`);
-      else status('Nothing to fix.');
-      if (diff) status(c.dim(`\n${plural(applied.length, 'fix', 'fixes')} would be applied. Nothing was written. To apply it later, save it with > duo.patch and run git apply duo.patch.`));
+      status(diff || none);
+      if (diff) {
+        const save = cmd.format === 'text' ? '> duo.patch' : '2> duo.patch';
+        status(c.dim(`\n${plural(applied.length, 'fix', 'fixes')} would be applied. Nothing was written. To apply later, save this with ${save} and run git apply duo.patch in ${baseDir(root)}.`));
+      }
       if (cmd.format === 'text' && !cmd.out) return exitCode(result, cmd.failOn);
     } else {
       const base = baseDir(root);
@@ -218,7 +223,7 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
         err(`Could not write fixes: ${(e as Error).message}`);
         return 2;
       }
-      status(applied.length ? c.green(`Applied ${plural(applied.length, 'fix', 'fixes')} to ${changed.join(', ')}.`) : 'Nothing to fix.');
+      status(applied.length ? c.green(`Applied ${plural(applied.length, 'fix', 'fixes')} to ${changed.join(', ')}.`) : none);
       if (changed.length) status(c.dim('Review them with git diff before you commit; git checkout -- <file> undoes one.'));
       result = audit(fixed);
     }
@@ -232,12 +237,12 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
   const body = render[cmd.format]();
   if (cmd.out) {
     try {
-      writeFileSync(cmd.out, body + '\n');
+      writeFileSync(resolve(here(), cmd.out), body + '\n');
     } catch (e) {
       err(`Could not write the report: ${(e as Error).message}`);
       return 2;
     }
-    status(`Report written to ${cmd.out}`);
+    status(`Report written to ${resolve(here(), cmd.out)}`);
   } else log(body);
 
   return exitCode(result, cmd.failOn);
@@ -250,8 +255,14 @@ function exitCode(result: AuditResult, failOn: AuditOptions['failOn']): number {
   return result.findings.some((f) => SEVERITY_ORDER[f.severity] <= FAIL_AT[failOn]) ? 1 : 0;
 }
 
-/** Where relative paths start: the folder the person ran the command in, even under `npm run`, which moves to the package root. */
-const here = () => process.env.INIT_CWD ?? process.cwd();
+/**
+ * Where relative paths start: the folder the person ran the command in. `npm run` moves to the
+ * package root and keeps that folder in INIT_CWD, but a script that cds elsewhere inherits a stale one.
+ */
+function here(): string {
+  const { INIT_CWD, npm_package_json } = process.env;
+  return INIT_CWD && npm_package_json && dirname(npm_package_json) === process.cwd() ? INIT_CWD : process.cwd();
+}
 
 function ruleHelp(id: string) {
   const { title, why, instead, source } = RULE_BY_ID.get(id)!;
