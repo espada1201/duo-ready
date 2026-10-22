@@ -48,7 +48,7 @@ export interface ScreenSummary {
   path: string;
   findings: Finding[];
   cost: number;
-  /** Points the score rises by once every finding here is fixed. A rule that also fires elsewhere adds nothing until it is fixed there too, and a score stuck at 0 needs more than one screen fixed. */
+  /** Points the score rises by once every finding here is fixed. A rule that also fires elsewhere adds nothing until it is fixed there too. */
   gain: number;
 }
 

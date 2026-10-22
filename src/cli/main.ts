@@ -200,7 +200,7 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
 
   if (cmd.fix || cmd.dryRun) {
     const { files: fixed, applied } = applyFixes(files, result.findings, cmd.fix ?? 'safe');
-    // Review fixes left out because the level was safe; with --fix all, only overlaps are left out.
+    // Review fixes wait for --fix all.
     const held = cmd.fix === 'all' ? 0 : result.findings.filter((f) => f.fix?.confidence === 'review').length;
     const none = held
       ? `No safe fixes. ${plural(held, 'review fix', 'review fixes')} ${held === 1 ? 'needs' : 'need'} a human look: --dry-run --fix all shows ${held === 1 ? 'it' : 'them'}.`
