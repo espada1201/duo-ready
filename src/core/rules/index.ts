@@ -4,7 +4,7 @@
 import { callsIn, resolveViews } from './fold';
 import { parseObjC } from '../objc';
 import { parsePlist } from '../plist';
-import { blockAt, declaredTypes, parseSwift, walk, type Block, type SwiftSource } from '../swift';
+import { blockAt, declaredTypes, headerOf, parseSwift, walk, type Block, type SwiftSource } from '../swift';
 import { configDeploymentTarget, deploymentTarget, upgradeCheck } from '../sdk';
 import { lineAround, lineStarts, position } from '../text';
 import type { Finding, SourceFile } from '../types';
@@ -182,6 +182,49 @@ function previewHeads(src: SwiftSource): [number, number][] {
   return out;
 }
 
+/** Duo runs iOS 27.1, so code only older systems run never reaches it. */
+const DUO_OS = 27.1;
+const below = (version: string) => parseFloat(version) <= DUO_OS;
+
+const debug = new WeakMap<SwiftSource, [number, number][]>();
+
+/** `#if DEBUG` up to its `#else` or `#endif`: code App Store builds leave out. */
+function debugRegions(src: SwiftSource): [number, number][] {
+  let out = debug.get(src);
+  if (out) return out;
+  out = [];
+  const re = /^[ \t]*#(if|elseif|else|endif)\b(.*)$/gm;
+  const stack: { debug: boolean; from: number }[] = [];
+  for (let hit = re.exec(src.masked); hit; hit = re.exec(src.masked)) {
+    const top = stack[stack.length - 1];
+    if (hit[1] === 'if') stack.push({ debug: /^\s*DEBUG\s*$/.test(hit[2]), from: hit.index });
+    else if (top) {
+      if (top.debug) out.push([top.from, hit.index]);
+      if (hit[1] === 'endif') stack.pop();
+      else top.debug = false;
+    }
+  }
+  debug.set(src, out);
+  return out;
+}
+
+/** Code under `#if DEBUG`, or in a branch only an iOS older than Duo's runs (`if #available(iOS 16, *) {} else {…}`, `if #unavailable(iOS 17)`). */
+function neverShips(src: SwiftSource, offset: number): boolean {
+  if (debugRegions(src).some(([from, to]) => offset > from && offset < to)) return true;
+  for (let b: Block | null = blockAt(src.root, offset); b?.parent; b = b.parent) {
+    const head = headerOf(src, b);
+    const unavailable = /^(?:\}?\s*else\s+)?if\s+#unavailable\s*\(\s*iOS\s+([\d.]+)[^)]*\)\s*$/.exec(head);
+    if (unavailable && below(unavailable[1])) return true;
+    const guarded = /^guard\s+#available\s*\(\s*iOS\s+([\d.]+)[^)]*\)\s*else$/.exec(head);
+    if (guarded && below(guarded[1])) return true;
+    if (head !== 'else') continue;
+    const prev = b.parent.children[b.parent.children.indexOf(b) - 1];
+    const available = prev && /^(?:\}?\s*else\s+)?if\s+#available\s*\(\s*iOS\s+([\d.]+)[^)]*\)\s*$/.exec(headerOf(src, prev));
+    if (available && below(available[1])) return true;
+  }
+  return false;
+}
+
 /** Xcode previews never ship, so their fixed sizes and fonts aren't the app's problem. */
 function inPreview(src: SwiftSource, offset: number): boolean {
   const m = src.masked;
@@ -205,7 +248,7 @@ function inPreview(src: SwiftSource, offset: number): boolean {
 function reporter(file: SourceFile, findings: Finding[], src?: SwiftSource): Report {
   const starts = src?.lineStarts ?? lineStarts(file.content);
   return (ruleId, offset, message, fix) => {
-    if (src && inPreview(src, offset)) return;
+    if (src && (inPreview(src, offset) || neverShips(src, offset))) return;
     const rule = RULE_BY_ID.get(ruleId)!;
     const { line, column } = position(starts, offset);
     findings.push({

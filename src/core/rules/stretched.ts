@@ -98,6 +98,8 @@ export const stretched = defineGroup({
       // A size read from a text style follows the reader's text size when the font is made.
       const call = callText(m, hit.index!);
       if (/relativeTo\s*:|UIFontMetrics|scaledFont/.test(lineAround(m, hit.index!) + call) || /forTextStyle|withTextStyle/.test(call)) continue;
+      // `UIFont(name: "Avenir", size: 1)` only names the family; the size is set later.
+      if (/\bsize\s*:\s*(?:0?\.\d+|[01](?:\.0+)?)\s*[,)]/.test(m.slice(hit.index!, hit.index! + hit[0].length + 20))) continue;
       // A point size on an SF Symbol sizes an icon; PDF and draw(_:) output has no Dynamic Type to follow.
       if (/\bImage\s*\(\s*system(?:Name|Symbol)\s*:[^()]*\)(?:\s*\.\w+\s*\((?:[^()]|\([^()]*\))*\))*\s*\.font\s*\(\s*$/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
       if (inDrawing(m, blockAt(src.root, hit.index!))) continue;

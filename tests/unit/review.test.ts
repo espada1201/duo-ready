@@ -586,3 +586,24 @@ it('treats content passed into a size-class swap as stateful', () => {
   expect(swap('VStack { imageContent() }', 'HStack { imageContent() }')).toContain('state-reset');
   expect(swap('VStack { Image("a"); Text(title) }', 'HStack { Image("a"); Text(title) }')).not.toContain('state-reset');
 });
+
+describe('code that never ships to Duo', () => {
+  const swiftIds = (content: string) => ids([{ path: 'A.swift', content }]);
+  it.each([
+    ['an old-iOS fallback', 'if #available(iOS 16, *) {\n  ok()\n} else {\n  let s = UIScreen.main.bounds\n}'],
+    ['an #unavailable branch', 'if #unavailable(iOS 17) {\n  let s = UIScreen.main.bounds\n}'],
+    ['a guard #available else', 'func f() {\n  guard #available(iOS 16, *) else {\n    let s = UIScreen.main.bounds\n    return\n  }\n}'],
+    ['debug-only code', '#if DEBUG\nlet s = UIScreen.main.bounds\n#endif'],
+  ])('skips %s', (_, code) => {
+    expect(swiftIds(code)).toEqual([]);
+  });
+
+  it.each([
+    ['the #available branch itself', 'if #available(iOS 16, *) {\n  let s = UIScreen.main.bounds\n}'],
+    ['an else after a compound condition', 'if #available(iOS 16, *), ready {\n  ok()\n} else {\n  let s = UIScreen.main.bounds\n}'],
+    ['a fallback for a newer iOS', 'if #available(iOS 28, *) {\n  ok()\n} else {\n  let s = UIScreen.main.bounds\n}'],
+    ['the release side of #if DEBUG', '#if DEBUG\nlet a = 1\n#else\nlet s = UIScreen.main.bounds\n#endif'],
+  ])('keeps %s', (_, code) => {
+    expect(swiftIds(code)).toContain('uiscreen-main');
+  });
+});
