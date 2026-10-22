@@ -1,6 +1,7 @@
 // Regressions found by independent review: fixes must never produce broken or reinterpreted Swift.
 import { describe, expect, it } from 'vitest';
 import { applyFixes, audit } from '../../src/core/audit';
+import { parseObjC } from '../../src/core/objc';
 import { maskSwift } from '../../src/core/swift';
 import type { SourceFile } from '../../src/core/types';
 
@@ -540,4 +541,16 @@ describe('eighth review: offsets and C++ literals', () => {
     const r = audit([{ path: 'A.m', content: 'UIToolbar *a = [UIToolbar new]; UITabBar *b = [UITabBar new];' }]);
     expect(r.findings.filter((f) => f.ruleId === 'hand-built-bar')).toHaveLength(2);
   });
+});
+
+it('keeps every offset and line break when masking odd Objective-C', () => {
+  const pieces = ['"', "'", '@"', 'R"(', ')"', '/*', '*/', '//', '\\', '\n', '\r\n', '#if 0\n', '#endif\n', '{', '}', '﻿', "1'0", 'u8R"x('];
+  let seed = 7;
+  const pick = () => pieces[(seed = (seed * 1103515245 + 12345) & 0x7fffffff) % pieces.length];
+  for (let k = 0; k < 300; k++) {
+    const text = Array.from({ length: 12 }, () => pick() + 'a ').join('');
+    const { masked } = parseObjC(text);
+    expect(masked.length).toBe(text.length);
+    expect([...masked].filter((c) => c === '\n').length).toBe([...text].filter((c) => c === '\n').length);
+  }
 });
