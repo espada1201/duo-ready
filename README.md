@@ -14,17 +14,18 @@ iOS doesn't let anyone reshape someone else's app, so this kit is for the people
 
 ## What's inside
 
-- **Duo Lab (browser).** *Audit* takes your Xcode project folder or a .zip of it (it never leaves your Mac), scores it, names the screens to fix first, filters findings by severity or pain point, explains each problem with Apple's guidance, and gives you a zip of fixed files. *Preview* shows a typical app in every Duo pose, Split View included, for each SDK build, and whether it keeps your place when you fold.
+- **Duo Lab (browser).** *Audit* takes your Xcode project folder or a .zip of it (it never leaves your Mac), scores it, ranks what to fix first by the points it gains, filters findings by severity or pain point, explains each problem with Apple's guidance, and gives you the fixes as a zip or a git patch. *Preview* shows a typical app in every Duo pose, Split View included, for each SDK build, and whether it keeps your place when you fold.
 - **CLI.** The same engine for terminals and CI:
   ```sh
   npm run audit -- ../MyApp              # report
-  npm run audit -- ../MyApp --dry-run    # preview fixes as a diff
+  npm run audit -- ../MyApp --dry-run    # preview fixes as a patch git apply accepts
   npm run audit -- ../MyApp --fix        # apply safe fixes (--fix all for the rest)
   ```
+  Try it on the bundled legacy app with `npm run audit -- sample`, or skip the clone with
+  `npx github:espada1201/duo-ready ../MyApp`. Paths are relative to where you run the command.
   `--format json` or `sarif` (for GitHub code scanning) keeps stdout machine-readable; add `-s`
   (`npm run -s audit -- ...`) so npm's own banner stays off it, or use `--out report.json`.
-  Without a clone: `npx github:espada1201/duo-ready ../MyApp`. Paths are relative to where you run the command. Exit codes: 0 nothing at `--fail-on`, 1 findings at it
-  (error by default; warning or note are stricter), 2 bad input. Try it on the bundled legacy app: `npm run audit -- sample`.
+  Exit codes: 0 nothing at `--fail-on` (error by default; warning or note are stricter), 1 findings at it, 2 bad input.
 
 ## The rules
 
