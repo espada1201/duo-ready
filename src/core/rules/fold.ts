@@ -275,7 +275,7 @@ export const fold = defineGroup({
       // With one scene, `connectedScenes.first` is that scene.
       if (facts.singleScene && !facts.multipleScenes && hit[1].startsWith('connectedScenes')) continue;
       // Touching every window (`windows.forEach`, `for w in UIApplication.shared.windows`) assumes nothing about which is key.
-      if (hit[1] === 'windows' && (/^\s*\.\s*forEach\b/.test(m.slice(hit.index! + hit[0].length, hit.index! + hit[0].length + 30)) || /\bfor\s+\w+\s+in\s+$/.test(m.slice(Math.max(0, hit.index! - 40), hit.index)))) continue;
+      if (hit[1] === 'windows' && (/^\s*\.\s*forEach\b/.test(m.slice(hit.index! + hit[0].length, hit.index! + hit[0].length + 30)) || /\bfor\s+(?:case\s+let\s+\w+\s+as\s+\w+|\w+)\s+in\s+$/.test(m.slice(Math.max(0, hit.index! - 60), hit.index)))) continue;
       if ((!facts.multipleScenes && /activationState\s*==\s*\.foregroundActive/.test(m.slice(hit.index!, hit.index! + 200))) || /UITest|uiTest/.test(m.slice(Math.max(0, hit.index! - 300), hit.index))) continue;
       report('key-window', hit.index!, oneWindow(facts) ? ONE_WINDOW : undefined);
     }
@@ -284,7 +284,7 @@ export const fold = defineGroup({
       const statement = /^[^;]*?(?=\n[ \t]*\n|;|$)/.exec(m.slice(hit.index!, hit.index! + 400))![0];
       // Applying something to every scene's windows (`.forEach`, `for scene in connectedScenes`, or a loop over the scenes just collected) assumes nothing about which is in front.
       const bound = /\b(?:let|var)\s+(\w+)\s*=\s*$/.exec(m.slice(Math.max(0, hit.index! - 60), hit.index))?.[1];
-      if (/\.forEach\b/.test(statement) || /\bfor\s+\w+\s+in\s+$/.test(m.slice(Math.max(0, hit.index! - 40), hit.index)) || (bound && new RegExp(`\\bfor\\s+\\w+\\s+in\\s+${bound}\\b`).test(statement))) continue;
+      if (/\.forEach\b/.test(statement) || /\bfor\s+(?:case\s+let\s+\w+\s+as\s+\w+|\w+)\s+in\s+$/.test(m.slice(Math.max(0, hit.index! - 60), hit.index)) || (bound && new RegExp(`\\bfor\\s+\\w+\\s+in\\s+${bound}\\b`).test(statement))) continue;
       if (/\.windows\b|isKeyWindow/.test(statement) && (facts.multipleScenes || !/activationState\s*==\s*\.foregroundActive/.test(statement))) report('key-window', hit.index!, oneWindow(facts) ? ONE_WINDOW : undefined);
     }
 
@@ -353,7 +353,8 @@ export const fold = defineGroup({
   },
 
   project({ facts, reporterFor }) {
-    const usesScenes = facts.swiftUIApp || (facts.sceneManifest && facts.sceneDelegate);
+    // Without the app's Info.plist (XcodeGen writes it at build time), a scene delegate is the best evidence there is.
+    const usesScenes = facts.swiftUIApp || (facts.sceneDelegate && (facts.sceneManifest || !facts.appPlist));
     if (!usesScenes && facts.appDelegate) reporterFor(facts.appDelegate.file)('no-scene-lifecycle', facts.appDelegate.offset);
   },
 });

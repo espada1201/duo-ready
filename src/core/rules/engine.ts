@@ -45,6 +45,8 @@ export interface ProjectFacts {
   aspectViews: Set<string>;
   /** Some TabView in the project already opts into a sidebar (`.sidebarAdaptable` or `defaultTabBarPlacement`). */
   tabPlacement: boolean;
+  /** The iPhone app's Info.plist was read, or the Xcode project generates one, so a missing scene manifest is known missing. */
+  appPlist: boolean;
   /** The project's SwiftUI views, true where one keeps state a rebuild throws away (@State, a ScrollView, a TextField…). */
   views: Map<string, boolean>;
   /** LastUpgradeCheck, e.g. "2600". */

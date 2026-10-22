@@ -51,7 +51,7 @@ const WATCH_DIR = /(^|\/)[^/]*Watch[^/]*(?:App|Kit|Extension|OS)\//;
 const OTHER_PLATFORM = /\b(?:WATCHOS|MACOSX|TVOS|XROS)_DEPLOYMENT_TARGET\b|SDKROOT\s*=\s*(?:watchos|macosx|appletvos|xros)\b|SUPPORTED_PLATFORMS\s*[=:][^\n]*\b(?:watchos|macosx|appletvos|xros)\b|\b(?:platform|supportedDestinations):[^\n]*\b(?:watchOS|tvOS|macOS|visionOS)\b|^[ \t]+(?:watchOS|tvOS|macOS|visionOS):[ \t]*["']?\d/m;
 
 /** Mac, TV and Vision targets beside the iPhone app: `Pocket Casts TV App/`, `App_macOS.swift`. */
-const OTHER_PLATFORM_PATH = /(^|\/)(?:[^/]*(?:tvOS|watchOS|macOS|visionOS)|tvos|watchos|macos|visionos)\/|(^|\/)[^/]*(?:[ _-]TV(?:[ _-](?:App|Extension|Top ?Shelf))?|[ _-]Mac(?:[ _-]App)?)\/|(^|\/)(?:[Mm]ac[Bb]ox|[^/]*[a-z]Mac)\/|[_+-](?:tvOS|watchOS|macOS|visionOS|TV|Mac)\.swift$|(^|\/)macOS\w*\.(?:swift|mm?|h)$/;
+const OTHER_PLATFORM_PATH = /(^|\/)(?:[^/]*(?:tvOS|watchOS|macOS|visionOS)|tvos|watchos|macos|visionos)\/|(^|\/)[^/]*(?:[ _-]TV(?:[ _-](?:App|Extension|Top ?Shelf))?|[ _-]Mac(?:[ _-]App)?)\/|(^|\/)(?:[Mm]ac[Bb]ox|[^/]*[a-z]Mac|[^/]+(?<!Apple)Watch(?:App|Kit)?(?:[ _-]?(?:App|Extension))?|Watch(?:Kit)?[ _-]?(?:App|Extension))\/|[_+-](?:tvOS|watchOS|macOS|visionOS|TV|Mac)\.swift$|(^|\/)macOS\w*\.(?:swift|mm?|h)$/;
 
 /**
  * Code for another platform's target: a watch app, or a Mac or TV app that imports AppKit or TVUIKit.
@@ -121,6 +121,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
     squareModifiers: [],
     aspectViews: new Set(),
     tabPlacement: false,
+    appPlist: false,
     views: new Map(),
     ownVideoPlayer: false,
     upgradeCheck: null,
@@ -159,6 +160,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
     } else if (p.kind === 'plist') {
       facts.hasProjectFiles = true;
       const manifest = p.plist.keys.get('UIApplicationSceneManifest');
+      facts.appPlist = true;
       if (manifest) facts.sceneManifest = true;
       // The manifest can name the scene delegate class, as Objective-C apps that declare the protocol in the .m do.
       if (manifest && /<key>UISceneDelegateClassName<\/key>/.test(p.file.content)) facts.sceneDelegate = true;
@@ -169,6 +171,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
     } else if (p.kind === 'pbxproj') {
       facts.hasProjectFiles = true;
       if (/INFOPLIST_KEY_UIApplicationSceneManifest_Generation\s*=\s*YES/.test(p.file.content)) facts.sceneManifest = true;
+      if (/GENERATE_INFOPLIST_FILE\s*=\s*YES/.test(p.file.content)) facts.appPlist = true;
       if (MULTIPLE_SCENES.test(p.file.content)) facts.multipleScenes = true;
       if (/INFOPLIST_KEY_UIApplicationSupportsMultipleScenes\s*=\s*NO\b/.test(p.file.content)) facts.singleScene = true;
       // The app's own project says which SDK it ships with; framework projects follow the app's.
