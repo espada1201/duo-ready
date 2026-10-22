@@ -252,6 +252,13 @@ describe('fourth review: apps the scanner had never seen', () => {
     expect(one('let w = UIApplication.shared.connectedScenes\n  .compactMap { $0 as? UIWindowScene }\n  .flatMap { $0.windows }\n  .first { $0.isKeyWindow }')).toEqual(['key-window']);
   });
 
+  it('follows idiom checks wrapped in a property to their call sites', () => {
+    const wrapper = { path: 'Ext/UIDevice.swift', content: 'extension UIDevice {\n  static var isPad: Bool {\n    UIDevice.current.userInterfaceIdiom == .pad\n  }\n  static var isTV: Bool {\n    current.userInterfaceIdiom == .tv\n  }\n}' };
+    const use = { path: 'App/Grid.swift', content: 'let columns = UIDevice.isPad ? 4 : 2\nlet gap = UIDevice.isTV ? 30 : 15' };
+    const found = audit([wrapper, use]).findings.filter((f) => f.path === 'App/Grid.swift');
+    expect(found.map((f) => [f.ruleId, f.line, f.message])).toEqual([['idiom-layout', 1, 'isPad is a device idiom check under another name.']]);
+  });
+
   it('points brightness at the window scene’s screen', () => {
     expect(audit(swift('UIScreen.main.brightness = 1')).findings[0].message).toContain('windowScene?.screen');
   });

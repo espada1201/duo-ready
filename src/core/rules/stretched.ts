@@ -70,7 +70,12 @@ export const stretched = defineGroup({
     },
   ],
 
-  swift({ file, src, masked: m, blocks, report }) {
+  swift({ file, src, masked: m, blocks, facts, report }) {
+    if (facts.idiomWrappers.length) {
+      for (const hit of m.matchAll(new RegExp(`\\.(${facts.idiomWrappers.join('|')})\\b(?!\\s*[:(])`, 'g'))) {
+        if (!/\bkeyboardType\b/.test(lineAround(m, hit.index!))) report('idiom-layout', hit.index! + 1, `${hit[1]} is a device idiom check under another name.`);
+      }
+    }
     for (const hit of m.matchAll(/\buserInterfaceIdiom\b/g)) {
       // Picking a keyboard type by idiom is about input, not layout.
       if (!declaredAt(m, hit.index!) && !/\bkeyboardType\b/.test(lineAround(m, hit.index!))) report('idiom-layout', hit.index!);

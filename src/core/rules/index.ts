@@ -47,6 +47,8 @@ const WATCH_KEY = /^WK(WatchKitApp|CompanionAppBundleIdentifier|ApplicationType|
 const WATCH_CODE = /\bimport\s+WatchKit\b|@WK(?:Extension|Application)DelegateAdaptor\b/;
 const WATCH_DIR = /(^|\/)[^/]*Watch(?:App|Kit| ?Extension|OS)[^/]*\//;
 const OTHER_PLATFORM_CONFIG = /\b(?:WATCHOS|MACOSX|TVOS|XROS)_DEPLOYMENT_TARGET\b|\bplatform:[^\n]*\b(?:watchOS|tvOS|macOS|visionOS)\b|^[ \t]+(?:watchOS|tvOS|macOS|visionOS):[ \t]*["']?\d/m;
+/** `var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }`, with nothing else in the body. */
+const IDIOM_WRAPPER = /\bvar\s+(\w+)\s*:\s*Bool\s*\{\s*(?:return\s+)?(?:[\w.]+\.)?userInterfaceIdiom\s*==\s*\.(?:pad|phone)\s*\}/g;
 const WIDGET = /\b(?:TimelineProvider|TimelineEntry|WidgetConfiguration|WidgetBundle|widgetAccentedRenderingMode)\b|@Environment\s*\(\s*\\\.widgetFamily\s*\)/;
 
 function parse(file: SourceFile): Parsed | null {
@@ -81,6 +83,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
     appDelegate: null,
     deploymentTarget: null,
     otherPlatforms: false,
+    idiomWrappers: [],
     upgradeCheck: null,
     hasProjectFiles: false,
   };
@@ -94,6 +97,7 @@ function learn(parsed: Parsed[]): ProjectFacts {
       if (/\bUIWindowSceneDelegate\b/.test(m)) facts.sceneDelegate = true;
       const appDelegate = /\bclass\s+\w+\s*:\s*[^{]*\bUIApplicationDelegate\b/.exec(m);
       if (appDelegate && !facts.appDelegate) facts.appDelegate = { file: p.file, offset: appDelegate.index };
+      for (const hit of m.matchAll(IDIOM_WRAPPER)) if (!facts.idiomWrappers.includes(hit[1])) facts.idiomWrappers.push(hit[1]);
     } else if (p.kind === 'plist') {
       facts.hasProjectFiles = true;
       if (p.plist.keys.has('UIApplicationSceneManifest')) facts.sceneManifest = true;

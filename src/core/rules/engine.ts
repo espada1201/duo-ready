@@ -31,6 +31,8 @@ export interface ProjectFacts {
   deploymentTarget: number | null;
   /** The project also builds for watchOS, macOS, tvOS or visionOS, whose SwiftUI versions lag iOS. */
   otherPlatforms: boolean;
+  /** Properties like `UIDevice.isPad` whose whole body is an idiom comparison. */
+  idiomWrappers: string[];
   /** LastUpgradeCheck, e.g. "2600". */
   upgradeCheck: string | null;
   /** An Info.plist or project.pbxproj was given. */
