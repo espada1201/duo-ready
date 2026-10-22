@@ -14,6 +14,12 @@ export function intersect(a: Rect, b: Rect): Rect | null {
   return { x, y, w: r - x, h: bt - y };
 }
 
-export const area = (r: Rect) => r.w * r.h;
+export const area = (r: { w: number; h: number }) => r.w * r.h;
 
 export const translate = (r: Rect, dx: number, dy: number): Rect => ({ ...r, x: r.x + dx, y: r.y + dy });
+
+/** The part of `r` inside `frame`, in `frame`'s coordinates. */
+export function clipTo(r: Rect, frame: Rect): Rect | null {
+  const hit = intersect(r, frame);
+  return hit && translate(hit, -frame.x, -frame.y);
+}

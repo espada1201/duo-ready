@@ -3,7 +3,7 @@
 import type { AuditResult, Finding, Severity } from './types';
 
 export const SEVERITY_ORDER: Record<Severity, number> = { error: 0, warning: 1, info: 2 };
-export const PENALTY: Record<Severity, number> = { error: 8, warning: 3, info: 1 };
+const PENALTY: Record<Severity, number> = { error: 8, warning: 3, info: 1 };
 
 export const severityLabel = (s: Severity) => (s === 'info' ? 'note' : s);
 
@@ -13,6 +13,8 @@ export function countBySeverity(findings: Finding[]): Record<Severity, number> {
   return out;
 }
 
+export const PARTIAL_NOTE = 'Partial audit: no Info.plist or Xcode project, so orientation, full-screen and SDK checks did not run. The grade is capped at Close.';
+
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 export function summaryLine(r: AuditResult): string {
@@ -20,7 +22,7 @@ export function summaryLine(r: AuditResult): string {
   return `${plural(r.files, 'file')} (${r.swiftFiles} Swift) · ${plural(n.error, 'error')} · ${plural(n.warning, 'warning')} · ${plural(n.info, 'note')}`;
 }
 
-/** Cost of a set of findings: each rule counts once, weighted by severity, as in the score. */
+/** Cost of a set of findings: each rule counts once, weighted by severity. The score is 100 minus this. */
 export function cost(findings: Finding[]): number {
   const seen = new Map<string, Severity>();
   for (const f of findings) seen.set(f.ruleId, f.severity);

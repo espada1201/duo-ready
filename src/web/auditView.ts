@@ -1,7 +1,7 @@
 import { strToU8, zipSync } from 'fflate';
 import { applyFixes, audit, isRelevant, isRelevantDir, MAX_BYTES } from '../core/audit';
 import { hunks, type Hunk } from '../core/diff';
-import { describeCounts, plural, screensFirst, severityLabel, summaryLine } from '../core/findings';
+import { describeCounts, PARTIAL_NOTE, plural, screensFirst, severityLabel, summaryLine } from '../core/findings';
 import { PAIN_POINTS, RULE_BY_ID } from '../core/rules';
 import { tierLabel } from '../core/sdk';
 import { groupBy } from '../core/text';
@@ -236,9 +236,7 @@ function results(state: AuditState, openPreview: (tier: SdkTier | null) => void)
       h('p', { class: 'eyebrow' }, state.source),
       h('h3', { 'data-testid': 'grade' }, r.grade),
       h('p', {}, summaryLine(r)),
-      r.partial
-        ? h('p', { class: 'partial', 'data-testid': 'partial' }, 'Partial audit: no Info.plist or Xcode project, so orientation, full-screen and SDK checks did not run. The grade is capped at Close.')
-        : null,
+      r.partial ? h('p', { class: 'partial', 'data-testid': 'partial' }, PARTIAL_NOTE) : null,
       r.tier ? h('p', {}, `Today Duo users likely see ${tierLabel(r.tier.value)}. `, h('span', { class: 'hint' }, `Based on ${r.tier.source}.`)) : null,
       h(
         'div',

@@ -3,7 +3,7 @@
 // spec pixels at 3x. Status bar, hinge and camera geometry are approximations:
 // confirm them in the Xcode 27.1 iPhone Duo simulator.
 
-import { intersect, translate, type Rect } from './rect';
+import { area, clipTo, type Rect } from './rect';
 import type { SdkTier } from './types';
 
 interface Insets {
@@ -140,15 +140,13 @@ export function present(posture: Posture, tier: SdkTier, cameraActive = false): 
     safeArea = { top: STATUS_TOP, left: 0, bottom: HOME_INDICATOR, right: 0 };
   }
 
-  const toWindow = (r: Rect): Rect => translate(r, -window.x, -window.y);
   const regions: ReservedRegion[] = [];
   for (const r of screenRegions(posture, screen, cameraActive)) {
-    const clipped = intersect(r.frame, window);
-    if (!clipped) continue;
-    regions.push({ ...r, frame: toWindow(clipped) });
+    const clipped = clipTo(r.frame, window);
+    if (clipped) regions.push({ ...r, frame: clipped });
   }
 
-  const status = intersect(statusBarRect(screen), window);
+  const status = clipTo(statusBarRect(screen), window);
   const sizeClass = sizeClassFor(s.display, posture, window);
   return {
     display: s.display,
@@ -158,10 +156,16 @@ export function present(posture: Posture, tier: SdkTier, cameraActive = false): 
     safeArea,
     bars,
     regions,
-    statusBar: status && status.w * status.h > 0 ? toWindow(status) : null,
+    statusBar: status && area(status) > 0 ? status : null,
     share,
-    coverage: (window.w * window.h) / (space.w * space.h),
+    coverage: area(window) / area(space),
   };
+}
+
+/** The window's safe area, in window coordinates. */
+export function safeFrame(p: Presentation): Rect {
+  const sa = p.safeArea;
+  return { x: sa.left, y: sa.top, w: p.window.w - sa.left - sa.right, h: p.window.h - sa.top - sa.bottom };
 }
 
 function sizeClassFor(display: 'inner' | 'outer', posture: Posture, window: Rect): Presentation['sizeClass'] {
@@ -198,7 +202,7 @@ export function arrange(
   axes: ('horizontal' | 'vertical')[] = ['horizontal', 'vertical'],
 ): Arrangement {
   const full: Rect = { x: 0, y: 0, w: bounds.w, h: bounds.h };
-  const division = regions.find((r) => r.kind === 'division' && r.active && r.frame.w * r.frame.h > 0);
+  const division = regions.find((r) => r.kind === 'division' && r.active && area(r.frame) > 0);
   const divisionAxis = division ? (division.frame.h >= bounds.h - 0.5 ? 'horizontal' : 'vertical') : null;
 
   if (style === 'overlay' && !division) {

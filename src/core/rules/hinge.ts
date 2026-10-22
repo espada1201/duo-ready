@@ -1,5 +1,5 @@
 import { ancestors, labelOffset, type Block } from '../swift';
-import { POSE, PREPARE, type RuleGroup } from './engine';
+import { matchBefore, POSE, PREPARE, type RuleGroup } from './engine';
 
 const SCROLLERS = new Set(['List', 'ScrollView', 'LazyVStack', 'LazyHStack', 'Form']);
 /** Closures whose content is presented elsewhere, so it is not laid out inside the enclosing scroller. */
@@ -74,9 +74,8 @@ export const hinge: RuleGroup = {
 
     for (const b of blocks) {
       // `if horizontalSizeClass == .regular { HStack { … } }`
-      const head = m.slice(Math.max(0, b.open - 80), b.open);
-      const sizeCheck = /\b\w*[sS]izeClass\w*\s*==\s*\.regular\s*$/.exec(head);
-      if (sizeCheck && b.children.some((c) => c.label === 'HStack')) report('manual-two-pane', b.open - head.length + sizeCheck.index);
+      const sizeCheck = matchBefore(m, b.open, /\b\w*[sS]izeClass\w*\s*==\s*\.regular\s*$/);
+      if (sizeCheck !== null && b.children.some((c) => c.label === 'HStack')) report('manual-two-pane', sizeCheck);
 
       if (b.argument) continue;
       if (b.label === 'ArrangementView') {

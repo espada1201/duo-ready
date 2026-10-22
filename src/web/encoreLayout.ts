@@ -1,8 +1,8 @@
 // Layout of "Encore", the demo music app, before and after duo-ready's fixes.
 // Pure geometry so the claims the lab makes ("no collisions after fixes") are testable.
 
-import { arrange, present, type Arrangement, type Posture, type Presentation } from '../core/duo';
-import { area, intersect, translate, type Rect } from '../core/rect';
+import { arrange, present, safeFrame, type Arrangement, type Posture, type Presentation } from '../core/duo';
+import { area, clipTo, intersect, translate, type Rect } from '../core/rect';
 import type { SdkTier } from '../core/types';
 
 export type Build = 'legacy-26' | 'legacy-27' | 'legacy-27.1' | 'ready';
@@ -91,18 +91,17 @@ function ready(p: Presentation): { pieces: Piece[]; arrangement: Arrangement } {
   const { w: W, h: H } = p.window;
   const sa = p.safeArea;
   const pieces: Piece[] = [];
-  let content: Rect;
+  let content = safeFrame(p);
   if (p.bars === 'vertical') {
     const railTop = p.statusBar ? p.statusBar.y + p.statusBar.h : sa.top;
     pieces.push({ role: 'rail', label: 'System tab bar (vertical)', rect: { x: W - sa.right, y: railTop, w: sa.right, h: H - sa.bottom - railTop } });
-    content = { x: sa.left, y: sa.top, w: W - sa.left - sa.right, h: H - sa.top - sa.bottom };
   } else {
-    content = { x: sa.left, y: sa.top, w: W - sa.left - sa.right, h: H - sa.top - sa.bottom - TAB };
+    content = { ...content, h: content.h - TAB };
     pieces.push({ role: 'bar', label: 'System tab bar', rect: { x: sa.left, y: content.y + content.h, w: content.w, h: TAB } });
   }
   const local = p.regions.flatMap((r) => {
-    const clipped = intersect(r.frame, content);
-    return clipped ? [{ ...r, frame: translate(clipped, -content.x, -content.y) }] : [];
+    const clipped = clipTo(r.frame, content);
+    return clipped ? [{ ...r, frame: clipped }] : [];
   });
   const a = arrange(content, local, 'split');
   const shift = (r: Rect): Rect => translate(r, content.x, content.y);

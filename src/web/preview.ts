@@ -1,5 +1,5 @@
-import { POSTURES, statusBarRect, type Posture, type Presentation } from '../core/duo';
-import type { Rect } from '../core/rect';
+import { POSTURES, safeFrame, statusBarRect, type Posture, type Presentation } from '../core/duo';
+import { translate, type Rect } from '../core/rect';
 import { RULE_BY_ID } from '../core/rules';
 import { groupBy, joinEnglish } from '../core/text';
 import { h, segmented, toggle } from './dom';
@@ -21,6 +21,9 @@ const TRACKS = ['Low Tide', 'Paper Lanterns', 'Overpass', 'Static Bloom', 'Half 
 const BEZEL = 10;
 
 const px = (r: Rect, s: number) => `left:${r.x * s}px;top:${r.y * s}px;width:${r.w * s}px;height:${r.h * s}px`;
+/** Font size in px for a `pt` size at scale `s`, never below `min` px. */
+const font = (pt: number, s: number, min = 7) => `font-size:${Math.max(min, pt * s)}px`;
+const TAB_ICONS = ['library', 'search', 'radio', 'person'];
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 const fmt = (r: Rect) => `${Math.round(r.w)} × ${Math.round(r.h)} pt at (${Math.round(r.x)}, ${Math.round(r.y)})`;
 
@@ -32,21 +35,21 @@ function piece(p: Piece, s: number): HTMLElement {
       if (p.label.includes('navigation')) {
         return h(
           'div',
-          { class: `enc-bar enc-nav${p.rule ? ' enc-custom' : ''}`, style: `${style};font-size:${Math.max(7, 15 * s)}px` },
+          { class: `enc-bar enc-nav${p.rule ? ' enc-custom' : ''}`, style: `${style};${font(15, s)}` },
           h('span', {}, '‹ Library'),
           h('strong', {}, 'Now Playing'),
           h('span', {}, ''),
         );
       }
-      return h('div', { class: `enc-bar${p.rule ? ' enc-custom' : ''}`, style }, icons(['library', 'search', 'radio', 'person'], Math.max(10, 20 * s)));
+      return h('div', { class: `enc-bar${p.rule ? ' enc-custom' : ''}`, style }, icons(TAB_ICONS, Math.max(10, 20 * s)));
     case 'rail':
-      return h('div', { class: 'enc-rail', style }, icons(['library', 'search', 'radio', 'person'], Math.max(10, 20 * s)));
+      return h('div', { class: 'enc-rail', style }, icons(TAB_ICONS, Math.max(10, 20 * s)));
     case 'artwork':
-      return h('div', { class: 'enc-art', style }, h('span', { style: `font-size:${Math.max(8, 13 * s)}px` }, 'ENCORE'));
+      return h('div', { class: 'enc-art', style }, h('span', { style: font(13, s, 8) }, 'ENCORE'));
     case 'title':
       return h(
         'div',
-        { class: 'enc-title', style: `${style};font-size:${Math.max(7, 15 * s)}px` },
+        { class: 'enc-title', style: `${style};${font(15, s)}` },
         h('strong', {}, 'Night Drive'),
         h('span', {}, 'The Parallels'),
       );
@@ -57,7 +60,7 @@ function piece(p: Piece, s: number): HTMLElement {
       const rows = Math.max(0, Math.floor((p.rect.h - 48) / rowH));
       return h(
         'div',
-        { class: 'enc-list', style: `${style};font-size:${Math.max(7, 14 * s)}px` },
+        { class: 'enc-list', style: `${style};${font(14, s)}` },
         h('div', { class: 'enc-list-head' }, 'Up next'),
         TRACKS.slice(0, rows).map((t, i) =>
           h('div', { class: 'enc-row', style: `height:${rowH * s}px` }, h('i', { style: `--hue:${(i * 47) % 360}` }), h('span', {}, t)),
@@ -65,7 +68,7 @@ function piece(p: Piece, s: number): HTMLElement {
       );
     }
     case 'mini':
-      return h('div', { class: 'enc-mini', style: `${style};font-size:${Math.max(7, 13 * s)}px` }, `Up next · ${TRACKS.length} tracks`);
+      return h('div', { class: 'enc-mini', style: `${style};${font(13, s)}` }, `Up next · ${TRACKS.length} tracks`);
   }
 }
 
@@ -77,7 +80,7 @@ function statusBar(p: Presentation, s: number, compat: boolean): HTMLElement | n
   const r = statusBarRect(p.screen);
   return h(
     'div',
-    { class: `status${landscape ? ' status-side' : ''}${overApp ? ' status-dark' : ''}`, style: `${px(r, s)};font-size:${Math.max(7, 13 * s)}px`, 'aria-hidden': 'true' },
+    { class: `status${landscape ? ' status-side' : ''}${overApp ? ' status-dark' : ''}`, style: `${px(r, s)};${font(13, s)}`, 'aria-hidden': 'true' },
     h('span', {}, '9:41'),
     h('i', { class: 'battery' }),
   );
@@ -99,18 +102,11 @@ function renderStage(layout: EncoreLayout, state: PreviewState, width: number): 
   }
   if (compat) {
     win.appendChild(
-      h('div', { class: 'status compat-status', style: `height:${p.safeArea.top * s}px;font-size:${Math.max(7, 12 * s)}px` }, h('span', {}, '9:41'), h('i', { class: 'battery' })),
+      h('div', { class: 'status compat-status', style: `height:${p.safeArea.top * s}px;${font(12, s)}` }, h('span', {}, '9:41'), h('i', { class: 'battery' })),
     );
   }
   if (state.safeArea) {
-    const sa = p.safeArea;
-    win.appendChild(
-      h('div', {
-        class: 'overlay-safe',
-        style: px({ x: sa.left, y: sa.top, w: p.window.w - sa.left - sa.right, h: p.window.h - sa.top - sa.bottom }, s),
-        title: 'Safe area',
-      }),
-    );
+    win.appendChild(h('div', { class: 'overlay-safe', style: px(safeFrame(p), s), title: 'Safe area' }));
   }
   if (state.regions) {
     for (const r of p.regions) {
@@ -136,8 +132,7 @@ function renderStage(layout: EncoreLayout, state: PreviewState, width: number): 
   );
   const camera = state.camera && p.display === 'inner' ? p.regions.find((r) => r.kind === 'occlusion') : null;
   if (camera) {
-    const f = { x: camera.frame.x + p.window.x, y: camera.frame.y + p.window.y, w: camera.frame.w, h: camera.frame.h };
-    screen.appendChild(h('div', { class: 'camera-dot', style: px(f, s), 'aria-hidden': 'true' }));
+    screen.appendChild(h('div', { class: 'camera-dot', style: px(translate(camera.frame, p.window.x, p.window.y), s), 'aria-hidden': 'true' }));
   }
 
   return h(

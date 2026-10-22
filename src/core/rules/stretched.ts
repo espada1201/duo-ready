@@ -2,6 +2,7 @@ import { eolOf, lineAround } from '../text';
 import { afterModifiers, inString, PREPARE, type RuleGroup } from './engine';
 
 const VIEWPORT_WIDTH = /viewport[^\n>]{0,160}?\bwidth\s*=\s*(\d{3,4})\b/g;
+const viewportMessage = (width: string) => `The web viewport is fixed at ${width} px, an iPhone width.`;
 /** Callbacks that run when the window changes size. */
 const ON_RESIZE = /\bfunc\s+(viewWillTransition|traitCollectionDidChange|viewWillLayoutSubviews|viewDidLayoutSubviews)\b|\.onChange\s*\(\s*of\s*:\s*\w*[sS]izeClass\b/g;
 
@@ -76,7 +77,7 @@ export const stretched: RuleGroup = {
     // HTML in string literals: the mask blanks it, so read the raw text inside strings.
     for (const hit of file.content.matchAll(VIEWPORT_WIDTH)) {
       const at = hit.index! + hit[0].length - hit[1].length;
-      if (inString(file.content, m, at)) report('webview-viewport', hit.index!, `The web viewport is fixed at ${hit[1]} px, an iPhone width.`);
+      if (inString(file.content, m, at)) report('webview-viewport', hit.index!, viewportMessage(hit[1]));
     }
     for (const hit of m.matchAll(ON_RESIZE)) {
       const open = m.indexOf('{', hit.index!);
@@ -92,7 +93,7 @@ export const stretched: RuleGroup = {
 
   html({ file, report }) {
     for (const hit of file.content.matchAll(VIEWPORT_WIDTH)) {
-      report('webview-viewport', hit.index!, `The web viewport is fixed at ${hit[1]} px, an iPhone width.`);
+      report('webview-viewport', hit.index!, viewportMessage(hit[1]));
     }
   },
 };

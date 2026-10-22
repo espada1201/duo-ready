@@ -1,5 +1,5 @@
-import { PENALTY, SEVERITY_ORDER } from './findings';
-import { checkFiles, RULE_BY_ID } from './rules';
+import { cost, SEVERITY_ORDER } from './findings';
+import { checkFiles } from './rules';
 import { tierFromUpgradeCheck, xcodeVersion } from './sdk';
 import type { AuditResult, Finding, SourceFile } from './types';
 
@@ -20,10 +20,7 @@ export function isRelevantDir(path: string): boolean {
 
 /** Each rule costs once however often it fires: the score measures kinds of problem, not volume. */
 function score(findings: Finding[]): number {
-  const ids = new Set(findings.map((f) => f.ruleId));
-  let total = 0;
-  for (const id of ids) total += PENALTY[RULE_BY_ID.get(id)!.severity];
-  return Math.max(0, 100 - total);
+  return Math.max(0, 100 - cost(findings));
 }
 
 function grade(value: number, findings: Finding[], partial: boolean): AuditResult['grade'] {

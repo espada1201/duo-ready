@@ -1,6 +1,6 @@
 import { blockAt, declaredTypes, headerOf, labelOffset, type Block, type SwiftSource } from '../swift';
 import type { Fix } from '../types';
-import { PREPARE, type RuleGroup } from './engine';
+import { matchBefore, PREPARE, type RuleGroup } from './engine';
 
 const SCENES = 'Apple, WWDC25 “Make your UIKit app more flexible” (UIScene required after iOS 26)';
 
@@ -144,9 +144,8 @@ export const fold: RuleGroup = {
     // Swapping view types on size class rebuilds them, so @State is lost on fold.
     for (const b of blocks) {
       const sibling = b.parent?.children[b.parent.children.indexOf(b) + 1];
-      const head = m.slice(Math.max(0, b.open - 80), b.open);
-      const cond = /\bif\s+\w*[sS]izeClass\w*\s*[!=]=\s*\.\w+\s*$/.exec(head);
-      if (cond && sibling && headerOf(src, sibling) === 'else') report('state-reset', b.open - head.length + cond.index);
+      const cond = matchBefore(m, b.open, /\bif\s+\w*[sS]izeClass\w*\s*[!=]=\s*\.\w+\s*$/);
+      if (cond !== null && sibling && headerOf(src, sibling) === 'else') report('state-reset', cond);
     }
     for (const hit of m.matchAll(/\.id\s*\(\s*UUID\s*\(\s*\)\s*\)/g)) {
       report('state-reset', hit.index!, '.id(UUID()) gives the view a new identity on every update, so its state never survives a fold.');

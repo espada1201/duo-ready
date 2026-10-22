@@ -2,7 +2,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync, statSync, writeFileSy
 import { dirname, join, relative, resolve } from 'node:path';
 import { applyFixes, audit, isRelevant, isRelevantDir, MAX_BYTES } from '../core/audit';
 import { unifiedDiff } from '../core/diff';
-import { describeCounts, screensFirst, summaryLine } from '../core/findings';
+import { describeCounts, PARTIAL_NOTE, screensFirst, summaryLine } from '../core/findings';
 import { RULE_BY_ID, RULES } from '../core/rules';
 import { tierLabel } from '../core/sdk';
 import { groupBy } from '../core/text';
@@ -130,9 +130,7 @@ function textReport(result: AuditResult, c: ReturnType<typeof paint>): string {
   const review = result.findings.filter((f) => f.fix?.confidence === 'review').length;
   lines.push(`${c.bold(`Duo readiness ${result.score}/100`)}  ${result.grade}`);
   lines.push(summaryLine(result));
-  if (result.partial) {
-    lines.push(c.yellow('Partial audit: no Info.plist or Xcode project, so orientation, full-screen and SDK checks did not run. The grade is capped at Close.'));
-  }
+  if (result.partial) lines.push(c.yellow(PARTIAL_NOTE));
   if (result.tier) lines.push(`Today, Duo users likely see ${tierLabel(result.tier.value)} (based on ${result.tier.source}).`);
   if (safe || review) lines.push(`${safe} safe fixes (--fix), ${review} more for review (--fix all).`);
   return lines.join('\n');

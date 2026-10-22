@@ -4,6 +4,7 @@
 import { parsePlist } from '../plist';
 import { declaredTypes, lineStarts, parseSwift, position, walk, type SwiftSource } from '../swift';
 import { deploymentTarget, upgradeCheck } from '../sdk';
+import { lineAround } from '../text';
 import type { Finding, SourceFile } from '../types';
 import { blackBars } from './blackBars';
 import type { PlistContext, ProjectFacts, Report, Rule, RuleGroup } from './engine';
@@ -97,7 +98,6 @@ function reporter(file: SourceFile, findings: Finding[], src?: SwiftSource): Rep
   return (ruleId, offset, message, fix) => {
     const rule = RULE_BY_ID.get(ruleId)!;
     const { line, column } = position({ lineStarts: starts }, offset);
-    const end = file.content.indexOf('\n', starts[line - 1]);
     findings.push({
       ruleId,
       severity: rule.severity,
@@ -105,7 +105,7 @@ function reporter(file: SourceFile, findings: Finding[], src?: SwiftSource): Rep
       line,
       column,
       message: message ?? rule.why,
-      excerpt: file.content.slice(starts[line - 1], end === -1 ? undefined : end).trim(),
+      excerpt: lineAround(file.content, starts[line - 1]).trim(),
       screen: src ? screenAt(src, offset) : undefined,
       fix,
     });

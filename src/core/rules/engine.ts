@@ -89,6 +89,13 @@ export function afterModifiers(masked: string, from: number): number {
   }
 }
 
+/** Offset of `re` (anchored with `$`) in the text just before `open`, such as the `if` that owns a block. */
+export function matchBefore(masked: string, open: number, re: RegExp): number | null {
+  const head = masked.slice(Math.max(0, open - 80), open);
+  const hit = re.exec(head);
+  return hit ? open - head.length + hit.index : null;
+}
+
 /** Offsets in the raw source that sit inside a string literal: blank in the mask, and not a comment. */
 export function inString(raw: string, masked: string, offset: number): boolean {
   if (masked[offset] !== ' ' || raw[offset] === ' ') return false;
