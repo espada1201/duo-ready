@@ -1,7 +1,8 @@
 // Diffs for fixes, built from the fixes' own edits so a hunk is exactly the lines an edit touches.
 
+import { fixLabel } from './findings';
 import { lineStarts, position } from './text';
-import type { Edit } from './types';
+import type { Edit, Finding, SourceFile } from './types';
 
 export interface Hunk {
   /** 1-based line in the original where the hunk starts. */
@@ -77,4 +78,16 @@ export function unifiedDiff(path: string, content: string, edits: Edit[], notes:
     shift += added;
   }
   return out.join('\n');
+}
+
+/** One patch for the `applied` fixes across `files`, with each fix described above its file. */
+export function patchFor(files: SourceFile[], applied: Finding[]): string {
+  return files
+    .map((file) => {
+      const mine = applied.filter((f) => f.path === file.path);
+      const notes = mine.map((f) => `# ${file.path}:${f.line} ${f.fix!.description}${fixLabel(f)}`);
+      return unifiedDiff(file.path, file.content, mine.flatMap((f) => f.fix!.edits), notes);
+    })
+    .filter(Boolean)
+    .join('\n');
 }

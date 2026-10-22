@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from 'fflate';
 import { applyFixes, isRelevant, isRelevantDir, MAX_BYTES } from '../core/audit';
-import type { Hunk } from '../core/diff';
+import { patchFor, type Hunk } from '../core/diff';
 import { describeCounts, gainLabel, GRADE_LEGEND, PARTIAL_NOTE, plural, screensFirst, severityLabel, summaryLine, unreadableNote } from '../core/findings';
 import { PAIN_POINTS, RULE_BY_ID } from '../core/rules';
 import { tierLabel } from '../core/sdk';
@@ -152,6 +152,10 @@ function chosenFixes(state: AuditState) {
   return applyFixes(state.files, state.result!.findings.filter((_, i) => state.selected.has(i)), 'all');
 }
 
+function fixedPatch(state: AuditState): Uint8Array {
+  return strToU8(`${patchFor(state.files, chosenFixes(state).applied)}\n`);
+}
+
 function fixedZip(state: AuditState): Uint8Array {
   const { files } = chosenFixes(state);
   const entries: Record<string, Uint8Array> = {};
@@ -299,13 +303,25 @@ function results(state: AuditState, set: (s: AuditState) => void, openPreview: (
     icon('download', 16),
     downloadLabel,
   );
+  const patchButton = h(
+    'button',
+    {
+      type: 'button',
+      class: 'button ghost',
+      disabled: state.selected.size === 0,
+      'data-testid': 'download-patch',
+      'aria-label': 'Download the fixes as a patch',
+      onclick: () => download('duo-ready-fixes.patch', fixedPatch(state), 'text/x-diff'),
+    },
+    'As a patch',
+  );
   const filterBy = (patch: Partial<Filter>) => set({ ...state, filter: { ...state.filter, ...patch } });
   // Toggling a fix updates in place so keyboard focus stays on the checkbox.
   const toggleFix = (i: number, on: boolean) => {
     if (on) state.selected.add(i);
     else state.selected.delete(i);
     downloadLabel.textContent = label();
-    downloadButton.disabled = state.selected.size === 0;
+    downloadButton.disabled = patchButton.disabled = state.selected.size === 0;
   };
 
   const summary = h(
@@ -326,9 +342,10 @@ function results(state: AuditState, set: (s: AuditState) => void, openPreview: (
         'div',
         { class: 'summary-actions' },
         downloadButton,
+        patchButton,
         h('button', { type: 'button', class: 'button', onclick: () => openPreview(r.tier?.value ?? null) }, 'Preview on Duo (sample app)', icon('arrow', 16)),
       ),
-      fixable ? h('p', { class: 'hint' }, 'The zip holds just the changed files at their paths in your project. Unzip it over your project folder, then review the changes with git diff.') : null,
+      fixable ? h('p', { class: 'hint' }, 'The zip holds just the changed files at their paths in your project: unzip it over your project folder. Or save the patch in that folder and run git apply duo-ready-fixes.patch. Either way, review with git diff before you commit.') : null,
       h(
         'ul',
         { class: 'pain-chips', 'aria-label': 'Findings by reviewer pain point' },

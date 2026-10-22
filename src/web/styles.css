@@ -1188,6 +1188,7 @@ label.button:focus-within {
 
   .summary {
     flex-wrap: wrap;
+    align-items: flex-start;
     gap: 16px;
     padding: 18px;
   }
@@ -1205,8 +1206,9 @@ label.button:focus-within {
     font-size: 28px;
   }
 
+  /* Wider than what's left beside the ring on a phone, so the text drops below it and gets the full width. */
   .summary-text {
-    flex: 1 1 200px;
+    flex: 1 1 260px;
   }
 
   .rule-list {

@@ -23,7 +23,7 @@ iOS doesn't let anyone reshape someone else's app, so this kit is for the people
   ```
   `--format json` or `sarif` (for GitHub code scanning) keeps stdout machine-readable; add `-s`
   (`npm run -s audit -- ...`) so npm's own banner stays off it, or use `--out report.json`.
-  Paths are relative to where you run the command. Exit codes: 0 clean, 1 findings at `--fail-on`
+  Without a clone: `npx github:espada1201/duo-ready ../MyApp`. Paths are relative to where you run the command. Exit codes: 0 clean, 1 findings at `--fail-on`
   (error by default; warning or note are stricter), 2 bad input. Try it on the bundled legacy app: `npm run audit -- sample`.
 
 ## The rules

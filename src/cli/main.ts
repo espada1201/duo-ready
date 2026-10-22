@@ -1,12 +1,12 @@
 import { existsSync, lstatSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { applyFixes, audit, isRelevant, isRelevantDir, MAX_BYTES } from '../core/audit';
-import { unifiedDiff } from '../core/diff';
-import { describeCounts, gainLabel, GRADE_LEGEND, PARTIAL_NOTE, plural, screensFirst, SEVERITY_ORDER, severityLabel, summaryLine, unreadableNote } from '../core/findings';
+import { patchFor } from '../core/diff';
+import { describeCounts, fixLabel, gainLabel, GRADE_LEGEND, PARTIAL_NOTE, plural, screensFirst, SEVERITY_ORDER, severityLabel, summaryLine, unreadableNote } from '../core/findings';
 import { PAIN_POINTS, RULE_BY_ID } from '../core/rules';
 import { tierLabel } from '../core/sdk';
 import { groupBy } from '../core/text';
-import type { AuditResult, Finding, SourceFile } from '../core/types';
+import type { AuditResult, SourceFile } from '../core/types';
 import { toSarif } from './sarif';
 
 declare const __VERSION__: string;
@@ -20,8 +20,9 @@ Usage
   duo-ready [path] --dry-run       Show what --fix would change as a patch, write nothing
   duo-ready rules                  List every rule and the Apple guidance behind it
 
-From the duo-ready folder, run it as \`npm run -s audit -- ../MyApp\`. Paths are relative
-to the folder you ran the command in.
+From the duo-ready folder, run it as \`npm run -s audit -- ../MyApp\`. Without a clone,
+\`npx github:espada1201/duo-ready ../MyApp\` works too. Paths are relative to the folder
+you ran the command in.
 
 Options
   --format text|json|sarif         Output format (default: text)
@@ -118,8 +119,6 @@ function paint(on: boolean) {
   return { red: wrap('31'), yellow: wrap('33'), cyan: wrap('36'), dim: wrap('2'), bold: wrap('1'), green: wrap('32') };
 }
 
-const fixLabel = (f: Finding) => (f.fix ? ` [${f.fix.confidence} fix]` : '');
-
 function textReport(result: AuditResult, c: ReturnType<typeof paint>): string {
   const lines: string[] = [];
   const mark = { error: c.red('error  '), warning: c.yellow('warning'), info: c.cyan('note   ') };
@@ -202,14 +201,7 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
   if (cmd.fix || cmd.dryRun) {
     const { files: fixed, applied } = applyFixes(files, result.findings, cmd.fix ?? 'safe');
     if (cmd.dryRun) {
-      const diff = files
-        .map((file) => {
-          const mine = applied.filter((f) => f.path === file.path);
-          const notes = mine.map((f) => `# ${file.path}:${f.line} ${f.fix!.description}${fixLabel(f)}`);
-          return unifiedDiff(file.path, file.content, mine.flatMap((f) => f.fix!.edits), notes);
-        })
-        .filter(Boolean)
-        .join('\n');
+      const diff = patchFor(files, applied);
       // With --format json or sarif the diff goes to stderr so stdout stays a valid report.
       const held = result.findings.filter((f) => f.fix?.confidence === 'review').length - applied.filter((f) => f.fix!.confidence === 'review').length;
       if (diff) status(diff);

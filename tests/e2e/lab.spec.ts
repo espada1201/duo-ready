@@ -108,6 +108,13 @@ test('auditing the sample app lists findings and downloads working fixes', async
   expect(library).toContain('.defaultTabBarPlacement(.sidebar)');
   expect(strFromU8(zip['Encore/Encore/PlayerViewController.swift'])).toContain('view.bounds.inset(by: view.safeAreaInsets).width');
 
+  const [patchFile] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download the fixes as a patch' }).click()]);
+  const patch = readFileSync((await patchFile.path())!, 'utf8');
+  expect(patchFile.suggestedFilename()).toBe('duo-ready-fixes.patch');
+  expect(patch).toContain('+++ b/Encore/Encore/LibraryView.swift');
+  expect(patch).toContain('+        .defaultTabBarPlacement(.sidebar)');
+  expect(patch).toContain('[review fix]');
+
   await page.getByRole('button', { name: 'Preview on Duo' }).click();
   await expect(page).toHaveURL(/#preview$/);
   await expect(page.getByRole('radio', { name: 'iOS 26 SDK' })).toBeChecked();

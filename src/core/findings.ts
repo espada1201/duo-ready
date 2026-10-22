@@ -23,6 +23,9 @@ export const PARTIAL_NOTE = 'Partial audit: no Info.plist or Xcode project, so o
 export const unreadableNote = (paths: string[]) =>
   `${joinEnglish(paths)} ${paths.length === 1 ? 'is a binary plist' : 'are binary plists'}, which duo-ready can't read. Convert with \`plutil -convert xml1 <file>\` to include ${paths.length === 1 ? 'it' : 'them'}.`;
 
+/** " [safe fix]" or " [review fix]", the one name each kind of fix goes by. */
+export const fixLabel = (f: Finding) => (f.fix ? ` [${f.fix.confidence} fix]` : '');
+
 export const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 
 export function summaryLine(r: AuditResult): string {
