@@ -81,3 +81,15 @@ export async function filesFromInput(list: FileList): Promise<SourceFile[]> {
     .filter(({ f, path }) => isRelevant(path) && f.size <= MAX_BYTES);
   return Promise.all(picked.map(async ({ f, path }) => ({ path, content: await f.text() })));
 }
+
+/** What to call a chosen project: the folder that was picked, which every relative path starts with. */
+export function sourceName(list: ArrayLike<File>): string {
+  const path = list[0]?.webkitRelativePath;
+  return path?.includes('/') ? path.slice(0, path.indexOf('/')) : 'Chosen folder';
+}
+
+/** What to call a dropped project: its name when one folder or zip was dropped. */
+export function droppedName(data: DataTransfer): string {
+  const items = [...data.items];
+  return items.length === 1 ? items[0].webkitGetAsEntry?.()?.name || 'Dropped files' : 'Dropped files';
+}

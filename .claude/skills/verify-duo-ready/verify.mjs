@@ -3,7 +3,7 @@
 // Usage: node .claude/skills/verify-duo-ready/verify.mjs [doctor | all | <feature>...]
 import { chromium } from '@playwright/test';
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { strFromU8, unzipSync } from 'fflate';
@@ -115,6 +115,7 @@ const FEATURES = {
     await page.goto(`${URL}#audit`);
     await page.getByTestId('folder-input').setInputFiles(build);
     assert((await findings(page)) === 31, 'a chosen folder is audited, even one named build');
+    assert((await page.locator('.eyebrow').textContent()) === 'build', 'the summary is named for the chosen folder');
     await proof(page, dir, 'folder');
 
     const zip = join(build, '..', 'Encore.zip');
@@ -160,6 +161,10 @@ const FEATURES = {
     assert(JSON.parse(dry.out).findings.length === 31 && dry.err.includes('+++ b/Encore/Encore/LibraryView.swift'), 'dry run keeps JSON on stdout, diff on stderr');
     const copy = mkdtempSync(join(tmpdir(), 'duo-verify-'));
     cpSync(join(ROOT, 'sample'), copy, { recursive: true });
+    const patchFile = join(copy, 'duo.patch');
+    const toFile = cli([copy, '--dry-run', '--out', patchFile, '--no-color', '--fail-on', 'never']);
+    assert(toFile.out.includes('Patch written to') && spawnSync('git', ['apply', '--check', patchFile], { cwd: copy }).status === 0, 'dry run with --out writes a patch git apply --check accepts');
+    rmSync(patchFile);
     const fixed = cli([copy, '--fix', '--no-color', '--fail-on', 'never']);
     writeFileSync(join(dir, 'fix.txt'), fixed.out);
     assert(readFileSync(join(copy, 'Encore/Encore/LibraryView.swift'), 'utf8').includes('NavigationStack {'), 'safe fixes are written to disk');

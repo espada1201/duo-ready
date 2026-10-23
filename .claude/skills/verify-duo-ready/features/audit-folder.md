@@ -16,7 +16,7 @@ Choosing a project folder reads its Swift, Info.plist, Xcode project and HTML in
 
 Preconditions: a temporary copy of `sample/Encore` in a folder named `build`.
 
-- **Pick.** Set `folder-input` to that folder. 31 `.finding` items render.
+- **Pick.** Set `folder-input` to that folder. 31 `.finding` items render, and `.eyebrow` reads `build`, the chosen folder's name (`Chosen folder` only when the browser gives no folder name; a zip uses its file name).
 - **Zip.** Zip that folder with `zip -qr`, set `zip-input` to it. 31 `.finding` items render.
 
 ## Gotchas

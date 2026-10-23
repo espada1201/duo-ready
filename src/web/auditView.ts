@@ -6,7 +6,7 @@ import { PAIN_POINTS, RULE_BY_ID } from '../core/rules';
 import { groupBy } from '../core/text';
 import type { AuditResult, Finding, SdkTier, Severity, SourceFile } from '../core/types';
 import { analyse, type Analysis } from './analyse';
-import { filesFromDrop, filesFromInput, filesFromZip } from './projectFiles';
+import { droppedName, filesFromDrop, filesFromInput, filesFromZip, sourceName } from './projectFiles';
 import { h, svg } from './dom';
 import { icon } from './icons';
 
@@ -162,7 +162,7 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
       ondrop: (e: Event) => {
         e.preventDefault();
         const data = (e as DragEvent).dataTransfer;
-        if (data) void load(() => filesFromDrop(data), 'Dropped files');
+        if (data) void load(() => filesFromDrop(data), droppedName(data));
       },
     },
     icon('folder', 28),
@@ -185,7 +185,7 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
           'data-key': 'folder-input',
           onchange: (e: Event) => {
             const list = (e.target as HTMLInputElement).files;
-            if (list) void load(() => filesFromInput(list), 'Chosen folder');
+            if (list) void load(() => filesFromInput(list), sourceName(list));
           },
         }),
       ),
