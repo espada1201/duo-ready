@@ -58,8 +58,8 @@ export const POSTURES: { id: Posture; label: string; detail: string }[] = [
   { id: 'open', label: 'Open', detail: 'Inner display, flat' },
   { id: 'open-portrait', label: 'Open, rotated', detail: 'Inner display turned upright' },
   { id: 'split', label: 'Split View', detail: 'Inner display shared 50/50 with another app' },
-  { id: 'book', label: 'Book', detail: 'Half folded, hinge runs top to bottom' },
-  { id: 'tent', label: 'Propped up', detail: 'Half folded on a table, hinge runs across' },
+  { id: 'book', label: 'Half folded, book', detail: 'Half folded and held like a book, hinge runs top to bottom' },
+  { id: 'tent', label: 'Half folded, propped up', detail: 'Half folded and propped up on a table, hinge runs across' },
 ];
 
 const ZERO: Insets = { top: 0, left: 0, bottom: 0, right: 0 };

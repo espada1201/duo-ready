@@ -89,7 +89,8 @@ function statusBar(p: Presentation, s: number, compat: boolean): HTMLElement | n
 
 function renderStage(layout: EncoreLayout, state: PreviewState, width: number): HTMLElement {
   const p = layout.presentation;
-  const maxH = Math.min(window.innerHeight * 0.62, 560);
+  // Leaves room for the header and the caption, so the whole phone fits on a laptop screen.
+  const maxH = Math.max(300, Math.min(window.innerHeight * 0.55, 560));
   const s = Math.min((width - 24 - BEZEL * 2) / p.screen.w, (maxH - BEZEL * 2) / p.screen.h);
   const compat = p.display === 'inner' && buildTier(state.build) === '26';
   const folded = state.posture === 'book' || state.posture === 'tent';
@@ -349,10 +350,13 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
       h(
         'p',
         {},
-        'Encore is a typical iPhone music app. Step through the builds: as shipped, rebuilt with each new SDK, and rebuilt with the changes duo-ready recommends. Then fold the phone, or share the screen in Split View.',
+        'Encore is a typical iPhone music app. Step through the builds: as shipped, rebuilt with each new SDK, and rebuilt with the changes duo-ready recommends. Then fold the phone, or share the screen in Split View. Its full report is on the ',
+        h('a', { href: '#audit' }, 'Audit tab'),
+        ' under Try the sample app.',
       ),
     ),
-    h('div', { class: 'preview-grid' }, h('div', { class: 'preview-main' }, controls, stageHost), readout(layout, state)),
+    // On wide screens the phone stays in view beside the controls, so every pose change shows at once.
+    h('div', { class: 'preview-grid' }, controls, stageHost, readout(layout, state)),
     h('p', { class: 'fineprint' }, 'Panel sizes come from Apple’s published specs at 3x. Status bar, hinge and camera geometry are approximations. Confirm in the iPhone Duo simulator in Xcode 27.1.'),
   );
 }

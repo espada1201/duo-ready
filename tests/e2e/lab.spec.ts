@@ -19,7 +19,7 @@ test('preview walks from letterboxed legacy app to a fixed app that clears the h
   await expect(page.getByTestId('window')).toHaveText('430 × 626 pt, 48% of the display');
   await expect(page.getByTestId('problems')).toContainText('52% of the display is left black');
 
-  await choose(page, 'Book');
+  await choose(page, 'Half folded, book');
   await expect(page.getByTestId('problems')).toContainText('The hinge cuts through');
 
   await choose(page, 'iOS 27.1 SDK');
