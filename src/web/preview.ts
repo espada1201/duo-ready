@@ -13,7 +13,6 @@ export interface PreviewState {
   safeArea: boolean;
   camera: boolean;
   screenshot: string | null;
-  /** File name of the screenshot, for the announcement. */
   shotName?: string;
   /** Why the last screenshot couldn't be shown. */
   shotError: string | null;
