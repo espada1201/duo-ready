@@ -24,9 +24,17 @@ test('every pose radio has a name inside a labelled Pose group, and the chosen o
       - radio "Half folded, propped up"
   `);
   await expect(page.getByRole('group', { name: 'Build' }).getByRole('radio')).toHaveCount(4);
-  // Radios stay in a roving tab order: one stop for the group, arrows move inside it.
-  const radios = pose.getByRole('radio');
-  for (let i = 0; i < 7; i++) expect(await radios.nth(i).evaluate((el) => (el as HTMLInputElement).name)).toBe('seg-pose');
+});
+
+test('the Pose radios are one Tab stop: Tab leaves the group for the Build group instead of visiting every pose', async ({ page }) => {
+  await page.goto('./');
+  const pose = page.getByRole('group', { name: 'Pose' });
+  const build = page.getByRole('group', { name: 'Build' });
+  await pose.getByRole('radio', { name: 'Open', exact: true }).focus();
+  await page.keyboard.press('Tab');
+  await expect(build.getByRole('radio', { name: 'iOS 26 SDK' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(pose.getByRole('radio', { name: 'Open', exact: true })).toBeFocused();
 });
 
 test('arrow keys move through the poses, keep focus on the radio and announce the new pose', async ({ page }) => {
@@ -55,8 +63,11 @@ test('the hidden file inputs are keyboard stops named by their visible buttons, 
   await expect(page.getByRole('button', { name: 'Try the sample app' })).toBeFocused();
 
   await page.goto('./');
-  await page.getByRole('radio', { name: 'iOS 26 SDK' }).focus();
-  for (let i = 0; i < 4; i++) await page.keyboard.press('Tab'); // past the three switches
+  await page.getByRole('group', { name: 'Build' }).getByRole('radio', { name: 'iOS 26 SDK' }).focus();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('switch', { name: 'Reserved regions' })).toBeFocused();
+  await page.getByRole('switch', { name: 'Camera in use' }).focus();
+  await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Try your own screenshot' })).toBeFocused();
   await expect(page.locator('label.button:focus-within')).toHaveCSS('outline-style', 'solid');
 });
@@ -94,8 +105,36 @@ test('a chosen screenshot is announced, keeps focus on its control, and Remove h
   await page.getByTestId('shot-input').focus();
   await page.getByTestId('shot-input').setInputFiles({ name: 'home.png', mimeType: 'image/png', buffer: png });
   await expect(page.getByRole('button', { name: 'Change screenshot' })).toBeFocused();
-  await expect(page.locator('#announce')).toContainText('Screenshot home.png is showing in the iOS 26 SDK window.');
+  await expect(page.locator('#announce')).toContainText('Screenshot home.png loaded.');
   await page.getByRole('button', { name: 'Remove' }).click();
   await expect(page.getByRole('button', { name: 'Try your own screenshot' })).toBeFocused();
   await expect(page.locator('#announce')).not.toContainText('home.png');
+});
+
+test('the screenshot is announced once, when it loads; later pose changes announce only the pose', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('shot-input').setInputFiles({ name: 'home.png', mimeType: 'image/png', buffer: png });
+  await expect(page.locator('#announce')).toHaveText(/Screenshot home\.png loaded\.$/);
+  await page.getByRole('radio', { name: 'Closed', exact: true }).click();
+  await expect(page.locator('#announce')).toContainText('Closed, iOS 26 SDK:');
+  await expect(page.locator('#announce')).not.toContainText('creenshot');
+  await page.getByRole('radio', { name: 'Open', exact: true }).click();
+  await expect(page.locator('#announce')).toContainText('Open, iOS 26 SDK:');
+  await expect(page.locator('#announce')).not.toContainText('creenshot');
+});
+
+test('while files are being read, exactly one live region says so', async ({ page }) => {
+  await page.goto('./#audit');
+  // Counts the live regions that hold the text at every DOM change, since the state is brief.
+  await page.evaluate(() => {
+    const w = window as unknown as { seen: number };
+    w.seen = 0;
+    new MutationObserver(() => {
+      const live = [...document.querySelectorAll('[role="status"], [role="alert"], [aria-live]')].filter((el) => el.textContent?.includes('Reading files'));
+      w.seen = Math.max(w.seen, live.length);
+    }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true });
+  });
+  await page.getByTestId('zip-input').setInputFiles({ name: 'MyApp.zip', mimeType: 'application/zip', buffer: projectZip });
+  await expect(page.getByRole('region', { name: 'Audit summary' })).toBeFocused();
+  expect(await page.evaluate(() => (window as unknown as { seen: number }).seen)).toBe(1);
 });

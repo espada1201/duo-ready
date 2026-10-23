@@ -247,7 +247,7 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
   );
 
   let body: HTMLElement | null = null;
-  if (state.status === 'loading') body = h('p', { class: 'status-line', role: 'status', 'data-announce': 'Reading files…' }, 'Reading files…');
+  if (state.status === 'loading') body = h('p', { class: 'status-line', 'data-announce': 'Reading files…' }, 'Reading files…');
   else if (state.status === 'error') body = h('p', { class: 'error', role: 'alert' }, state.error);
   else if (state.status === 'done' && state.result) body = results(state, set, openPreview);
 

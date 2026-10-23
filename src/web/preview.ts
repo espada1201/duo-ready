@@ -12,13 +12,19 @@ export interface PreviewState {
   regions: boolean;
   safeArea: boolean;
   camera: boolean;
-  screenshot: string | null;
-  shotName?: string;
+  /** The person's own screenshot: an object URL and the file's name. */
+  screenshot: { url: string; name: string } | null;
+  /** One sentence for screen readers, spoken once; the next change of any kind clears it. */
+  notice: string | null;
   /** Why the last screenshot couldn't be shown. */
   shotError: string | null;
   /** The pose before the last change, for the fold continuity check. */
   previous: Posture | null;
 }
+
+/** The screenshot only replaces the app on the inner display, in a build made with the iOS 26 SDK. */
+const showsScreenshot = (display: Presentation['display'], build: Build) => display === 'inner' && buildTier(build) === '26';
+const SHOT_HINT = 'Your screenshot shows on the inner display with the iOS 26 SDK build.';
 
 const TRACKS = ['Low Tide', 'Paper Lanterns', 'Overpass', 'Static Bloom', 'Half Light', 'North Window', 'Glass Hours', 'Undertow', 'Small Hours'];
 const BEZEL = 10;
@@ -93,13 +99,13 @@ function renderStage(layout: EncoreLayout, state: PreviewState, width: number): 
   // Leaves room for the header and the caption, so the whole phone fits on a laptop screen.
   const maxH = Math.max(300, Math.min(window.innerHeight * 0.5, 560));
   const s = Math.min((width - 24 - BEZEL * 2) / p.screen.w, (maxH - BEZEL * 2) / p.screen.h);
-  const compat = p.display === 'inner' && buildTier(state.build) === '26';
+  const compat = showsScreenshot(p.display, state.build);
   const folded = state.posture === 'book' || state.posture === 'tent';
   const vertical = p.bars === 'vertical';
 
   const win = h('div', { class: 'app-window', style: px(p.window, s) });
   if (compat && state.screenshot) {
-    win.appendChild(h('img', { class: 'shot', src: state.screenshot, alt: 'Your app screenshot in the compatibility window' }));
+    win.appendChild(h('img', { class: 'shot', src: state.screenshot.url, alt: 'Your app screenshot in the compatibility window' }));
   } else {
     for (const x of layout.pieces) win.appendChild(piece(x, s));
   }
@@ -175,9 +181,7 @@ function readout(layout: EncoreLayout, state: PreviewState): HTMLElement {
     `${POSTURES.find((x) => x.id === state.posture)!.label}, ${BUILDS.find((b) => b.id === state.build)!.label}:`,
     problems.length ? `${problems.length} ${problems.length === 1 ? 'problem' : 'problems'} in this pose.` : 'no collisions in this pose.',
     fold ? (fold.lost.length ? `Fold test: lost ${joinEnglish(fold.lost)}.` : 'Fold test: Encore kept your place.') : '',
-    state.screenshot
-      ? `Screenshot${state.shotName ? ` ${state.shotName}` : ''} ${p.display === 'inner' && buildTier(state.build) === '26' ? 'is showing in the iOS 26 SDK window.' : 'is loaded and shows on the inner display with the iOS 26 SDK build.'}`
-      : '',
+    state.notice ?? '',
   ].filter(Boolean).join(' ');
 
   return h(
@@ -271,7 +275,7 @@ let observer: ResizeObserver | null = null;
 
 export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewState>) => void): HTMLElement {
   const layout = layoutEncore(state.posture, state.build, state.camera);
-  const shotShown = layout.presentation.display === 'inner' && buildTier(state.build) === '26';
+  const shotShown = showsScreenshot(layout.presentation.display, state.build);
   const stageHost = h('div', { class: 'stage-host' });
   const paint = () => {
     stageHost.replaceChildren(renderStage(layout, state, stageHost.clientWidth || 600));
@@ -280,6 +284,9 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
   observer = new ResizeObserver(paint);
   observer.observe(stageHost);
 
+  // Any change but a new screenshot ends the one-time notice about the last one.
+  const change = (patch: Partial<PreviewState>) => set({ notice: null, ...patch });
+
   const onShot = (e: Event) => {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -287,12 +294,12 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
     // Decode before showing: a HEIC photo, for one, is an image type most browsers can't draw.
     const probe = new Image();
     probe.onload = () => {
-      if (state.screenshot) URL.revokeObjectURL(state.screenshot);
-      set({ screenshot: url, shotName: file.name, shotError: null, build: 'legacy-26', posture: state.posture === 'closed' || state.posture === 'closed-landscape' ? 'open' : state.posture });
+      if (state.screenshot) URL.revokeObjectURL(state.screenshot.url);
+      set({ screenshot: { url, name: file.name }, notice: `Screenshot ${file.name} loaded.`, shotError: null, build: 'legacy-26', posture: state.posture === 'closed' || state.posture === 'closed-landscape' ? 'open' : state.posture });
     };
     probe.onerror = () => {
       URL.revokeObjectURL(url);
-      set({ shotError: `This browser can't show ${file.name}. Use a PNG or JPEG screenshot.` });
+      change({ shotError: `This browser can't show ${file.name}. Use a PNG or JPEG screenshot.` });
     };
     probe.src = url;
   };
@@ -304,22 +311,22 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
       'Pose',
       POSTURES.map((p) => ({ value: p.id, label: p.label, title: p.detail })),
       state.posture,
-      (posture) => set({ posture, previous: state.posture }),
+      (posture) => change({ posture, previous: state.posture }),
       'poses',
     ),
     segmented(
       'Build',
       BUILDS.map((b) => ({ value: b.id, label: b.label, title: b.detail })),
       state.build,
-      (build) => set({ build }),
+      (build) => change({ build }),
       'builds',
     ),
     h(
       'div',
       { class: 'toggles' },
-      toggle('Reserved regions', state.regions, (regions) => set({ regions }), 'Parts of the screen iOS asks apps to keep clear: the hinge and the camera'),
-      toggle('Safe area', state.safeArea, (safeArea) => set({ safeArea })),
-      toggle('Camera in use', state.camera, (camera) => set({ camera })),
+      toggle('Reserved regions', state.regions, (regions) => change({ regions }), 'Parts of the screen iOS asks apps to keep clear: the hinge and the camera'),
+      toggle('Safe area', state.safeArea, (safeArea) => change({ safeArea })),
+      toggle('Camera in use', state.camera, (camera) => change({ camera })),
     ),
     h(
       'div',
@@ -333,14 +340,14 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
       ),
       state.screenshot
         ? h('button', { class: 'button ghost', type: 'button', onclick: () => {
-            URL.revokeObjectURL(state.screenshot!);
-            set({ screenshot: null });
+            URL.revokeObjectURL(state.screenshot!.url);
+            change({ screenshot: null });
             // This button is gone after the re-render; hand keyboard focus to the control that replaced it.
             document.querySelector<HTMLElement>('[data-key="shot-input"]')?.focus();
           } }, 'Remove')
         : h('span', { class: 'hint' }, 'See how your current iPhone app opens on the inner display.'),
       state.screenshot && !shotShown
-        ? h('span', { class: 'hint', 'data-testid': 'shot-hidden' }, 'Your screenshot shows on the inner display with the iOS 26 SDK build.')
+        ? h('span', { class: 'hint', 'data-testid': 'shot-hidden' }, SHOT_HINT)
         : null,
       state.shotError ? h('p', { class: 'hint', role: 'alert', 'data-testid': 'shot-error' }, state.shotError) : null,
     ),

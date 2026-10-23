@@ -155,7 +155,7 @@ const FEATURES = {
     const report = cli(['sample', '--no-color']);
     writeFileSync(join(dir, 'report.txt'), `${report.out}\n--- stderr\n${report.err}\nexit ${report.code}`);
     assert(report.code === 1 && report.out.includes('Fix these first'), 'text report exits 1 with errors and ranks screens');
-    assert(report.out.trimEnd().split('\n').at(-1).startsWith('Exit code 1 means findings at error or worse remain'), 'the last line says what exit code 1 means');
+    assert(report.err.trimEnd().split('\n').at(-1).startsWith('Exit code 1 means findings at error or worse remain') && !report.out.includes('Exit code'), 'stderr ends with what exit code 1 means, and stdout stays the report');
     const dry = cli(['sample', '--dry-run', '--format', 'json', '--fail-on', 'never']);
     assert(JSON.parse(dry.out).findings.length === 31 && dry.err.includes('+++ b/Encore/Encore/LibraryView.swift'), 'dry run keeps JSON on stdout, diff on stderr');
     const copy = mkdtempSync(join(tmpdir(), 'duo-verify-'));

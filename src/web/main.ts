@@ -12,7 +12,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'rules', label: 'Why it breaks' },
 ];
 
-let preview: PreviewState = { posture: 'open', build: 'legacy-26', regions: true, safeArea: false, camera: false, screenshot: null, shotError: null, previous: null };
+let preview: PreviewState = { posture: 'open', build: 'legacy-26', regions: true, safeArea: false, camera: false, screenshot: null, notice: null, shotError: null, previous: null };
 let auditState: AuditState = initialAudit();
 const root = document.getElementById('app')!;
 

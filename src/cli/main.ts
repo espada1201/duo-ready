@@ -55,7 +55,7 @@ const oneOf = <T extends string>(flag: string, v: string, allowed: readonly T[])
   return v as T;
 };
 
-function parseArgs(argv: string[]): Command {
+function parseArgs(argv: string[], base: string): Command {
   const o: AuditOptions = { kind: 'audit', path: '.', fix: null, dryRun: false, format: 'text', out: null, failOn: 'error', color: !process.env.NO_COLOR && !!process.stdout.isTTY };
   let rules = false;
   let path: string | null = null;
@@ -72,7 +72,7 @@ function parseArgs(argv: string[]): Command {
       else if (flag === '--fix') {
         // `--fix`, `--fix=all` and `--fix all` all work; a bare `--fix` means safe fixes only.
         const next = argv[i + 1];
-        if (inline === undefined && next && !['all', 'safe'].includes(next) && !next.startsWith('-') && !existsSync(userPath(next)))
+        if (inline === undefined && next && !['all', 'safe'].includes(next) && !next.startsWith('-') && !existsSync(userPath(next, base)))
           throw new Error(`--fix takes "safe" or "all", and "${next}" isn't a folder either`);
         const level = inline ?? (next === 'all' || next === 'safe' ? argv[++i] : 'safe');
         o.fix = oneOf('--fix', level, ['safe', 'all'] as const);
@@ -83,7 +83,7 @@ function parseArgs(argv: string[]): Command {
       else if (flag === '--fail-on') o.failOn = oneOf('--fail-on', value(), ['error', 'warning', 'note', 'never'] as const);
       else if (a.startsWith('-')) return { kind: 'error', message: `Unknown option ${a}` };
       // `rules` is the subcommand unless there is a folder of that name to audit.
-      else if (a === 'rules' && !existsSync(userPath(a))) rules = true;
+      else if (a === 'rules' && !existsSync(userPath(a, base))) rules = true;
       else if (path !== null) return { kind: 'error', message: `One project at a time: got "${path}" and "${a}". If the folder name has a space, put the path in quotes.` };
       else path = a;
     }
@@ -173,7 +173,8 @@ function textReport(result: AuditResult, c: ReturnType<typeof paint>): string {
  * whenever stdout carries JSON or SARIF, so a piped report stays valid.
  */
 export function run(argv: string[], log = (s: string) => console.log(s), err = (s: string) => console.error(s)): number {
-  const cmd = parseArgs(argv);
+  const base = startDir();
+  const cmd = parseArgs(argv, base);
   if (cmd.kind === 'help') {
     log(HELP);
     return 0;
@@ -191,19 +192,20 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
     return 2;
   }
   const status = cmd.format === 'text' ? log : err;
-  const root = userPath(cmd.path);
+  const root = userPath(cmd.path, base);
   let files: SourceFile[];
   try {
     files = readProject(root);
   } catch (e) {
-    err(`${(e as Error).message}\nPaths are relative to the folder you ran the command in (${here()}).`);
+    err(`${(e as Error).message}\nPaths are relative to the folder you ran the command in (${base}).`);
     return 2;
   }
   const c = paint(cmd.color);
   // A 1 after a fix or a dry run that worked reads as a failure, so the last line says what it means.
+  // It goes to stderr in every format: stdout may be a patch or a report that someone redirects to a file.
   const finish = (r: AuditResult) => {
     const code = exitCode(r, cmd.failOn);
-    if (code === 1 && cmd.failOn !== 'never') status(c.dim(`Exit code 1 means findings at ${cmd.failOn} or worse remain, not that this run failed. --fail-on never exits 0.`));
+    if (code === 1 && cmd.failOn !== 'never') err(c.dim(`Exit code 1 means findings at ${cmd.failOn} or worse remain, not that this run failed. --fail-on never exits 0.`));
     return code;
   };
   if (files.length === 0) {
@@ -259,12 +261,12 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
   const body = render[cmd.format]();
   if (cmd.out) {
     try {
-      writeFileSync(userPath(cmd.out), body + '\n');
+      writeFileSync(userPath(cmd.out, base), body + '\n');
     } catch (e) {
       err(`Could not write the report: ${(e as Error).message}`);
       return 2;
     }
-    status(`Report written to ${userPath(cmd.out)}`);
+    status(`Report written to ${userPath(cmd.out, base)}`);
   } else log(body);
   if (after) status(after);
 
@@ -278,7 +280,7 @@ function exitCode(result: AuditResult, failOn: AuditOptions['failOn']): number {
   return result.findings.some((f) => SEVERITY_ORDER[f.severity] <= FAIL_AT[failOn]) ? 1 : 0;
 }
 
-/** The real location of a path, with its on-disk letter case on macOS; the path itself when it can't be resolved. */
+/** The real location of a path, through symlinks; the path itself when it can't be resolved. */
 const canonical = (path: string) => {
   try {
     return realpathSync.native(path);
@@ -300,11 +302,8 @@ export function startDir(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd
   return norm(dirname(npm_package_json)) === norm(cwd) ? INIT_CWD : cwd;
 }
 
-const here = () => startDir();
-
-/** A path as the person typed it: `~` is their home folder (a shell only expands it unquoted), the rest starts from `here()`. */
-function userPath(path: string): string {
-  const base = here();
+/** A path as the person typed it: `~` is their home folder (a shell only expands it unquoted), the rest starts from `base`. */
+function userPath(path: string, base: string): string {
   return (path === '~' || path.startsWith('~/')) && !existsSync(resolve(base, path)) ? join(homedir(), path.slice(1)) : resolve(base, path);
 }
 
@@ -318,7 +317,7 @@ const baseDir = (root: string) => (statSync(root).isDirectory() ? root : dirname
 
 /** Path from the enclosing git checkout to the audited folder, so SARIF paths match the repo. */
 function repoPrefix(root: string): string {
-  // Through symlinks, and with the letter case the disk has (APFS keeps whatever was typed first).
+  // Through symlinks, so the prefix matches where git sees the folder.
   const start = canonical(baseDir(root));
   for (let dir = start; ; dir = dirname(dir)) {
     if (existsSync(join(dir, '.git'))) return relative(dir, start).split('\\').join('/');

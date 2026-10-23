@@ -94,7 +94,9 @@ describe('duo-ready CLI', () => {
 
     const all = capture([dir, '--fix', 'all', '--format', 'json', '--fail-on', 'never']);
     expect(all.err).toContain('Applied 3 fixes to ');
-    expect(capture([dir, '--dry-run']).out).toBe(`Nothing to fix.\n${NOTE}`);
+    const again = capture([dir, '--dry-run']);
+    expect(again.out).toBe('Nothing to fix.');
+    expect(again.err).toBe(NOTE);
     expect(JSON.parse(all.out).findings.some((f: { fix?: object }) => f.fix)).toBe(false);
   });
 
@@ -174,7 +176,9 @@ describe('duo-ready CLI patches and exit codes', () => {
     writeFileSync(join(dir, 'duo.patch'), patch);
     execFileSync('git', ['apply', '--check', 'duo.patch'], { cwd: dir });
     execFileSync('git', ['apply', 'duo.patch'], { cwd: dir });
-    expect(capture([dir, '--dry-run', '--fix', 'all']).out).toBe(`Nothing to fix.\n${NOTE}`);
+    const again = capture([dir, '--dry-run', '--fix', 'all']);
+    expect(again.out).toBe('Nothing to fix.');
+    expect(again.err).toBe(NOTE);
   });
 
   it('patches files with Windows line endings or no final newline', () => {
@@ -245,27 +249,48 @@ describe('duo-ready CLI exit code note', () => {
     for (const argv of [[dir], [dir, '--dry-run'], [dir, '--fix']]) {
       const r = capture([...argv, '--no-color']);
       expect(r.code).toBe(1);
-      expect(lastLine(r.out)).toBe(NOTE);
+      expect(lastLine(r.err)).toBe(NOTE);
+      expect(r.out).not.toContain('Exit code');
     }
-    expect(lastLine(capture(['sample', '--no-color', '--fail-on', 'warning']).out)).toBe(NOTE.replace('error or worse', 'warning or worse'));
+    expect(lastLine(capture(['sample', '--no-color', '--fail-on', 'warning']).err)).toBe(NOTE.replace('error or worse', 'warning or worse'));
   });
 
   it('stays quiet when the exit code is 0, and keeps JSON and SARIF on stdout clean', () => {
-    expect(capture(['sample', '--no-color', '--fail-on', 'never']).out).not.toContain('Exit code');
+    const quiet = capture(['sample', '--no-color', '--fail-on', 'never']);
+    expect(quiet.out + quiet.err).not.toContain('Exit code');
     const json = capture(['sample', '--format', 'json']);
     expect(json.code).toBe(1);
     expect(JSON.parse(json.out).findings).toHaveLength(31);
     expect(lastLine(json.err)).toBe(NOTE);
-    const out = join(tmpdir(), `duo-${process.pid}.txt`);
-    expect(lastLine(capture(['sample', '--no-color', '--out', out]).out)).toBe(NOTE);
-    rmSync(out);
+    const sarif = capture(['sample', '--format', 'sarif']);
+    expect(sarif.code).toBe(1);
+    expect(JSON.parse(sarif.out).runs[0].results.length).toBeGreaterThan(0);
+    expect(sarif.out).not.toContain('Exit code');
+    expect(lastLine(sarif.err)).toBe(NOTE);
   });
 
-  it('keeps a dry-run patch applicable with the note after it', () => {
+  describe('with --out', () => {
+    let out: string | null = null;
+    afterEach(() => {
+      if (out) rmSync(out, { force: true });
+      out = null;
+    });
+
+    it('writes the report to the file and keeps the note on stderr', () => {
+      out = join(tmpdir(), `duo-${process.pid}.txt`);
+      const r = capture(['sample', '--no-color', '--out', out]);
+      expect(lastLine(r.err)).toBe(NOTE);
+      expect(r.out).not.toContain('Exit code');
+      expect(readFileSync(out, 'utf8')).not.toContain('Exit code');
+    });
+  });
+
+  it('keeps a dry-run patch on stdout exactly as git apply wants it, with the note on stderr', () => {
     dir = mkdtempSync(join(tmpdir(), 'duo-'));
     cpSync('sample', dir, { recursive: true });
-    const patch = capture([dir, '--dry-run', '--no-color']).out;
-    expect(lastLine(patch)).toBe(NOTE);
+    const { out: patch, err } = capture([dir, '--dry-run', '--no-color']);
+    expect(lastLine(err)).toBe(NOTE);
+    expect(patch).not.toContain('Exit code');
     writeFileSync(join(dir, 'duo.patch'), patch);
     execFileSync('git', ['apply', '--check', 'duo.patch'], { cwd: dir });
   });

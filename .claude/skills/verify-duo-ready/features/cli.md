@@ -17,9 +17,9 @@
 
 Preconditions: `dist-cli/duo-ready.js` built (the run builds it).
 
-- **Report.** Run `duo-ready sample --no-color`. Exit code 1, stdout contains `Fix these first`, and its last line starts `Exit code 1 means findings at error or worse remain`.
+- **Report.** Run `duo-ready sample --no-color`. Exit code 1, stdout contains `Fix these first` and no exit-code line, and the last line of stderr starts `Exit code 1 means findings at error or worse remain`.
 - **Dry run.** Run `duo-ready sample --dry-run --format json --fail-on never`. stdout parses as JSON with 31 findings and stderr contains `+++ b/Encore/Encore/LibraryView.swift`.
-- **Fix.** Run `duo-ready <copy of sample> --fix`. The copy's `LibraryView.swift` now contains `NavigationStack {`. With the default `--fail-on`, the output still ends with the exit-code line.
+- **Fix.** Run `duo-ready <copy of sample> --fix`. The copy's `LibraryView.swift` now contains `NavigationStack {`. With the default `--fail-on`, stderr still ends with the exit-code line.
 - **Rules.** Run `duo-ready rules`. stdout contains `game-aspect`.
 
 ## Gotchas

@@ -53,16 +53,20 @@ describe('where relative paths start (npm run, npx, macOS and Windows paths)', (
     dir = mkdtempSync(join(tmpdir(), 'duo-'));
     mkdirSync(join(dir, 'My Apps/Tunely'), { recursive: true });
     writeFileSync(join(dir, 'My Apps/Tunely/A.swift'), 'let s = UIScreen.main.scale');
-    const home = process.env.HOME;
+    // os.homedir() reads HOME on macOS and Linux, USERPROFILE on Windows.
+    const before = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
     try {
       process.env.HOME = dir;
+      process.env.USERPROFILE = dir;
       expect(capture(['~/My Apps/Tunely', '--no-color']).out).toContain('UIScreen.main');
       expect(capture(['~/My Apps/Tunely', '--no-color', '--out', '~/r.txt', '--fail-on', 'never']).code).toBe(0);
       expect(readFileSync(join(dir, 'r.txt'), 'utf8')).toContain('UIScreen.main');
       expect(capture(['~/Missing']).err).toContain(join(dir, 'Missing'));
     } finally {
-      if (home === undefined) delete process.env.HOME;
-      else process.env.HOME = home;
+      for (const [k, v] of Object.entries(before)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
     }
   });
 
