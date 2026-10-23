@@ -182,6 +182,7 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
           multiple: true,
           class: 'visually-hidden',
           'data-testid': 'folder-input',
+          'data-key': 'folder-input',
           onchange: (e: Event) => {
             const list = (e.target as HTMLInputElement).files;
             if (list) void load(() => filesFromInput(list), 'Chosen folder');
@@ -197,6 +198,7 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
           accept: '.zip,application/zip',
           class: 'visually-hidden',
           'data-testid': 'zip-input',
+          'data-key': 'zip-input',
           onchange: (e: Event) => {
             const file = (e.target as HTMLInputElement).files?.[0];
             if (file) void load(() => filesFromZip(file), file.name);
@@ -245,7 +247,7 @@ export function renderAudit(state: AuditState, set: (s: AuditState) => void, ope
   );
 
   let body: HTMLElement | null = null;
-  if (state.status === 'loading') body = h('p', { class: 'status-line', role: 'status' }, 'Reading files…');
+  if (state.status === 'loading') body = h('p', { class: 'status-line', role: 'status', 'data-announce': 'Reading files…' }, 'Reading files…');
   else if (state.status === 'error') body = h('p', { class: 'error', role: 'alert' }, state.error);
   else if (state.status === 'done' && state.result) body = results(state, set, openPreview);
 
@@ -304,7 +306,14 @@ function results(state: AuditState, set: (s: AuditState) => void, openPreview: (
 
   const summary = h(
     'section',
-    { class: 'summary', id: 'audit-summary', tabindex: '-1', 'aria-label': 'Audit summary' },
+    {
+      class: 'summary',
+      id: 'audit-summary',
+      tabindex: '-1',
+      'aria-label': 'Audit summary',
+      // Heard in the page's live region, since the results replace the tree the person was in.
+      'data-announce': `Audited ${state.source}: ${r.score} out of 100, ${r.grade}, ${plural(r.findings.length, 'finding', 'findings')}.`,
+    },
     h('div', { class: 'score', 'data-grade': r.grade }, scoreRing(r.score), h('div', { class: 'score-num' }, h('strong', { 'data-testid': 'score' }, String(r.score)), h('span', {}, '/100'))),
     h(
       'div',

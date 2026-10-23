@@ -125,6 +125,24 @@ const FEATURES = {
     await proof(page, dir, 'zip');
   },
 
+  async 'screen-reader'(page, dir) {
+    await page.goto(URL);
+    const pose = page.getByRole('group', { name: 'Pose' });
+    assert((await pose.getByRole('radio').count()) === 7, 'every pose is a named radio inside the Pose group');
+    await page.getByRole('radio', { name: 'Open', exact: true }).focus();
+    await page.keyboard.press('ArrowRight');
+    assert(await page.getByRole('radio', { name: 'Open, rotated', exact: true }).evaluate((el) => el === document.activeElement && el.checked), 'an arrow key selects the next pose and keeps focus on it');
+    assert((await page.locator('#announce').innerText()).startsWith('Open, rotated, iOS 26 SDK:'), 'the new pose is announced in the live region');
+    await page.goto(`${URL}#audit`);
+    await page.locator('#main').focus();
+    await page.keyboard.press('Tab');
+    assert(await page.getByRole('button', { name: 'Choose folder' }).evaluate((el) => el === document.activeElement), 'Tab reaches the hidden folder input as a button named Choose folder');
+    await page.getByRole('button', { name: 'Try the sample app' }).click();
+    await findings(page);
+    assert((await page.locator('#announce').innerText()) === 'Audited Sample app: Encore: 10 out of 100, Not ready, 31 findings.', 'a loaded project is announced with its grade');
+    await proof(page, dir, 'announced');
+  },
+
   async rules(page, dir) {
     await page.goto(`${URL}#rules/keyboard-frame`);
     await page.waitForFunction(() => document.activeElement?.id === 'rule-keyboard-frame');

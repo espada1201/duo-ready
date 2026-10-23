@@ -13,6 +13,8 @@ export interface PreviewState {
   safeArea: boolean;
   camera: boolean;
   screenshot: string | null;
+  /** File name of the screenshot, for the announcement. */
+  shotName?: string;
   /** Why the last screenshot couldn't be shown. */
   shotError: string | null;
   /** The pose before the last change, for the fold continuity check. */
@@ -174,7 +176,10 @@ function readout(layout: EncoreLayout, state: PreviewState): HTMLElement {
     `${POSTURES.find((x) => x.id === state.posture)!.label}, ${BUILDS.find((b) => b.id === state.build)!.label}:`,
     problems.length ? `${problems.length} ${problems.length === 1 ? 'problem' : 'problems'} in this pose.` : 'no collisions in this pose.',
     fold ? (fold.lost.length ? `Fold test: lost ${joinEnglish(fold.lost)}.` : 'Fold test: Encore kept your place.') : '',
-  ].join(' ');
+    state.screenshot
+      ? `Screenshot${state.shotName ? ` ${state.shotName}` : ''} ${p.display === 'inner' && buildTier(state.build) === '26' ? 'is showing in the iOS 26 SDK window.' : 'is loaded and shows on the inner display with the iOS 26 SDK build.'}`
+      : '',
+  ].filter(Boolean).join(' ');
 
   return h(
     'section',
@@ -284,7 +289,7 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
     const probe = new Image();
     probe.onload = () => {
       if (state.screenshot) URL.revokeObjectURL(state.screenshot);
-      set({ screenshot: url, shotError: null, build: 'legacy-26', posture: state.posture === 'closed' || state.posture === 'closed-landscape' ? 'open' : state.posture });
+      set({ screenshot: url, shotName: file.name, shotError: null, build: 'legacy-26', posture: state.posture === 'closed' || state.posture === 'closed-landscape' ? 'open' : state.posture });
     };
     probe.onerror = () => {
       URL.revokeObjectURL(url);
@@ -325,12 +330,14 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
         { class: 'button ghost' },
         icon('upload', 16),
         h('span', {}, state.screenshot ? 'Change screenshot' : 'Try your own screenshot'),
-        h('input', { type: 'file', accept: 'image/*', class: 'visually-hidden', onchange: onShot, 'data-testid': 'shot-input' }),
+        h('input', { type: 'file', accept: 'image/*', class: 'visually-hidden', onchange: onShot, 'data-testid': 'shot-input', 'data-key': 'shot-input' }),
       ),
       state.screenshot
         ? h('button', { class: 'button ghost', type: 'button', onclick: () => {
             URL.revokeObjectURL(state.screenshot!);
             set({ screenshot: null });
+            // This button is gone after the re-render; hand keyboard focus to the control that replaced it.
+            document.querySelector<HTMLElement>('[data-key="shot-input"]')?.focus();
           } }, 'Remove')
         : h('span', { class: 'hint' }, 'See how your current iPhone app opens on the inner display.'),
       state.screenshot && !shotShown

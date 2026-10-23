@@ -16,6 +16,7 @@ One file per user-facing feature. The file name matches the function in `../veri
 - `audit-sample.md` covers the sample audit, the worst-screens list, fix selection, the zip, and pain-point links.
 - `audit-paste.md` covers pasted code, fix previews, and partial audits.
 - `audit-folder.md` covers choosing a project folder.
+- `screen-reader.md` covers pose radio names, arrow keys, file inputs reached by keyboard, and live announcements.
 - `rules.md` covers the rules page and deep links.
 - `cli.md` covers the report, dry run, fixing in place, and the rules command.
 
