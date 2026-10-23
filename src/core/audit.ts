@@ -15,6 +15,19 @@ export function isRelevant(path: string): boolean {
   return RELEVANT.test(path) && !SKIP_DIR.test(path) && !TEST_FILE.test(path);
 }
 
+/** Files that mark a project for another platform, so an empty audit can say what it found instead. */
+const OTHER_PLATFORMS: [RegExp, string][] = [
+  [/(^|\/)(AndroidManifest\.xml|build\.gradle(\.kts)?|settings\.gradle(\.kts)?)$/, 'an Android project'],
+  [/(^|\/)pubspec\.yaml$/, 'a Flutter project without its ios folder'],
+  [/(^|\/)\w+\.csproj$/, 'a .NET project'],
+];
+
+/** What kind of non-iOS project these paths look like, or null. */
+export function otherPlatform(paths: string[]): string | null {
+  for (const [marker, kind] of OTHER_PLATFORMS) if (paths.some((p) => marker.test(p))) return kind;
+  return null;
+}
+
 /** Whether a folder can hold relevant files: vendored and hidden folders can't. */
 export function isRelevantDir(path: string): boolean {
   return !SKIP_DIR.test(`${path}/`);

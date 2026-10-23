@@ -1,6 +1,6 @@
 import { existsSync, lstatSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { applyFixes, audit, isRelevant, isRelevantDir, MAX_BYTES } from '../core/audit';
+import { applyFixes, audit, isRelevant, isRelevantDir, MAX_BYTES, otherPlatform } from '../core/audit';
 import { patchFor } from '../core/diff';
 import { describeCounts, fixCounts, fixLabel, gainLabel, GRADE_LEGEND, objcNote, PARTIAL_NOTE, plural, SCREENS_NOTE, screensFirst, SEVERITY_ORDER, severityLabel, summaryLine, tierNote, unreadableNote } from '../core/findings';
 import { PAIN_POINTS, RULE_BY_ID } from '../core/rules';
@@ -113,13 +113,22 @@ function readProject(root: string): SourceFile[] {
   return out;
 }
 
+/** Paths of the files in the top two levels of a folder, enough to recognise another platform's project. */
+function topNames(root: string, depth = 2): string[] {
+  if (!statSync(root, { throwIfNoEntry: false })?.isDirectory()) return [];
+  return readdirSync(root, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? (depth > 1 && isRelevantDir(e.name) ? topNames(join(root, e.name), depth - 1).map((p) => `${e.name}/${p}`) : []) : [e.name],
+  );
+}
+
 function paint(on: boolean) {
   const wrap = (code: string) => (s: string) => (on ? `\x1b[${code}m${s}\x1b[0m` : s);
   return { red: wrap('31'), yellow: wrap('33'), cyan: wrap('36'), dim: wrap('2'), bold: wrap('1'), green: wrap('32') };
 }
 
 function textReport(result: AuditResult, c: ReturnType<typeof paint>): string {
-  const lines: string[] = [];
+  // The verdict leads too, so a long report doesn't hide it above the fold of a short terminal.
+  const lines: string[] = result.findings.length ? [`${c.bold(`Duo readiness ${result.score}/100`)}  ${result.grade}. Details below, summary at the end.`, ''] : [];
   const mark = { error: c.red('error  '), warning: c.yellow('warning'), info: c.cyan('note   ') };
   const indent = ' '.repeat(18);
   // A rule's advice is printed under its first finding only, so a rule that fires 20 times doesn't repeat it.
@@ -191,10 +200,16 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
   }
   const c = paint(cmd.color);
   if (files.length === 0) {
-    err(`No Swift, Objective-C, Info.plist or Xcode project files found in ${root}. Point duo-ready at the folder that holds your .xcodeproj.`);
+    const kind = otherPlatform(topNames(root));
+    err(
+      `No Swift, Objective-C, Info.plist or Xcode project files found in ${root}.` +
+        (kind ? ` It looks like ${kind}, and duo-ready only checks iPhone apps.` : '') +
+        ` Point duo-ready at the folder that holds your .xcodeproj.`,
+    );
     return 2;
   }
   let result = audit(files);
+  let after = '';
 
   if (cmd.fix || cmd.dryRun) {
     const { files: fixed, applied } = applyFixes(files, result.findings, cmd.fix ?? 'safe');
@@ -221,8 +236,10 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
         err(`Could not write fixes: ${(e as Error).message}`);
         return 2;
       }
-      status(applied.length ? c.green(`Applied ${plural(applied.length, 'fix', 'fixes')} to ${changed.join(', ')}.`) : none);
-      if (changed.length) status(c.dim('Review them with git diff before you commit; git checkout -- <file> undoes one.'));
+      const done = applied.length ? c.green(`Applied ${plural(applied.length, 'fix', 'fixes')} to ${changed.join(', ')}.`) : none;
+      status(done);
+      // Repeated after the report, where the eye lands when the command finishes.
+      after = changed.length ? `\n${done}\n${c.dim('Review them with git diff before you commit; git checkout -- <file> undoes one.')}` : `\n${done}`;
       result = audit(fixed);
     }
   }
@@ -242,6 +259,7 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
     }
     status(`Report written to ${resolve(here(), cmd.out)}`);
   } else log(body);
+  if (after) status(after);
 
   return exitCode(result, cmd.failOn);
 }

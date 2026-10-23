@@ -85,6 +85,8 @@ describe('duo-ready CLI', () => {
     expect(fixed.code).toBe(0);
     expect(fixed.out).toContain('Applied 2 fixes to Encore/Encore/LibraryView.swift, Encore/Encore/PlayerViewController.swift.');
     expect(fixed.out).toContain('git diff');
+    // The fix summary closes the output too, after the long report.
+    expect(fixed.out.trimEnd().split('\n').slice(-2)[0]).toBe('Applied 2 fixes to Encore/Encore/LibraryView.swift, Encore/Encore/PlayerViewController.swift.');
     expect(readFileSync(player, 'utf8')).toContain('image(scale: UIScreen.main.scale)');
     expect(readFileSync(join(dir, 'Encore/Encore/LibraryView.swift'), 'utf8')).toContain('NavigationStack {');
 
@@ -112,6 +114,19 @@ describe('duo-ready CLI', () => {
     expect(sarif.runs[0].results.map((r: { locations: { physicalLocation: { artifactLocation: { uri: string } } }[] }) => r.locations[0].physicalLocation.artifactLocation.uri)).toEqual([
       'ios/App/A.swift',
     ]);
+  });
+
+  it('leads the report with the verdict', () => {
+    expect(capture(['sample', '--no-color']).out.split('\n')[0]).toBe('Duo readiness 10/100  Not ready. Details below, summary at the end.');
+  });
+
+  it('names an Android project instead of only saying nothing was found', () => {
+    dir = mkdtempSync(join(tmpdir(), 'duo-'));
+    mkdirSync(join(dir, 'app/src/main'), { recursive: true });
+    writeFileSync(join(dir, 'settings.gradle'), "include ':app'");
+    writeFileSync(join(dir, 'app/src/main/AndroidManifest.xml'), '<manifest/>');
+    expect(capture([dir])).toMatchObject({ code: 2, err: expect.stringContaining('It looks like an Android project, and duo-ready only checks iPhone apps.') });
+    expect(capture(['src/core']).err).not.toContain('looks like');
   });
 
   it('explains bad input instead of crashing', () => {

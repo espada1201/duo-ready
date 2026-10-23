@@ -6,11 +6,10 @@ iOS doesn't let anyone reshape someone else's app, so this kit is for the people
 
 ## Run on your Mac
 
-1. Install Homebrew from https://brew.sh if you don't have it.
-2. In Terminal, run `brew install node`.
-3. Run `git clone https://github.com/espada1201/duo-ready.git && cd duo-ready`.
-4. Run `npm install && npm start`.
-5. Your browser opens the Duo Lab at http://localhost:4178 (or the next free port Terminal shows).
+1. You need Node.js 20.19 or later (`node -v` shows yours). If you don't have it, get it from https://nodejs.org or run `brew install node`.
+2. In Terminal, run `git clone https://github.com/espada1201/duo-ready.git && cd duo-ready`.
+3. Run `npm install && npm start`.
+4. Your browser opens the Duo Lab at http://localhost:4178 (or the next free port Terminal shows). *Preview* shows a sample app in every Duo pose; *Audit* > *Try the sample app* shows its full report.
 
 ## What's inside
 
@@ -21,6 +20,7 @@ iOS doesn't let anyone reshape someone else's app, so this kit is for the people
   npm run audit -- ../MyApp --dry-run    # preview fixes as a patch git apply accepts
   npm run audit -- ../MyApp --fix        # apply safe fixes (--fix all for the rest)
   ```
+  `../MyApp` stands for the folder that holds your `.xcodeproj`, and the `--` hands the options on past npm.
   Try it on the bundled legacy app with `npm run audit -- sample`, or skip the clone with
   `npx github:espada1201/duo-ready ../MyApp`. Paths are relative to where you run the command.
   `--format json` or `sarif` (for GitHub code scanning) keeps stdout machine-readable; add `-s`
