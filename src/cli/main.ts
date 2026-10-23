@@ -200,6 +200,12 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
     return 2;
   }
   const c = paint(cmd.color);
+  // A 1 after a fix or a dry run that worked reads as a failure, so the last line says what it means.
+  const finish = (r: AuditResult) => {
+    const code = exitCode(r, cmd.failOn);
+    if (code === 1 && cmd.failOn !== 'never') status(c.dim(`Exit code 1 means findings at ${cmd.failOn} or worse remain, not that this run failed. --fail-on never exits 0.`));
+    return code;
+  };
   if (files.length === 0) {
     const kind = otherPlatform(topNames(root));
     err(
@@ -227,7 +233,7 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
         const save = cmd.format === 'text' ? '> duo.patch' : '2> duo.patch';
         status(c.dim(`\n${plural(applied.length, 'fix', 'fixes')} would be applied. Nothing was written. To apply later, save this with ${save} and run git apply duo.patch in ${baseDir(root)}.`));
       }
-      if (cmd.format === 'text' && !cmd.out) return exitCode(result, cmd.failOn);
+      if (cmd.format === 'text' && !cmd.out) return finish(result);
     } else {
       const base = baseDir(root);
       const changed = fixed.filter((file, i) => file.content !== files[i].content).map((file) => file.path);
@@ -262,7 +268,7 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
   } else log(body);
   if (after) status(after);
 
-  return exitCode(result, cmd.failOn);
+  return finish(result);
 }
 
 const FAIL_AT = { error: 0, warning: 1, note: 2 } as const;
