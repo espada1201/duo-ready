@@ -26,9 +26,13 @@ you ran the command in.
 
 Options
   --format text|json|sarif         Output format (default: text)
-  --out <file>                     Write the report to a file
-  --fail-on error|warning|note|never
-                                   Exit 1 at this severity or worse (default: error)
+  --out <file>                     Write the report to a file. With --dry-run, write the
+                                   patch instead, so git apply <file> works. With
+                                   --dry-run and --format json or sarif, the file still
+                                   gets the report and the patch goes to stderr.
+  --fail-on error|warning|note|info|never
+                                   Exit 1 at this severity or worse (default: error).
+                                   info is the same as note; JSON and SARIF say info.
   --no-color                       Plain output
 
 Exit codes
@@ -80,7 +84,10 @@ function parseArgs(argv: string[], base: string): Command {
       else if (a === '--no-color') o.color = false;
       else if (flag === '--format') o.format = oneOf('--format', value(), ['text', 'json', 'sarif'] as const);
       else if (flag === '--out') o.out = value();
-      else if (flag === '--fail-on') o.failOn = oneOf('--fail-on', value(), ['error', 'warning', 'note', 'never'] as const);
+      else if (flag === '--fail-on') {
+        const level = oneOf('--fail-on', value(), ['error', 'warning', 'note', 'info', 'never'] as const);
+        o.failOn = level === 'info' ? 'note' : level;
+      }
       else if (a.startsWith('-')) return { kind: 'error', message: `Unknown option ${a}` };
       // `rules` is the subcommand unless there is a folder of that name to audit.
       else if (a === 'rules' && !existsSync(userPath(a, base))) rules = true;
@@ -229,13 +236,29 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
       : 'Nothing to fix.';
     if (cmd.dryRun) {
       const diff = patchFor(files, applied);
-      // With --format json or sarif the diff goes to stderr so stdout stays a valid report.
+      // As text, --out takes the patch, so the file is something git apply accepts. With json or
+      // sarif it still takes the report and the diff goes to stderr, so stdout stays a valid report.
+      if (cmd.out && cmd.format === 'text') {
+        if (!diff) {
+          status(`${none} No patch file written.`);
+          return finish(result);
+        }
+        const file = userPath(cmd.out, base);
+        try {
+          writeFileSync(file, diff + '\n');
+        } catch (e) {
+          err(`Could not write the patch: ${(e as Error).message}`);
+          return 2;
+        }
+        status(`Patch written to ${file}. ${plural(applied.length, 'fix', 'fixes')} would be applied. Nothing else was written. To apply later, run git apply ${file} in ${baseDir(root)}.`);
+        return finish(result);
+      }
       status(diff || none);
       if (diff) {
-        const save = cmd.format === 'text' ? '> duo.patch' : '2> duo.patch';
+        const save = cmd.format === 'text' ? '--out duo.patch' : '2> duo.patch';
         status(c.dim(`\n${plural(applied.length, 'fix', 'fixes')} would be applied. Nothing was written. To apply later, save this with ${save} and run git apply duo.patch in ${baseDir(root)}.`));
       }
-      if (cmd.format === 'text' && !cmd.out) return finish(result);
+      if (cmd.format === 'text') return finish(result);
     } else {
       const base = baseDir(root);
       const changed = fixed.filter((file, i) => file.content !== files[i].content).map((file) => file.path);

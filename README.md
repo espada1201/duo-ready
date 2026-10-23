@@ -18,6 +18,7 @@ iOS doesn't let anyone reshape someone else's app, so this kit is for the people
   ```sh
   npm run audit -- ../MyApp              # report
   npm run audit -- ../MyApp --dry-run    # preview fixes as a patch git apply accepts
+  npm run audit -- ../MyApp --dry-run --out duo.patch   # the same patch, written to a file
   npm run audit -- ../MyApp --fix        # apply safe fixes (--fix all for the rest)
   ```
   `../MyApp` stands for the folder that holds your `.xcodeproj`, and the `--` hands the options on past npm.
@@ -25,7 +26,7 @@ iOS doesn't let anyone reshape someone else's app, so this kit is for the people
   `npx github:espada1201/duo-ready ../MyApp`. Paths are relative to where you run the command.
   `--format json` or `sarif` (for GitHub code scanning) keeps stdout machine-readable; add `-s`
   (`npm run -s audit -- ...`) so npm's own banner stays off it, or use `--out report.json`.
-  Exit codes: 0 nothing at `--fail-on` (error by default; warning or note are stricter), 1 findings at it, 2 bad input.
+  Exit codes: 0 nothing at `--fail-on` (error by default; warning or note are stricter, and info means note), 1 findings at it, 2 bad input.
 
 ## The rules
 

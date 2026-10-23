@@ -140,7 +140,7 @@ describe('duo-ready CLI', () => {
     expect(capture(['rules']).out).toContain('uiscreen-main');
     expect(capture(['--no-color', 'rules']).out).toContain('keyboard-frame');
     expect(capture(['--fix', 'everything'])).toMatchObject({ code: 2, err: expect.stringContaining('--fix takes "safe" or "all"') });
-    expect(capture(['--fail-on', 'info']).err).toContain('--fail-on takes "error", "warning", "note" or "never", not "info"');
+    expect(capture(['--fail-on', 'fatal']).err).toContain('--fail-on takes "error", "warning", "note", "info" or "never", not "fatal"');
     expect(capture(['README.md']).err).toContain('No Swift');
     expect(capture(['does-not-exist']).err).toContain('Paths are relative to the folder you ran the command in');
     expect(capture(['rules']).out).toMatch(/^Black bars\n=+\n/);
@@ -283,6 +283,51 @@ describe('duo-ready CLI exit code note', () => {
       expect(r.out).not.toContain('Exit code');
       expect(readFileSync(out, 'utf8')).not.toContain('Exit code');
     });
+  });
+
+  it('--dry-run --out writes the patch to the file, so git apply --check accepts it', () => {
+    dir = mkdtempSync(join(tmpdir(), 'duo-'));
+    cpSync('sample', dir, { recursive: true });
+    const stdout = capture([dir, '--dry-run', '--no-color']).out;
+    const file = join(dir, 'duo.patch');
+    const r = capture([dir, '--dry-run', '--no-color', '--out', file]);
+    expect(r.out).toContain(`Patch written to ${file}`);
+    expect(r.out).not.toContain('+++ b/');
+    const patch = readFileSync(file, 'utf8');
+    expect(patch).not.toContain('Audit');
+    expect(stdout.startsWith(patch.trimEnd())).toBe(true);
+    execFileSync('git', ['apply', '--check', 'duo.patch'], { cwd: dir });
+    expect(lastLine(r.err)).toBe(NOTE);
+  });
+
+  it('--dry-run --out with nothing to fix writes no file and says so', () => {
+    dir = mkdtempSync(join(tmpdir(), 'duo-'));
+    writeFileSync(join(dir, 'A.swift'), 'let x = 1');
+    const file = join(dir, 'duo.patch');
+    const r = capture([dir, '--dry-run', '--out', file]);
+    expect(r.out).toBe('Nothing to fix. No patch file written.');
+    expect(() => readFileSync(file)).toThrow();
+  });
+
+  it('--dry-run --out reports an unwritable patch file with exit 2', () => {
+    expect(capture(['sample', '--dry-run', '--out', '/nonexistent/duo.patch'])).toMatchObject({ code: 2, err: expect.stringContaining('Could not write the patch') });
+  });
+
+  it('--dry-run --format json --out keeps the JSON report in the file and the patch on stderr', () => {
+    dir = mkdtempSync(join(tmpdir(), 'duo-'));
+    const file = join(dir, 'r.json');
+    const r = capture(['sample', '--dry-run', '--format', 'json', '--out', file, '--fail-on', 'never']);
+    expect(JSON.parse(readFileSync(file, 'utf8')).findings.length).toBeGreaterThan(0);
+    expect(r.err).toContain('+++ b/Encore/Encore/LibraryView.swift');
+  });
+
+  it('--fail-on info is the same as note', () => {
+    dir = mkdtempSync(join(tmpdir(), 'duo-'));
+    writeFileSync(join(dir, 'A.swift'), 'Text("Unlock with Face ID")');
+    expect(capture([dir, '--fail-on', 'info']).code).toBe(capture([dir, '--fail-on', 'note']).code);
+    expect(capture([dir, '--fail-on', 'info']).code).toBe(1);
+    expect(lastLine(capture([dir, '--fail-on', 'info', '--no-color']).err)).toContain('findings at note or worse');
+    expect(capture(['--help']).out).toContain('note|info');
   });
 
   it('keeps a dry-run patch on stdout exactly as git apply wants it, with the note on stderr', () => {
