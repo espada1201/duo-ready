@@ -510,7 +510,9 @@ label.button:focus-within {
 .shot {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* The whole screenshot, never cropped: the window is a fixed iPhone-sized box, not the image's shape. */
+  object-fit: contain;
+  background: #000;
   display: block;
 }
 

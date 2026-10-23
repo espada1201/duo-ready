@@ -84,6 +84,20 @@ test('a screenshot of your own app appears in the compatibility window', async (
   await expect(page.locator('.shot')).toHaveCount(0);
 });
 
+test('with a screenshot loaded, the problems say they come from the sample app, and the whole screenshot shows', async ({ page }) => {
+  await page.goto('./');
+  await expect(page.getByTestId('sample-note')).toHaveCount(0);
+  const tall = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await page.getByTestId('shot-input').setInputFiles({ name: 'app.png', mimeType: 'image/png', buffer: tall });
+  await expect(page.getByAltText('Your app screenshot in the compatibility window')).toBeVisible();
+  await expect(page.getByTestId('sample-note')).toHaveText('These problems and the fold test come from the sample app’s code (Encore), not from your screenshot.');
+  await expect(page.locator('#announce')).toContainText('from the Encore sample app, not your screenshot');
+  // Contain, not cover: a portrait screenshot keeps its top and bottom.
+  await expect(page.locator('.shot')).toHaveCSS('object-fit', 'contain');
+  await page.getByRole('button', { name: 'Remove' }).click();
+  await expect(page.getByTestId('sample-note')).toHaveCount(0);
+});
+
 test('a screenshot the browser cannot draw gets a reason instead of a broken image', async ({ page }) => {
   await page.goto('./');
   await page.getByTestId('shot-input').setInputFiles({ name: 'IMG_0001.HEIC', mimeType: 'image/heic', buffer: Buffer.from('not really an image') });
@@ -135,6 +149,8 @@ test('auditing a chosen folder, pasted code, and a folder with nothing to audit'
   await page.goto('./#audit');
   await page.getByTestId('folder-input').setInputFiles('sample');
   await expect(page.locator('.finding')).toHaveCount(31);
+  await expect(page.locator('.eyebrow')).toHaveText('sample');
+  await expect(page.locator('#announce')).toContainText('Audited sample: ');
 
   await page.getByRole('button', { name: 'Paste Swift' }).click();
   await page.getByLabel('Swift source').fill('final class A: UIViewController {\n  func f() { let s = UIScreen.main.scale }\n}');

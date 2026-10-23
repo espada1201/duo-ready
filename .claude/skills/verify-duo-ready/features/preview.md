@@ -7,6 +7,7 @@ The Preview tab shows Encore, a typical iPhone music app, on every Duo pose for 
 - `poses` switches between Closed, Closed sideways, Open, Open rotated, Split View, Half folded, book and Half folded, propped up.
 - `builds` switches between the iOS 26, 27 and 27.1 SDKs and `27.1 + recommended changes`.
 - `problems` lists collisions and black bars for the current pose.
+- `screenshot` shows the person's own screenshot whole (contain, not cropped) in the compatibility window on the inner display; while one is loaded the problems say they come from the sample app, not the screenshot.
 - `changes` lists what the recommended build changes, split into applied, suggested and manual.
 
 ## How to get to it (user POV)

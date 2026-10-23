@@ -24,6 +24,7 @@ export interface PreviewState {
 
 /** The screenshot only replaces the app on the inner display, in a build made with the iOS 26 SDK. */
 const showsScreenshot = (display: Presentation['display'], build: Build) => display === 'inner' && buildTier(build) === '26';
+const SAMPLE_NOTE = 'These problems and the fold test come from the sample app’s code (Encore), not from your screenshot.';
 const SHOT_HINT = 'Your screenshot shows on the inner display with the iOS 26 SDK build.';
 
 const TRACKS = ['Low Tide', 'Paper Lanterns', 'Overpass', 'Static Bloom', 'Half Light', 'North Window', 'Glass Hours', 'Undertow', 'Small Hours'];
@@ -177,9 +178,10 @@ function readout(layout: EncoreLayout, state: PreviewState): HTMLElement {
 
   // One sentence for screen readers; the page announces it whenever it changes.
   const fold = state.previous ? continuity(state.previous, state.posture, state.build) : null;
+  const from = state.screenshot ? ', from the Encore sample app, not your screenshot' : '';
   const announce = [
     `${POSTURES.find((x) => x.id === state.posture)!.label}, ${BUILDS.find((b) => b.id === state.build)!.label}:`,
-    problems.length ? `${problems.length} ${problems.length === 1 ? 'problem' : 'problems'} in this pose.` : 'no collisions in this pose.',
+    problems.length ? `${problems.length} ${problems.length === 1 ? 'problem' : 'problems'} in this pose${from}.` : `no collisions in this pose${from}.`,
     fold ? (fold.lost.length ? `Fold test: lost ${joinEnglish(fold.lost)}.` : 'Fold test: Encore kept your place.') : '',
     state.notice ?? '',
   ].filter(Boolean).join(' ');
@@ -205,6 +207,7 @@ function readout(layout: EncoreLayout, state: PreviewState): HTMLElement {
       h('dd', {}, h('ul', { class: 'plain' }, regions), h('p', { class: 'hint' }, 'Parts of the display iOS asks apps to keep content clear of, such as the hinge and the camera.')),
     ),
     h('h3', {}, problems.length ? `Problems in this pose (${problems.length})` : 'Problems in this pose'),
+    state.screenshot ? h('p', { class: 'hint', 'data-testid': 'sample-note' }, SAMPLE_NOTE) : null,
     problems.length
       ? h('ul', { class: 'problems', 'data-testid': 'problems' }, problems)
       : h('p', { class: 'all-clear', 'data-testid': 'problems' }, icon('check', 16), ' No collisions. Content stays clear of the hinge, camera and status bar.'),
@@ -341,7 +344,7 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
       state.screenshot
         ? h('button', { class: 'button ghost', type: 'button', onclick: () => {
             URL.revokeObjectURL(state.screenshot!.url);
-            change({ screenshot: null });
+            change({ screenshot: null, notice: 'Screenshot removed.' });
             // This button is gone after the re-render; hand keyboard focus to the control that replaced it.
             document.querySelector<HTMLElement>('[data-key="shot-input"]')?.focus();
           } }, 'Remove')

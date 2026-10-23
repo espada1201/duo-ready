@@ -5,7 +5,7 @@ Every control has a name, the poses form one labelled group, and results are spo
 ## Sub-features
 
 - `pose-radios`: seven radios named after their poses sit in a group named Pose; arrow keys move the selection and keep focus.
-- `announce`: a pose change, a loaded project (name, score, grade, finding count) and a chosen screenshot are spoken through the `#announce` live region. The screenshot is named once, when it loads (`Screenshot <name> loaded.`); later pose changes announce only the pose.
+- `announce`: a pose change, a loaded project (name, score, grade, finding count) and a chosen screenshot are spoken through the `#announce` live region. The screenshot is named once, when it loads (`Screenshot <name> loaded.`), and Remove says `Screenshot removed.` once. While a screenshot is loaded, the problem count adds `from the Encore sample app, not your screenshot`; later pose changes otherwise announce only the pose.
 - `file-inputs`: the visually hidden file inputs are Tab stops named by their visible buttons (`Choose folder`, `Choose .zip`, `Try your own screenshot`), keep focus after a failed read, and show a focus ring on the label.
 
 ## Driving it with verify.mjs

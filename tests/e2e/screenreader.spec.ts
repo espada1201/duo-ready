@@ -109,6 +109,12 @@ test('a chosen screenshot is announced, keeps focus on its control, and Remove h
   await page.getByRole('button', { name: 'Remove' }).click();
   await expect(page.getByRole('button', { name: 'Try your own screenshot' })).toBeFocused();
   await expect(page.locator('#announce')).not.toContainText('home.png');
+  await expect(page.locator('#announce')).toHaveText(/Screenshot removed\.$/);
+  await expect(page.locator('#announce')).not.toContainText('Encore sample app');
+  // Said once: the next change of any kind clears it.
+  await page.getByRole('radio', { name: 'Closed', exact: true }).click();
+  await expect(page.locator('#announce')).toContainText('Closed, iOS 26 SDK:');
+  await expect(page.locator('#announce')).not.toContainText('removed');
 });
 
 test('the screenshot is announced once, when it loads; later pose changes announce only the pose', async ({ page }) => {
@@ -117,10 +123,10 @@ test('the screenshot is announced once, when it loads; later pose changes announ
   await expect(page.locator('#announce')).toHaveText(/Screenshot home\.png loaded\.$/);
   await page.getByRole('radio', { name: 'Closed', exact: true }).click();
   await expect(page.locator('#announce')).toContainText('Closed, iOS 26 SDK:');
-  await expect(page.locator('#announce')).not.toContainText('creenshot');
+  await expect(page.locator('#announce')).not.toContainText('loaded');
   await page.getByRole('radio', { name: 'Open', exact: true }).click();
   await expect(page.locator('#announce')).toContainText('Open, iOS 26 SDK:');
-  await expect(page.locator('#announce')).not.toContainText('creenshot');
+  await expect(page.locator('#announce')).not.toContainText('home.png');
 });
 
 test('while files are being read, exactly one live region says so', async ({ page }) => {
