@@ -90,7 +90,7 @@ function statusBar(p: Presentation, s: number, compat: boolean): HTMLElement | n
 function renderStage(layout: EncoreLayout, state: PreviewState, width: number): HTMLElement {
   const p = layout.presentation;
   // Leaves room for the header and the caption, so the whole phone fits on a laptop screen.
-  const maxH = Math.max(300, Math.min(window.innerHeight * 0.55, 560));
+  const maxH = Math.max(300, Math.min(window.innerHeight * 0.5, 560));
   const s = Math.min((width - 24 - BEZEL * 2) / p.screen.w, (maxH - BEZEL * 2) / p.screen.h);
   const compat = p.display === 'inner' && buildTier(state.build) === '26';
   const folded = state.posture === 'book' || state.posture === 'tent';
