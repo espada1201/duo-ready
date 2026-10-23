@@ -1,4 +1,5 @@
-import { existsSync, lstatSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { applyFixes, audit, isRelevant, isRelevantDir, MAX_BYTES, otherPlatform } from '../core/audit';
 import { patchFor } from '../core/diff';
@@ -71,7 +72,7 @@ function parseArgs(argv: string[]): Command {
       else if (flag === '--fix') {
         // `--fix`, `--fix=all` and `--fix all` all work; a bare `--fix` means safe fixes only.
         const next = argv[i + 1];
-        if (inline === undefined && next && !['all', 'safe'].includes(next) && !next.startsWith('-') && !existsSync(resolve(here(), next)))
+        if (inline === undefined && next && !['all', 'safe'].includes(next) && !next.startsWith('-') && !existsSync(userPath(next)))
           throw new Error(`--fix takes "safe" or "all", and "${next}" isn't a folder either`);
         const level = inline ?? (next === 'all' || next === 'safe' ? argv[++i] : 'safe');
         o.fix = oneOf('--fix', level, ['safe', 'all'] as const);
@@ -82,8 +83,8 @@ function parseArgs(argv: string[]): Command {
       else if (flag === '--fail-on') o.failOn = oneOf('--fail-on', value(), ['error', 'warning', 'note', 'never'] as const);
       else if (a.startsWith('-')) return { kind: 'error', message: `Unknown option ${a}` };
       // `rules` is the subcommand unless there is a folder of that name to audit.
-      else if (a === 'rules' && !existsSync(resolve(here(), a))) rules = true;
-      else if (path !== null) return { kind: 'error', message: `One project at a time: got "${path}" and "${a}"` };
+      else if (a === 'rules' && !existsSync(userPath(a))) rules = true;
+      else if (path !== null) return { kind: 'error', message: `One project at a time: got "${path}" and "${a}". If the folder name has a space, put the path in quotes.` };
       else path = a;
     }
   } catch (e) {
@@ -190,7 +191,7 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
     return 2;
   }
   const status = cmd.format === 'text' ? log : err;
-  const root = resolve(here(), cmd.path);
+  const root = userPath(cmd.path);
   let files: SourceFile[];
   try {
     files = readProject(root);
@@ -252,12 +253,12 @@ export function run(argv: string[], log = (s: string) => console.log(s), err = (
   const body = render[cmd.format]();
   if (cmd.out) {
     try {
-      writeFileSync(resolve(here(), cmd.out), body + '\n');
+      writeFileSync(userPath(cmd.out), body + '\n');
     } catch (e) {
       err(`Could not write the report: ${(e as Error).message}`);
       return 2;
     }
-    status(`Report written to ${resolve(here(), cmd.out)}`);
+    status(`Report written to ${userPath(cmd.out)}`);
   } else log(body);
   if (after) status(after);
 
@@ -271,13 +272,34 @@ function exitCode(result: AuditResult, failOn: AuditOptions['failOn']): number {
   return result.findings.some((f) => SEVERITY_ORDER[f.severity] <= FAIL_AT[failOn]) ? 1 : 0;
 }
 
+/** The real location of a path, with its on-disk letter case on macOS; the path itself when it can't be resolved. */
+const canonical = (path: string) => {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return path;
+  }
+};
+
 /**
  * Where relative paths start: the folder the person ran the command in. `npm run` moves to the
  * package root and keeps that folder in INIT_CWD, but a script that cds elsewhere inherits a stale one.
+ * The two package folders are compared as real paths (macOS keeps /tmp and /var behind symlinks),
+ * and without regard to letter case where the file system ignores it.
  */
-function here(): string {
-  const { INIT_CWD, npm_package_json } = process.env;
-  return INIT_CWD && npm_package_json && dirname(npm_package_json) === process.cwd() ? INIT_CWD : process.cwd();
+export function startDir(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd(), platform: string = process.platform): string {
+  const { INIT_CWD, npm_package_json } = env;
+  if (!INIT_CWD || !npm_package_json) return cwd;
+  const norm = (p: string) => (platform === 'darwin' || platform === 'win32' ? canonical(p).toLowerCase() : canonical(p));
+  return norm(dirname(npm_package_json)) === norm(cwd) ? INIT_CWD : cwd;
+}
+
+const here = () => startDir();
+
+/** A path as the person typed it: `~` is their home folder (a shell only expands it unquoted), the rest starts from `here()`. */
+function userPath(path: string): string {
+  const base = here();
+  return (path === '~' || path.startsWith('~/')) && !existsSync(resolve(base, path)) ? join(homedir(), path.slice(1)) : resolve(base, path);
 }
 
 function ruleHelp(id: string) {
@@ -290,7 +312,8 @@ const baseDir = (root: string) => (statSync(root).isDirectory() ? root : dirname
 
 /** Path from the enclosing git checkout to the audited folder, so SARIF paths match the repo. */
 function repoPrefix(root: string): string {
-  const start = baseDir(root);
+  // Through symlinks, and with the letter case the disk has (APFS keeps whatever was typed first).
+  const start = canonical(baseDir(root));
   for (let dir = start; ; dir = dirname(dir)) {
     if (existsSync(join(dir, '.git'))) return relative(dir, start).split('\\').join('/');
     if (dirname(dir) === dir) return '';
