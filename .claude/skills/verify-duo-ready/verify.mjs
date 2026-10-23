@@ -43,7 +43,7 @@ const FEATURES = {
   async preview(page, dir) {
     await page.goto(URL);
     assert((await text(page, 'window')) === '430 × 626 pt, 48% of the display', 'old SDK app sits in an iPhone-sized window');
-    await choose(page, 'Book');
+    await choose(page, 'Half folded, book');
     assert((await text(page, 'problems')).includes('The hinge cuts through'), 'hinge collision reported when half folded');
     await choose(page, 'iOS 27.1 SDK');
     assert((await page.locator('.overlay-collision').count()) > 0, 'collisions drawn for unchanged code');

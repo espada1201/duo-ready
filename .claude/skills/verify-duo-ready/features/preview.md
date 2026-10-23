@@ -4,7 +4,7 @@ The Preview tab shows Encore, a typical iPhone music app, on every Duo pose for 
 
 ## Sub-features
 
-- `poses` switches between Closed, Closed sideways, Open, Open rotated, Split View, Book and Propped up.
+- `poses` switches between Closed, Closed sideways, Open, Open rotated, Split View, Half folded, book and Half folded, propped up.
 - `builds` switches between the iOS 26, 27 and 27.1 SDKs and `27.1 + recommended changes`.
 - `problems` lists collisions and black bars for the current pose.
 - `changes` lists what the recommended build changes, split into applied, suggested and manual.
