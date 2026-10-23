@@ -1,6 +1,6 @@
 # duo-ready
 
-Most iPhone apps look wrong on iPhone Duo: black bars, stretched layouts, custom bars that ignore the side status bar, and content that runs straight under the hinge. Apple's fix is a rebuild with the iOS 27.1 SDK plus layout changes that each app's developer has to make. duo-ready finds those changes and makes the safe ones for you.
+Most iPhone apps look wrong on iPhone Duo: black bars, stretched layouts, custom bars that ignore the side status bar, and content that runs straight under the hinge (the fold line across the inner screen). Apple's fix is a rebuild with the iOS 27.1 SDK plus layout changes that each app's developer has to make. duo-ready finds those changes and makes the safe ones for you.
 
 iOS doesn't let anyone reshape someone else's app, so this kit is for the people who build apps.
 
@@ -9,7 +9,7 @@ iOS doesn't let anyone reshape someone else's app, so this kit is for the people
 1. You need Node.js 20.19 or later (`node -v` shows yours). If you don't have it, get it from https://nodejs.org or run `brew install node`.
 2. In Terminal, run `git clone https://github.com/espada1201/duo-ready.git && cd duo-ready`.
 3. Run `npm install && npm start`.
-4. Your browser opens the Duo Lab at http://localhost:4178 (or the next free port Terminal shows). *Preview* shows a sample app in every Duo pose; *Audit* > *Try the sample app* shows its full report.
+4. Your browser opens the Duo Lab at http://localhost:4178 (or the next free port Terminal shows). *Preview* shows a sample app in every Duo pose (closed, open, half folded, Split View); *Audit* > *Try the sample app* shows its full report.
 
 ## What's inside
 
@@ -44,7 +44,7 @@ Fixes come in two kinds. *Safe fixes* are Apple's own before/after rewrites, off
 
 - The scanner is pattern- and structure-based, not a Swift compiler. It skips comments and strings, but unusual code can slip past or trip it. On the last 40 open-source apps it was tested on before any tuning for them, an independent reviewer judged 56 to 81% of findings worth a look; treat each one as a lead, not a verdict. Objective-C files get the core checks (screen, idiom, orientation, keyboard, fonts, bars, gestures, cameras); fixes and SwiftUI checks are Swift only.
 - Duo panel sizes come from Apple's specs; hinge, camera and status bar geometry are approximations. Check in the Xcode 27.1 simulator.
-- The SDK tier is estimated from the project's `LastUpgradeCheck`.
+- The SDK tier (which iOS SDK the app was last built with, which decides whether Duo shows it in a small window) is estimated from the project's `LastUpgradeCheck`.
 - Tests, mocks, Xcode previews, `#if DEBUG` code, fallbacks for iOS versions older than Duo's, widgets, watch, Mac, TV and extension targets (and `#if os(...)` branches for them), build scripts, example apps and vendored folders (Pods, Carthage, Third Party, build) are skipped: Duo users never see them. Deployment targets are read from the Xcode project, `.xcconfig` files and XcodeGen specs.
 - Pasted code or a lone Swift file gets a partial audit: project-level checks can't run, so the grade stops at Close.
 

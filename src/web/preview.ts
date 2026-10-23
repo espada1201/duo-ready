@@ -313,7 +313,7 @@ export function renderPreview(state: PreviewState, set: (patch: Partial<PreviewS
     h(
       'div',
       { class: 'toggles' },
-      toggle('Reserved regions', state.regions, (regions) => set({ regions })),
+      toggle('Reserved regions', state.regions, (regions) => set({ regions }), 'Parts of the screen iOS asks apps to keep clear: the hinge and the camera'),
       toggle('Safe area', state.safeArea, (safeArea) => set({ safeArea })),
       toggle('Camera in use', state.camera, (camera) => set({ camera })),
     ),

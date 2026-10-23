@@ -55,10 +55,10 @@ export function segmented<T extends string>(
   );
 }
 
-export function toggle(label: string, checked: boolean, onChange: (v: boolean) => void): HTMLElement {
+export function toggle(label: string, checked: boolean, onChange: (v: boolean) => void, title?: string): HTMLElement {
   return h(
     'label',
-    { class: 'toggle' },
+    { class: 'toggle', title },
     h('input', { type: 'checkbox', role: 'switch', name: label, checked, onchange: (e: Event) => onChange((e.target as HTMLInputElement).checked) }),
     h('span', { class: 'toggle-track', 'aria-hidden': 'true' }),
     h('span', {}, label),
